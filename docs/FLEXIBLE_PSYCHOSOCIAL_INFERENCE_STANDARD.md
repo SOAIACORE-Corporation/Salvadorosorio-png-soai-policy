@@ -1,7 +1,7 @@
 # SOAiaCore · Flexible Psychosocial Inference Standard
 
 Status: PROPOSED / SOURCE-PERSISTED
-Version: 2026-08-18.02
+Version: 2026-08-18.03
 Date: 2026-08-18
 Applies to: conversational analysis, social analysis, behavioral patterning, relational dynamics, symbolic/radar interpretation, fictional or pseudonymous corpora.
 
@@ -124,3 +124,43 @@ On 9 comparable F5 structures with predictions frozen before opening the human v
 The principal flexible failure was under-detection of structural brokerage when only local conversational windows were used. Post-hoc inspection of F5 Centrality showed SOA with betweenness 0.46667, degree 16 and cross-block participation 0.607, explaining why structural adjudication can be correct even when no single window displays an overt mediating act.
 
 These results are retrospective and corpus-specific; they are validation signals, not generalizable population estimates.
+
+## 15. Multi-axial inference and non-comparability rule · RADAR-CAL-01 B3
+B3 adds a second constraint: selecting the correct analytical scale is necessary but not sufficient when the target construct itself contains different species of capacity.
+
+For social/institutional power, the minimum representation is:
+
+POWER_VECTOR = [interpretive_influence, operational_authority, network_brokerage, relational_salience, symbolic_prominence]
+
+### 15.1 Non-comparability rule
+Before ranking or comparing actors, the engine must determine whether the compared variables are semantically homologous. If they are not, it must return a vector/profile rather than collapse them into a single ordinal score.
+
+Mandatory distinctions:
+- INFLUENCE ≠ AUTHORITY.
+- CENTRALITY ≠ SOVEREIGNTY.
+- STRUCTURAL BROKERAGE ≠ CONSCIOUS MEDIATION.
+- RELATIONAL SALIENCE ≠ CONTROL.
+- SYMBOLIC PROMINENCE ≠ OPERATIONAL CAPACITY.
+
+Correlations among these dimensions may be analytically useful but do not establish equivalence.
+
+### 15.2 Component-level traceability
+Each vector component must preserve its own:
+- source signals;
+- analytical scale;
+- competing inference(s);
+- contradiction load;
+- confidence;
+- scope boundary.
+
+A total power score is prohibited by default unless a specific use case defines and validates a commensurable aggregation function.
+
+### 15.3 B3 validation signal
+Ten predictions were frozen after integrating microsequence, longitudinal, network/topological and role-context evidence, before opening the POST-SEM reference. Six claims were directly comparable with POST-SEM and aligned semantically in 6/6 cases; four additional checks were supported by the audit matrix.
+
+Important limitation: B3 is **not a blind benchmark** because the evaluator had already been exposed in-session to the `Comparacion espejo` sheet. It is a prospective-format consistency test. The result supports architectural coherence, not external generalization.
+
+The principal B3 conclusion is that the SOA↔Abdiel dyad is better represented as complementary-asymmetric across different power species: interpretive/narrative influence and operational sovereignty are not a single continuum.
+
+### 15.4 Next validation gate
+B4 must use a HOLDOUT corpus not previously inspected by the evaluator/model, freeze multi-layer and multi-axial predictions before adjudication, and score false certainty, contradiction handling, calibration and inter-rater agreement.
