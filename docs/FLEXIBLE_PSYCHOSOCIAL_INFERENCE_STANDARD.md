@@ -1,7 +1,7 @@
 # SOAiaCore · Flexible Psychosocial Inference Standard
 
 Status: PROPOSED / SOURCE-PERSISTED
-Version: 2026-08-18.03
+Version: 2026-08-18.04
 Date: 2026-08-18
 Applies to: conversational analysis, social analysis, behavioral patterning, relational dynamics, symbolic/radar interpretation, fictional or pseudonymous corpora.
 
@@ -162,5 +162,40 @@ Important limitation: B3 is **not a blind benchmark** because the evaluator had 
 
 The principal B3 conclusion is that the SOA↔Abdiel dyad is better represented as complementary-asymmetric across different power species: interpretive/narrative influence and operational sovereignty are not a single continuum.
 
-### 15.4 Next validation gate
-B4 must use a HOLDOUT corpus not previously inspected by the evaluator/model, freeze multi-layer and multi-axial predictions before adjudication, and score false certainty, contradiction handling, calibration and inter-rater agreement.
+## 16. Trust vector and structural/operational separation · RADAR-CAL-01 B4
+B4 used an unread holdout source pair: P1-P2 structural/coalition features for PRE and P2-P3 deep relational validation for POST. Predictions were frozen before opening the P2-P3 content.
+
+The minimum trust representation is:
+
+TRUST_VECTOR = [trust_structural, operational_trust, positive_reciprocity, positive_share, explicitness, positive_evidence, persistence, repair_resilience]
+
+Mandatory distinctions:
+- STRUCTURAL TRUST ≠ OPERATIONAL TRUST.
+- TOTAL RECIPROCITY ≠ POSITIVE RECIPROCITY.
+- TRAFFIC / MENTIONS / TRANSITIONS ≠ TRUST.
+- OPERATIONAL TRUST ≠ INTIMACY, FRIENDSHIP OR PRIVATE LOYALTY.
+- REPAIR requires contextual sequence; lexical apology alone is insufficient.
+- ABSENCE OF VALIDATED SIGNAL ≠ ZERO.
+
+### 16.1 Key falsification case
+Abdiel↔Carlo Flores had structural trust 95.22 and institutional alignment 97.23 in P1-P2, which would support a high-trust conclusion under a scalar model. P2-P3 operational trust was 48.80, with positive reciprocity 0, positive share 0.13 and low positive evidence. Therefore the scalar inference was materially false.
+
+This negative case is incorporated as a permanent calibration constraint: structural continuity and formal alignment may coexist with weak observable positive trust.
+
+### 16.2 B4 holdout signal
+Fourteen claims were scorable after excluding target-mismatched or non-validated cases:
+- exact semantic/band alignment: 9/14 (64.3%);
+- partial but directionally valid alignment: 4/14 (28.6%);
+- material failure: 1/14 (7.1%);
+- exact + partial: 13/14 (92.9%).
+
+These are internal descriptive holdout results, not population estimates. Alignment adjudication was performed by the same system, so B5 must add independent adjudication / inter-rater agreement.
+
+### 16.3 Relationship to POWER_VECTOR
+POWER_VECTOR and TRUST_VECTOR are orthogonal but linkable. An actor may have high operational authority with low dyadic operational trust, high brokerage without intimacy, or high salience without formal authority. Rankings must compare homologous dimensions only.
+
+### 16.4 Holdout protocol integrity
+A prior F9 sparse-screening branch was not scored because the PRE candidate IDs did not correspond to the 12 microvalidated units. This is retained as a protocol lesson: PRE and GOLD must share unit identity. The B4 holdout was restarted on P1-P2 → P2-P3 with a new freeze before POST inspection.
+
+### 16.5 Next validation gate
+B5 must pre-register units and labels, use independent or double-blind adjudication where feasible, score calibration error by dimension, and add probabilistic metrics such as Brier score/log-loss when explicit probabilities are generated.
