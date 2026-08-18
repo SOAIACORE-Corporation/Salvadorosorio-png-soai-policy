@@ -1,8 +1,8 @@
 # SOAiaCore · Flexible Psychosocial Inference Standard
 
 Status: PROPOSED / SOURCE-PERSISTED
-Version: 2026-08-17.01
-Date: 2026-08-17
+Version: 2026-08-18.02
+Date: 2026-08-18
 Applies to: conversational analysis, social analysis, behavioral patterning, relational dynamics, symbolic/radar interpretation, fictional or pseudonymous corpora.
 
 ## 1. Principle
@@ -96,3 +96,31 @@ Evaluation should therefore measure:
 
 ## 13. Governance
 This standard is additive. It does not alter DecisionOS v0.3-SHADOW-FROZEN, SOA_CONTEXT routing, change locks, PRECHECK or outbound approval gates.
+
+## 14. Multi-layer inference rule · RADAR-CAL-01 B2
+B2 demonstrated that flexibility alone is insufficient when the claim lives at a different analytical scale. The engine must select evidence layers according to the type of claim.
+
+Canonical multi-layer route:
+
+MICROSEQUENCE → LONGITUDINAL PATTERN → NETWORK / TOPOLOGY → ROLE CONTEXT → INFERENCE → CONTRADICTION → CONFIDENCE → REVISION.
+
+Rules:
+- Local pragmatic claims prioritize complete microsequences.
+- Pattern claims require recurrence across time.
+- Structural claims such as brokerage, centrality, cross-block participation or durable coalition require network/topological evidence and must not be inferred from isolated windows alone.
+- Network position does not prove conscious mediation, private alliance, affect, intent or psychological dependence.
+- Distinguish EPISODIC COALITION from STABLE COALITION.
+- Distinguish CONSCIOUS MEDIATION from STRUCTURAL BROKERAGE.
+- Caution that prevents over-generalization is not automatically an analytical error.
+
+### B2 empirical signal
+On 9 comparable F5 structures with predictions frozen before opening the human validation sheet:
+- rigid exact categorical match: 4/9 (44.4%);
+- flexible exact categorical match: 5/9 (55.6%);
+- rigid mean ordinal distance: 0.333;
+- flexible mean ordinal distance: 0.222;
+- within one ordinal step: rigid 8/9; flexible 9/9.
+
+The principal flexible failure was under-detection of structural brokerage when only local conversational windows were used. Post-hoc inspection of F5 Centrality showed SOA with betweenness 0.46667, degree 16 and cross-block participation 0.607, explaining why structural adjudication can be correct even when no single window displays an overt mediating act.
+
+These results are retrospective and corpus-specific; they are validation signals, not generalizable population estimates.
