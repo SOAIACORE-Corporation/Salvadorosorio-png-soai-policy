@@ -1,0 +1,48 @@
+name: validate-hardening
+
+on:
+  pull_request:
+  push:
+    branches:
+      - 'soaia/**'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install validators
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y shellcheck
+
+      - name: Bash syntax
+        run: |
+          set -euo pipefail
+          find deploy -type f -name '*.sh' -print0 | xargs -0 -r -n1 bash -n
+
+      - name: ShellCheck
+        run: |
+          set -euo pipefail
+          find deploy -type f -name '*.sh' -print0 | xargs -0 -r shellcheck -x
+
+      - name: Block committed secrets
+        run: |
+          set -euo pipefail
+          if git grep -nE '(sk-proj-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{20,}|access_key=[^[:space:]&]+)' -- ':!*.md' ':!*.txt'; then
+            echo 'Potential secret material detected.' >&2
+            exit 1
+          fi
+
+      - name: Required governance assertions
+        run: |
+          set -euo pipefail
+          grep -q 'OBSERVE_ONLY=true' docs/MESSAGING_DATA_GOVERNANCE_2026-08-17.md
+          grep -q 'PENDING_SEND_APPROVAL' docs/MESSAGING_DATA_GOVERNANCE_2026-08-17.md
+          grep -q 'SOAIA_OPENAI_STORE=false' deploy/bootstrap_stage.sh
+          grep -q '127.0.0.1' deploy/bootstrap_stage.sh
