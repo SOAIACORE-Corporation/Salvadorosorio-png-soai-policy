@@ -34,7 +34,11 @@ jobs:
       - name: Block committed secrets
         run: |
           set -euo pipefail
-          if git grep -nE '(sk-proj-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{20,}|access_key=[^[:space:]&]+)' -- ':!*.md' ':!*.txt'; then
+          pattern='(sk-proj-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{20,}|access_key=[^[:space:]&]+)'
+          if git grep -nE "$pattern" -- \
+            ':!*.md' \
+            ':!*.txt' \
+            ':!.github/workflows/validate-hardening.yml'; then
             echo 'Potential secret material detected.' >&2
             exit 1
           fi
