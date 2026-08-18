@@ -46,7 +46,11 @@ for port in 80 443 5000 8940; do
 done
 
 if command -v nginx >/dev/null 2>&1; then
-  nginx -t && pass "nginx_config" || fail "nginx_config"
+  if nginx -t; then
+    pass "nginx_config"
+  else
+    fail "nginx_config"
+  fi
 else
   warn "nginx not installed"
 fi
