@@ -1,0 +1,44 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+client_secret*.json
+
+# Runtime/session data
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.wwebjs_auth/
+.wwebjs_cache/
+chromium-profile/
+
+# Receipts/logs generated on hosts
+receipts/
+PRECHECK*.txt
+*.log
+*.pid
+
+# Databases and local state
+*.db
+*.sqlite
+*.sqlite3
+
+# Media / sensitive payloads
+media/
+screenshots/
+ocr_processed/
+ocr_importantes/
+backups/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
