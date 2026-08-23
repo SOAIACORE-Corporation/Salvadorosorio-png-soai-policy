@@ -176,6 +176,22 @@ The ONE-SHOT must be the default when the same material objective can be complet
 
 Do not fragment one material task into manual chains of scripts when the same workflow can be safely made idempotent and resumable. When a blocker reveals a missing precheck or remediation case, improve the PRECHECK/ONE-SHOT so the learned condition is handled automatically in future runs rather than relying on operator memory.
 
+## Docker/WSL contradictory-evidence guardrail
+
+When Docker Desktop reports `wslUpdateRequired=true`, `WSL version check failed`, `wsl.exe --version exit != 0` or equivalent while direct `%SystemRoot%\System32\wsl.exe --version` succeeds, Codex must **not** infer that WSL is outdated from the Docker flag alone.
+
+Required action before any further WSL/Docker mutation:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\deploy\local\SOAIACORE-DockerWsl-Diagnostic-OneShot.ps1" -RepoPath "$PWD"
+```
+
+Authority for the guardrail: `docs/rebuild/DOCKER_WSL_DIAGNOSTIC_GUARDRAIL_P0_2026-08-23.md`.
+
+Until this diagnostic classifies the root cause, Codex must not repeat `wsl --update`, reinstall/unregister WSL, reset Docker Desktop, delete Docker/WSL VHDX/data/images/volumes, change backend, modify BIOS/UEFI or global PATH, or reboot solely because of `wslUpdateRequired=true`.
+
+If the diagnostic reports `DOCKER_ENGINE_READY`, immediately resume the canonical rebuild one-shot from its existing checkpoint. If it reports a blocker, stop on the exact classification and preserve the diagnostic receipt. This diagnostic rail is read-only and does not create a second architecture/deployment path.
+
 ## Success condition
 
 This task is complete only when the real Windows run reports:
