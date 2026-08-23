@@ -1,9 +1,10 @@
 #requires -Version 5.1
 <#
-SOAIACORE Rebuild P0 — Windows One-Shot v1.0
+SOAIACORE Rebuild P0 — Windows One-Shot v1.1
 Architecture authority: v0.6 FINAL / FROZEN FOR P0
-Purpose: bootstrap local Docker/WSL if required, reconcile AR package, execute real PostgreSQL+pgvector gate,
-write receipts, and tear down disposable runtime. Safe to rerun.
+Purpose: self-heal the local Windows WSL2/Docker substrate, reconcile the AR package,
+execute the real PostgreSQL+pgvector gate, write receipts, and tear down disposable runtime.
+Safe to rerun. Fail-closed on non-remediable host conditions.
 
 This script never performs Azure apply and never creates cloud resources.
 #>
@@ -14,7 +15,6 @@ param(
     [string]$ArZip = "",
     [string]$GitExe = "",
     [switch]$AutoReboot,
-    [switch]$ContinueWithoutReboot,
     [switch]$KeepFailedRuntime
 )
 
@@ -31,6 +31,7 @@ $ReceiptDir = Join-Path $RepoPath 'receipts'
 $WorkRoot = Join-Path $env:TEMP 'SOAIACORE-RebuildP0'
 $ResumeName = 'SOAIACORE_RebuildP0_Resume'
 $StartUtc = (Get-Date).ToUniversalTime()
+$MaxReboots = 4
 
 function Write-Step([string]$Message) {
     $stamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
@@ -54,7 +55,7 @@ function Load-State {
         try { return (Get-Content -LiteralPath $StateFile -Raw | ConvertFrom-Json) } catch { }
     }
     return [pscustomobject]@{
-        version = 1
+        version = 2
         stage = 'INIT'
         repo_path = $RepoPath
         ar_zip = $ArZip
@@ -62,6 +63,15 @@ function Load-State {
         last_updated_utc = $StartUtc.ToString('o')
         reboot_count = 0
         attempts = 0
+        last_reboot_reason = ''
+        wsl_update_attempted = $false
+        docker_recovery_attempts = 0
+    }
+}
+
+function Ensure-StateProperty([object]$Object,[string]$Name,$Value) {
+    if (-not ($Object.PSObject.Properties.Name -contains $Name)) {
+        $Object | Add-Member -NotePropertyName $Name -NotePropertyValue $Value
     }
 }
 
@@ -72,6 +82,11 @@ function Save-State([object]$State, [string]$Stage) {
 }
 
 $State = Load-State
+Ensure-StateProperty $State 'version' 2
+Ensure-StateProperty $State 'last_reboot_reason' ''
+Ensure-StateProperty $State 'wsl_update_attempted' $false
+Ensure-StateProperty $State 'docker_recovery_attempts' 0
+$State.version = 2
 $State.attempts = [int]$State.attempts + 1
 if ([string]::IsNullOrWhiteSpace($ArZip) -and -not [string]::IsNullOrWhiteSpace([string]$State.ar_zip)) { $ArZip = [string]$State.ar_zip }
 if (-not [string]::IsNullOrWhiteSpace($ArZip)) { $State.ar_zip = $ArZip }
@@ -88,12 +103,20 @@ function Test-Admin {
     return $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Build-ResumeCommand {
+    $cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -RepoPath `"$RepoPath`""
+    if (-not [string]::IsNullOrWhiteSpace($ArZip)) { $cmd += " -ArZip `"$ArZip`"" }
+    if (-not [string]::IsNullOrWhiteSpace($GitExe)) { $cmd += " -GitExe `"$GitExe`"" }
+    if ($AutoReboot) { $cmd += ' -AutoReboot' }
+    if ($KeepFailedRuntime) { $cmd += ' -KeepFailedRuntime' }
+    return $cmd
+}
+
 function Relaunch-Elevated {
     $argList = @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"{0}"' -f $PSCommandPath),'-RepoPath',('"{0}"' -f $RepoPath))
     if (-not [string]::IsNullOrWhiteSpace($ArZip)) { $argList += @('-ArZip',('"{0}"' -f $ArZip)) }
     if (-not [string]::IsNullOrWhiteSpace($GitExe)) { $argList += @('-GitExe',('"{0}"' -f $GitExe)) }
     if ($AutoReboot) { $argList += '-AutoReboot' }
-    if ($ContinueWithoutReboot) { $argList += '-ContinueWithoutReboot' }
     if ($KeepFailedRuntime) { $argList += '-KeepFailedRuntime' }
     Start-Process powershell.exe -Verb RunAs -ArgumentList ($argList -join ' ')
     Stop-Transcript | Out-Null
@@ -101,7 +124,7 @@ function Relaunch-Elevated {
 }
 
 if (-not (Test-Admin)) {
-    Write-Step 'Administrative rights required for conditional Docker/WSL bootstrap. Relaunching elevated.'
+    Write-Step 'Administrative rights required. Relaunching the same one-shot elevated.'
     Relaunch-Elevated
 }
 
@@ -117,16 +140,15 @@ function Test-PendingReboot {
         'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'
     )
     foreach ($k in $keys) { if (Test-Path $k) { return $true } }
+    try {
+        $pending = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name PendingFileRenameOperations -ErrorAction SilentlyContinue).PendingFileRenameOperations
+        if ($pending) { return $true }
+    } catch { }
     return $false
 }
 
 function Register-Resume {
-    $cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -RepoPath `"$RepoPath`""
-    if (-not [string]::IsNullOrWhiteSpace($ArZip)) { $cmd += " -ArZip `"$ArZip`"" }
-    if (-not [string]::IsNullOrWhiteSpace($GitExe)) { $cmd += " -GitExe `"$GitExe`"" }
-    if ($AutoReboot) { $cmd += ' -AutoReboot' }
-    if ($ContinueWithoutReboot) { $cmd += ' -ContinueWithoutReboot' }
-    if ($KeepFailedRuntime) { $cmd += ' -KeepFailedRuntime' }
+    $cmd = Build-ResumeCommand
     New-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name $ResumeName -PropertyType String -Value $cmd -Force | Out-Null
 }
 
@@ -135,15 +157,19 @@ function Clear-Resume {
 }
 
 function Request-Reboot([string]$Reason) {
+    if ([int]$State.reboot_count -ge $MaxReboots) {
+        throw "REBOOT_LOOP_GUARD: max=$MaxReboots last_reason=$Reason"
+    }
     $State.reboot_count = [int]$State.reboot_count + 1
+    $State.last_reboot_reason = $Reason
     Save-State $State 'REBOOT_REQUIRED'
     Register-Resume
     Write-Step "REBOOT_REQUIRED: $Reason"
     if ($AutoReboot) {
-        Write-Step 'Automatic reboot authorized. Rebooting in 30 seconds; RunOnce will resume the same one-shot.'
-        shutdown.exe /r /t 30 /c "SOAIACORE Rebuild P0 one-shot resume" | Out-Null
+        Write-Step 'Automatic reboot authorized. Rebooting in 20 seconds; RunOnce will resume this same entrypoint.'
+        shutdown.exe /r /t 20 /c "SOAIACORE Rebuild P0 one-shot resume" | Out-Null
     } else {
-        Write-Step 'Resume has been registered. Restart Windows once; the same one-shot will continue automatically after sign-in.'
+        Write-Step 'Resume registered. Restart Windows once and sign in; the same one-shot will resume.'
     }
     Stop-Transcript | Out-Null
     exit 3010
@@ -166,6 +192,7 @@ function Assert-Repo {
                 'validation/', 'deploy/local/ar/', 'receipts/'
             )
             $unexpected = @($dirty | Where-Object {
+                if ($_.Length -lt 4) { return $true }
                 $path = $_.Substring(3).Replace('\\','/')
                 -not ($allowedPrefixes | Where-Object { $path.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) })
             })
@@ -176,31 +203,100 @@ function Assert-Repo {
     } finally { Pop-Location }
 }
 
+function Get-OptionalFeatureState([string]$Name) {
+    try {
+        $f = Get-WindowsOptionalFeature -Online -FeatureName $Name -ErrorAction Stop
+        return [string]$f.State
+    } catch {
+        return 'Unavailable'
+    }
+}
+
+function Test-FirmwareVirtualization {
+    try {
+        $cpus = @(Get-CimInstance Win32_Processor -ErrorAction Stop)
+        if (-not $cpus) { return $true }
+        $known = @($cpus | Where-Object { $null -ne $_.VirtualizationFirmwareEnabled })
+        if (-not $known) { return $true }
+        return -not (@($known | Where-Object { -not $_.VirtualizationFirmwareEnabled }).Count -gt 0)
+    } catch {
+        return $true
+    }
+}
+
+function Ensure-HypervisorBoot {
+    $bcd = & bcdedit.exe /enum '{current}' 2>$null
+    if ($LASTEXITCODE -ne 0) { return $false }
+    $text = ($bcd -join "`n")
+    if ($text -match '(?im)^hypervisorlaunchtype\s+Off\s*$') {
+        Write-Step 'Enabling Windows hypervisor launch at boot.'
+        & bcdedit.exe /set hypervisorlaunchtype auto | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'HYPERVISOR_BOOT_ENABLE_FAILED' }
+        return $true
+    }
+    return $false
+}
+
+function Invoke-WslUpdate {
+    Write-Step 'Ensuring WSL runtime is current.'
+    $State.wsl_update_attempted = $true
+    Save-State $State 'WSL_UPDATE'
+
+    & wsl.exe --update
+    $exit = $LASTEXITCODE
+    if ($exit -ne 0) {
+        Write-Step "wsl --update returned exit=$exit. Retrying with --web-download."
+        & wsl.exe --update --web-download
+        $exit = $LASTEXITCODE
+    }
+    if ($exit -ne 0) { throw "WSL_UPDATE_FAILED exit=$exit" }
+
+    try { & wsl.exe --set-default-version 2 | Out-Null } catch { }
+    try { & wsl.exe --shutdown | Out-Null } catch { }
+    Start-Sleep -Seconds 2
+
+    $versionText = ''
+    try { $versionText = ((& wsl.exe --version 2>&1) -join ' ') } catch { }
+    if (-not [string]::IsNullOrWhiteSpace($versionText)) { Write-Step "WSL: $versionText" }
+}
+
 function Ensure-WslPrereqs {
-    Write-Step 'Checking WSL2/VirtualMachinePlatform prerequisites.'
+    Write-Step 'Checking virtualization, WSL2, VirtualMachinePlatform, and Hyper-V availability.'
+    if (-not (Test-FirmwareVirtualization)) {
+        throw 'HARDWARE_VIRTUALIZATION_DISABLED_IN_FIRMWARE'
+    }
+
     $needsReboot = $false
-    $features = @('Microsoft-Windows-Subsystem-Linux','VirtualMachinePlatform')
-    foreach ($f in $features) {
-        $featureState = (Get-WindowsOptionalFeature -Online -FeatureName $f).State
-        if ($featureState -ne 'Enabled') {
+    foreach ($f in @('Microsoft-Windows-Subsystem-Linux','VirtualMachinePlatform')) {
+        $state = Get-OptionalFeatureState $f
+        if ($state -eq 'Unavailable') { throw "WINDOWS_FEATURE_UNAVAILABLE: $f" }
+        if ($state -ne 'Enabled') {
             Write-Step "Enabling Windows feature $f"
             Enable-WindowsOptionalFeature -Online -FeatureName $f -All -NoRestart | Out-Null
             $needsReboot = $true
         }
     }
-    if ($needsReboot) { Request-Reboot 'WSL2/VirtualMachinePlatform feature activation' }
-    if (Test-PendingReboot) {
-        if ($ContinueWithoutReboot) {
-            Write-Step 'Pending Windows reboot detected; operator authorized attempting the active WSL2 backend without restarting.'
-        } else {
-            Request-Reboot 'WSL2/VirtualMachinePlatform feature activation'
-        }
+
+    # Hyper-V is optional on editions that do not expose it, but if available we enable it because
+    # Docker Desktop may request it on this host. This is idempotent.
+    $hyperVState = Get-OptionalFeatureState 'Microsoft-Hyper-V-All'
+    if ($hyperVState -ne 'Unavailable' -and $hyperVState -ne 'Enabled') {
+        Write-Step 'Enabling Microsoft-Hyper-V-All because this Windows edition exposes it.'
+        Enable-WindowsOptionalFeature -Online -FeatureName 'Microsoft-Hyper-V-All' -All -NoRestart | Out-Null
+        $needsReboot = $true
     }
-    try { wsl.exe --set-default-version 2 | Out-Null } catch { }
+
+    if (Ensure-HypervisorBoot) { $needsReboot = $true }
+    if ($needsReboot) { Request-Reboot 'Windows virtualization feature activation' }
+    if (Test-PendingReboot) { Request-Reboot 'Windows has a pending reboot required by virtualization/WSL components' }
+
+    Invoke-WslUpdate
+
+    if (Test-PendingReboot) { Request-Reboot 'WSL update requires Windows restart' }
 }
 
 function Ensure-Winget {
-    if (-not (Get-CommandPath 'winget.exe')) { throw 'WINGET_UNAVAILABLE: install Microsoft App Installer, then rerun same one-shot' }
+    if (-not (Get-CommandPath 'winget.exe')) { throw 'WINGET_UNAVAILABLE: Microsoft App Installer is required for unattended Docker installation' }
 }
 
 function Resolve-DockerCli {
@@ -214,26 +310,18 @@ function Resolve-DockerCli {
     return $null
 }
 
-function Ensure-DockerDesktop {
-    $docker = Resolve-DockerCli
-    if (-not $docker) {
-        Write-Step 'Docker CLI/Desktop missing. Installing Docker Desktop idempotently via winget.'
-        Ensure-Winget
-        winget.exe install --exact --id Docker.DockerDesktop --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
-        if ($LASTEXITCODE -ne 0) { throw "DOCKER_INSTALL_FAILED exit=$LASTEXITCODE" }
-        if (Test-PendingReboot) {
-            if ($ContinueWithoutReboot) {
-                Write-Step 'Docker Desktop installation left a pending reboot; operator authorized a real engine readiness attempt without restarting.'
-            } else {
-                Request-Reboot 'Docker Desktop installation requested a reboot'
-            }
-        }
-        $docker = Resolve-DockerCli
-        if (-not $docker) { throw 'DOCKER_CLI_MISSING_AFTER_INSTALL' }
-    } else {
-        Write-Step "Docker CLI already present: $docker"
+function Stop-DockerDesktopBestEffort {
+    foreach ($name in @('Docker Desktop','com.docker.backend','com.docker.proxy','vpnkit')) {
+        Get-Process -Name $name -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     }
+    Start-Sleep -Seconds 2
+}
 
+function Start-DockerDesktopBestEffort {
+    $service = Get-Service 'com.docker.service' -ErrorAction SilentlyContinue
+    if ($service -and $service.Status -ne 'Running') {
+        try { Start-Service 'com.docker.service' -ErrorAction Stop } catch { }
+    }
     $desktop = 'C:\Program Files\Docker\Docker\Docker Desktop.exe'
     if (Test-Path -LiteralPath $desktop) {
         $running = Get-Process 'Docker Desktop' -ErrorAction SilentlyContinue
@@ -242,16 +330,56 @@ function Ensure-DockerDesktop {
             Start-Process -FilePath $desktop | Out-Null
         }
     }
+}
 
-    $deadline = (Get-Date).AddMinutes(5)
+function Wait-DockerEngine([string]$Docker,[int]$Seconds) {
+    $deadline = (Get-Date).AddSeconds($Seconds)
     do {
+        & $Docker info *> $null
+        if ($LASTEXITCODE -eq 0) { return $true }
         Start-Sleep -Seconds 5
-        & $docker info *> $null
-        if ($LASTEXITCODE -eq 0) { break }
     } while ((Get-Date) -lt $deadline)
+    return $false
+}
 
-    & $docker info *> $null
-    if ($LASTEXITCODE -ne 0) { throw 'DOCKER_ENGINE_NOT_READY_AFTER_5_MIN' }
+function Repair-DockerEngine([string]$Docker) {
+    $State.docker_recovery_attempts = [int]$State.docker_recovery_attempts + 1
+    Save-State $State 'DOCKER_RECOVERY'
+    Write-Step "Docker recovery attempt $($State.docker_recovery_attempts): shutting down WSL and restarting Docker Desktop."
+    try { & wsl.exe --shutdown | Out-Null } catch { }
+    Stop-DockerDesktopBestEffort
+    Start-DockerDesktopBestEffort
+    return (Wait-DockerEngine $Docker 240)
+}
+
+function Ensure-DockerDesktop {
+    $docker = Resolve-DockerCli
+    if (-not $docker) {
+        Write-Step 'Docker Desktop missing. Installing idempotently via winget.'
+        Ensure-Winget
+        & winget.exe install --exact --id Docker.DockerDesktop --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+        $exit = $LASTEXITCODE
+        if ($exit -ne 0) { throw "DOCKER_INSTALL_FAILED exit=$exit" }
+        $docker = Resolve-DockerCli
+        if (-not $docker) { throw 'DOCKER_CLI_MISSING_AFTER_INSTALL' }
+        if (Test-PendingReboot) { Request-Reboot 'Docker Desktop installation requested a restart' }
+    } else {
+        Write-Step "Docker CLI already present: $docker"
+    }
+
+    Start-DockerDesktopBestEffort
+    if (-not (Wait-DockerEngine $docker 180)) {
+        Write-Step 'Docker Engine not ready after initial wait. Starting self-heal sequence.'
+        if (-not (Repair-DockerEngine $docker)) {
+            Invoke-WslUpdate
+            if (Test-PendingReboot) { Request-Reboot 'WSL repair/update requires restart before Docker Engine can start' }
+            if (-not (Repair-DockerEngine $docker)) {
+                if (Test-PendingReboot) { Request-Reboot 'Docker/Windows virtualization stack still has a pending restart' }
+                throw 'DOCKER_ENGINE_NOT_READY_AFTER_SELF_HEAL'
+            }
+        }
+    }
+
     & $docker compose version | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'DOCKER_COMPOSE_UNAVAILABLE' }
     return $docker
@@ -272,7 +400,7 @@ function Expand-ArPackage([string]$ZipPath) {
     if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
     Ensure-Dir $dest
     Expand-Archive -LiteralPath $ZipPath -DestinationPath $dest -Force
-    $rootCandidates = Get-ChildItem -LiteralPath $dest -Directory
+    $rootCandidates = @(Get-ChildItem -LiteralPath $dest -Directory)
     if ($rootCandidates.Count -eq 1 -and (Test-Path (Join-Path $rootCandidates[0].FullName 'README.md'))) { return $rootCandidates[0].FullName }
     if (Test-Path (Join-Path $dest 'README.md')) { return $dest }
     $readme = Get-ChildItem -LiteralPath $dest -Filter README.md -Recurse | Select-Object -First 1
@@ -345,6 +473,9 @@ function Write-Receipt([string]$Status,[string]$Blocker,[string]$CommitSha,[stri
         ended_at_utc = $end.ToString('o')
         attempts = $State.attempts
         reboot_count = $State.reboot_count
+        last_reboot_reason = $State.last_reboot_reason
+        wsl_update_attempted = $State.wsl_update_attempted
+        docker_recovery_attempts = $State.docker_recovery_attempts
         AZURE_APPLY_EXECUTED = $false
         CLOUD_RESOURCES_CREATED = 0
         transcript = $Transcript
@@ -365,6 +496,9 @@ function Write-Receipt([string]$Status,[string]$Blocker,[string]$CommitSha,[stri
 - Ended UTC: ``$($end.ToString('o'))``
 - Attempts: ``$($State.attempts)``
 - Reboots: ``$($State.reboot_count)``
+- Last reboot reason: ``$($State.last_reboot_reason)``
+- WSL update attempted: ``$($State.wsl_update_attempted)``
+- Docker recovery attempts: ``$($State.docker_recovery_attempts)``
 - AZURE_APPLY_EXECUTED: ``false``
 - CLOUD_RESOURCES_CREATED: ``0``
 
@@ -379,7 +513,10 @@ $composeVersion = ''
 try {
     Save-State $State 'PRECHECK'
     $commit = Assert-Repo
+
+    Save-State $State 'WINDOWS_SUBSTRATE'
     Ensure-WslPrereqs
+
     Save-State $State 'DOCKER_BOOTSTRAP'
     $docker = Ensure-DockerDesktop
     $dockerVersion = (& $docker --version) -join ' '
@@ -414,7 +551,8 @@ catch {
     if (-not $KeepFailedRuntime) {
         try {
             $compose = Join-Path $RepoPath 'deploy\local\ar\docker-compose.persistence.yml'
-            if (Test-Path -LiteralPath $compose) { docker compose -f $compose down -v --remove-orphans *> $null }
+            $dockerCli = Resolve-DockerCli
+            if ($dockerCli -and (Test-Path -LiteralPath $compose)) { & $dockerCli compose -f $compose down -v --remove-orphans *> $null }
         } catch { }
     }
     Stop-Transcript | Out-Null
