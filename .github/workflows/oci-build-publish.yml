@@ -1,0 +1,203 @@
+name: OCI Build and Publish
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - rebuild/p0-06a-runtime
+    paths:
+      - .github/workflows/oci-build-publish.yml
+      - apps/**
+      - packages/**
+      - schemas/**
+      - contracts/**
+      - db/migrations/**
+      - tests/**
+      - pyproject.toml
+      - uv.lock
+      - .python-version
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: oci-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  CORE_IMAGE: ghcr.io/soaiacore-corporation/soaiacore-core
+  WEB_IMAGE: ghcr.io/soaiacore-corporation/soaiacore-web
+  WORKER_IMAGE: ghcr.io/soaiacore-corporation/soaiacore-worker
+
+jobs:
+  build-test-publish:
+    name: Test, build, publish, and verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: pgvector/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f
+        env:
+          POSTGRES_DB: soaiacore
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d soaiacore"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - name: Check out the authorized commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: 3.12.10
+
+      - name: Test Core and Worker runtime
+        env:
+          SOAIACORE_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/soaiacore
+          SOAIACORE_PROVIDER_MODE: MOCK
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir uv==0.12.5
+          uv sync --frozen
+          uv run --frozen pytest -q
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 24.18.0
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Test Web BFF
+        working-directory: apps/web
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Build Core for linux/amd64
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: apps/core/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          provenance: false
+          build-args: VCS_REF=${{ github.sha }}
+          tags: ${{ env.CORE_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=core-amd64
+          cache-to: type=gha,mode=max,scope=core-amd64
+
+      - name: Build Web for linux/amd64
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          provenance: false
+          build-args: VCS_REF=${{ github.sha }}
+          tags: ${{ env.WEB_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=web-amd64
+          cache-to: type=gha,mode=max,scope=web-amd64
+
+      - name: Build Worker for linux/amd64
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: apps/worker/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          provenance: false
+          build-args: VCS_REF=${{ github.sha }}
+          tags: ${{ env.WORKER_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=worker-amd64
+          cache-to: type=gha,mode=max,scope=worker-amd64
+
+      - name: Log in to GHCR after every test and build passed
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish commit tags and capture immutable digests
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker push "${CORE_IMAGE}:${GITHUB_SHA}"
+          docker push "${WEB_IMAGE}:${GITHUB_SHA}"
+          docker push "${WORKER_IMAGE}:${GITHUB_SHA}"
+
+          resolve_digest() {
+            docker buildx imagetools inspect "$1" | awk '$1 == "Digest:" { print $2; exit }'
+          }
+          core_digest="$(resolve_digest "${CORE_IMAGE}:${GITHUB_SHA}")"
+          web_digest="$(resolve_digest "${WEB_IMAGE}:${GITHUB_SHA}")"
+          worker_digest="$(resolve_digest "${WORKER_IMAGE}:${GITHUB_SHA}")"
+          digest_pattern='^sha256:[0-9a-f]{64}$'
+          [[ "${core_digest}" =~ ${digest_pattern} ]]
+          [[ "${web_digest}" =~ ${digest_pattern} ]]
+          [[ "${worker_digest}" =~ ${digest_pattern} ]]
+
+          {
+            echo "CORE_DIGEST=${core_digest}"
+            echo "WEB_DIGEST=${web_digest}"
+            echo "WORKER_DIGEST=${worker_digest}"
+          } >> "${GITHUB_ENV}"
+
+          jq -n \
+            --arg commit "${GITHUB_SHA}" \
+            --arg platform "linux/amd64" \
+            --arg core "${CORE_IMAGE}@${core_digest}" \
+            --arg web "${WEB_IMAGE}@${web_digest}" \
+            --arg worker "${WORKER_IMAGE}@${worker_digest}" \
+            '{schema_version:"P0-OCI-1",commit:$commit,platform:$platform,live_provider_calls:0,images:{core:$core,web:$web,worker:$worker}}' \
+            > oci-publish-receipt.json
+
+      - name: Upload OCI publish receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: oci-publish-receipt-${{ github.sha }}
+          path: oci-publish-receipt.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Verify anonymous public-read access by digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker logout ghcr.io
+          anonymous_config="$(mktemp -d)"
+          trap 'rm -rf "${anonymous_config}"' EXIT
+          DOCKER_CONFIG="${anonymous_config}" docker buildx imagetools inspect "${CORE_IMAGE}@${CORE_DIGEST}"
+          DOCKER_CONFIG="${anonymous_config}" docker buildx imagetools inspect "${WEB_IMAGE}@${WEB_DIGEST}"
+          DOCKER_CONFIG="${anonymous_config}" docker buildx imagetools inspect "${WORKER_IMAGE}@${WORKER_DIGEST}"
+
+      - name: Record deployment-ready references
+        shell: bash
+        run: |
+          {
+            echo '## P0-06B immutable OCI references'
+            echo
+            echo "- Core: \`${CORE_IMAGE}@${CORE_DIGEST}\`"
+            echo "- Web: \`${WEB_IMAGE}@${WEB_DIGEST}\`"
+            echo "- Worker: \`${WORKER_IMAGE}@${WORKER_DIGEST}\`"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo '- Platform: `linux/amd64`'
+            echo '- Anonymous public-read: `PASS`'
+            echo '- LIVE_PROVIDER_CALLS: `0`'
+          } >> "${GITHUB_STEP_SUMMARY}"
