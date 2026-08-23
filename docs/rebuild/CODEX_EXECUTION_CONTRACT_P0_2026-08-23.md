@@ -164,6 +164,18 @@ Stop on:
 - cloud resource creation requirement;
 - requirement to merge historical PR as-is.
 
+## Permanent execution rule — PRECHECK FIRST
+
+For material technical tasks involving a host, infrastructure, automation or multiple dependencies, the preferred execution model is:
+
+`SOA CONTEXT -> SOA SYNC -> SOA PRECHECK -> IDEMPOTENT/AUTOCORRECTIVE ONE-SHOT -> VALIDATION -> RECEIPT -> GO/NO-GO`
+
+The PRECHECK must be faithful, actionable and sufficient: validate the real current state, prerequisites, permissions, collisions, checkpoints, dependencies, host capability and any condition that can block the run before spending execution time. A doubtful or high-impact signal must be corroborated independently before it becomes a blocker.
+
+The ONE-SHOT must be the default when the same material objective can be completed safely through one entrypoint. It should detect existing state, avoid repeating changes already applied, self-remediate safe prerequisites, persist checkpoints, resume after reboot/interruption, prevent parallel duplicate execution, fail closed with the exact blocker and emit a verifiable receipt.
+
+Do not fragment one material task into manual chains of scripts when the same workflow can be safely made idempotent and resumable. When a blocker reveals a missing precheck or remediation case, improve the PRECHECK/ONE-SHOT so the learned condition is handled automatically in future runs rather than relying on operator memory.
+
 ## Success condition
 
 This task is complete only when the real Windows run reports:
