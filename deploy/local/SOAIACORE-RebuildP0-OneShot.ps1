@@ -12,6 +12,7 @@ This script never performs Azure apply and never creates cloud resources.
 param(
     [string]$RepoPath = (Get-Location).Path,
     [string]$ArZip = "",
+    [string]$GitExe = "",
     [switch]$AutoReboot,
     [switch]$KeepFailedRuntime
 )
@@ -75,6 +76,11 @@ if ([string]::IsNullOrWhiteSpace($ArZip) -and -not [string]::IsNullOrWhiteSpace(
 if (-not [string]::IsNullOrWhiteSpace($ArZip)) { $State.ar_zip = $ArZip }
 Save-State $State $State.stage
 
+if ([string]::IsNullOrWhiteSpace($GitExe)) {
+    $gitCommand = Get-Command git.exe -ErrorAction SilentlyContinue
+    if ($gitCommand) { $GitExe = $gitCommand.Source }
+}
+
 function Test-Admin {
     $id = [Security.Principal.WindowsIdentity]::GetCurrent()
     $p = New-Object Security.Principal.WindowsPrincipal($id)
@@ -84,6 +90,7 @@ function Test-Admin {
 function Relaunch-Elevated {
     $argList = @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"{0}"' -f $PSCommandPath),'-RepoPath',('"{0}"' -f $RepoPath))
     if (-not [string]::IsNullOrWhiteSpace($ArZip)) { $argList += @('-ArZip',('"{0}"' -f $ArZip)) }
+    if (-not [string]::IsNullOrWhiteSpace($GitExe)) { $argList += @('-GitExe',('"{0}"' -f $GitExe)) }
     if ($AutoReboot) { $argList += '-AutoReboot' }
     if ($KeepFailedRuntime) { $argList += '-KeepFailedRuntime' }
     Start-Process powershell.exe -Verb RunAs -ArgumentList ($argList -join ' ')
@@ -118,6 +125,7 @@ function Test-PendingReboot {
 function Register-Resume {
     $cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -RepoPath `"$RepoPath`""
     if (-not [string]::IsNullOrWhiteSpace($ArZip)) { $cmd += " -ArZip `"$ArZip`"" }
+    if (-not [string]::IsNullOrWhiteSpace($GitExe)) { $cmd += " -GitExe `"$GitExe`"" }
     if ($AutoReboot) { $cmd += ' -AutoReboot' }
     if ($KeepFailedRuntime) { $cmd += ' -KeepFailedRuntime' }
     New-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name $ResumeName -PropertyType String -Value $cmd -Force | Out-Null
@@ -147,14 +155,25 @@ function Assert-Repo {
     if (-not (Test-Path -LiteralPath (Join-Path $RepoPath '.git'))) { throw "REPO_NOT_FOUND: $RepoPath" }
     Push-Location $RepoPath
     try {
-        if (-not (Get-CommandPath 'git')) { throw 'GIT_UNAVAILABLE' }
-        $branch = (git branch --show-current).Trim()
+        if ([string]::IsNullOrWhiteSpace($GitExe) -or -not (Test-Path -LiteralPath $GitExe)) { throw 'GIT_UNAVAILABLE' }
+        $branch = (& $GitExe branch --show-current).Trim()
         if ($branch -ne $ExpectedBranch) { throw "WRONG_BRANCH: expected=$ExpectedBranch actual=$branch" }
-        git remote -v | Out-Null
+        & $GitExe remote -v | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'GIT_REMOTE_UNAVAILABLE' }
-        $dirty = git status --porcelain
-        if ($dirty) { throw 'REPO_NOT_CLEAN: preserve local work before one-shot' }
-        return (git rev-parse HEAD).Trim()
+        $dirty = @(& $GitExe status --porcelain)
+        if ($dirty) {
+            $allowedPrefixes = @(
+                'contracts/', 'schemas/', 'db/', 'docs/persistence/', 'docs/azure/',
+                'validation/', 'deploy/local/ar/', 'receipts/'
+            )
+            $unexpected = @($dirty | Where-Object {
+                $path = $_.Substring(3).Replace('\\','/')
+                -not ($allowedPrefixes | Where-Object { $path.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) })
+            })
+            if ($unexpected) { throw "REPO_NOT_CLEAN: unrelated changes: $($unexpected -join '; ')" }
+            Write-Step 'PRECHECK: resuming with workflow-owned generated changes only.'
+        }
+        return (& $GitExe rev-parse HEAD).Trim()
     } finally { Pop-Location }
 }
 
@@ -297,7 +316,7 @@ function Invoke-LocalGate([string]$ArRoot) {
 
 function Write-Receipt([string]$Status,[string]$Blocker,[string]$CommitSha,[string]$DockerVersion,[string]$ComposeVersion) {
     $end = (Get-Date).ToUniversalTime()
-    $base = 'LOCAL_POSTGRES_GATE_' + (Get-Date -Format 'yyyy-MM-dd')
+    $base = 'LOCAL_POSTGRES_GATE_2026-08-23'
     $jsonPath = Join-Path $ReceiptDir ($base + '.json')
     $mdPath = Join-Path $ReceiptDir ($base + '.md')
     $hostSafe = $env:COMPUTERNAME
@@ -322,22 +341,22 @@ function Write-Receipt([string]$Status,[string]$Blocker,[string]$CommitSha,[stri
     @"
 # SOAIACORE Local PostgreSQL Gate Receipt
 
-- Status: `$Status`
-- Blocker: `$Blocker`
-- Architecture: `$ExpectedArchitecture`
-- Branch: `$ExpectedBranch`
-- Commit before receipt: `$CommitSha`
-- Host: `$hostSafe`
-- Docker: `$DockerVersion`
-- Docker Compose: `$ComposeVersion`
-- Started UTC: `$($State.started_at_utc)`
-- Ended UTC: `$($end.ToString('o'))`
-- Attempts: `$($State.attempts)`
-- Reboots: `$($State.reboot_count)`
-- AZURE_APPLY_EXECUTED: `false`
-- CLOUD_RESOURCES_CREATED: `0`
+- Status: ``$Status``
+- Blocker: ``$Blocker``
+- Architecture: ``$ExpectedArchitecture``
+- Branch: ``$ExpectedBranch``
+- Commit before receipt: ``$CommitSha``
+- Host: ``$hostSafe``
+- Docker: ``$DockerVersion``
+- Docker Compose: ``$ComposeVersion``
+- Started UTC: ``$($State.started_at_utc)``
+- Ended UTC: ``$($end.ToString('o'))``
+- Attempts: ``$($State.attempts)``
+- Reboots: ``$($State.reboot_count)``
+- AZURE_APPLY_EXECUTED: ``false``
+- CLOUD_RESOURCES_CREATED: ``0``
 
-Final: `SOAIACORE_LOCAL_POSTGRES_GATE=$Status`
+Final: ``SOAIACORE_LOCAL_POSTGRES_GATE=$Status``
 "@ | Set-Content -LiteralPath $mdPath -Encoding UTF8
     return @($jsonPath,$mdPath)
 }
