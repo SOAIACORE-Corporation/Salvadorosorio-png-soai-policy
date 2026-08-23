@@ -14,7 +14,16 @@ COPY apps/core/pyproject.toml apps/core/pyproject.toml
 COPY apps/core/src apps/core/src
 COPY apps/worker/pyproject.toml apps/worker/pyproject.toml
 COPY apps/worker/src apps/worker/src
-RUN uv sync --frozen --no-dev --no-editable --package soaiacore-core
+RUN uv sync --frozen --no-dev --no-editable --package soaiacore-core \
+      --no-install-package soaiacore-core \
+      --no-install-package soaiacore-runtime \
+    && mkdir -p /tmp/soaiacore-wheels \
+    && uv build --package soaiacore-runtime --wheel --out-dir /tmp/soaiacore-wheels \
+    && uv build --package soaiacore-core --wheel --out-dir /tmp/soaiacore-wheels \
+    && uv pip install --python /src/.venv/bin/python --no-deps \
+      /tmp/soaiacore-wheels/soaiacore_runtime-*.whl \
+      /tmp/soaiacore-wheels/soaiacore_core-*.whl \
+    && /src/.venv/bin/python -c "import pathlib, site, soaiacore_core, soaiacore_runtime; root = pathlib.Path(site.getsitepackages()[0]).resolve(); paths = [pathlib.Path(soaiacore_core.__file__).resolve(), pathlib.Path(soaiacore_runtime.__file__).resolve()]; print(*paths, sep='\n'); assert not list(root.glob('_editable_impl_soaiacore_*.pth')); assert all(path.is_relative_to(root) for path in paths)"
 
 FROM --platform=linux/amd64 docker.io/library/python:3.12.10-slim-bookworm@sha256:97983fa8cc88343512862c62307159a82261c3528dc025f79e5a3f7af43e50b4 AS runtime
 ARG VCS_REF=uncommitted

@@ -10,7 +10,10 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
 WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY apps/web/ ./
-RUN npm run build
+RUN npm run build \
+    && test -s /app/.next/standalone/server.js \
+    && test -d /app/.next/server/app/api/health/live \
+    && test -d /app/.next/server/app/api/health/ready
 
 FROM --platform=linux/amd64 docker.io/library/node:24.18.0-bookworm-slim@sha256:d45d78e7929b46875bbd4e29bea672d5bc48186c6c3588306521c815e78352d6 AS runtime
 ARG VCS_REF=uncommitted
@@ -26,4 +29,6 @@ COPY --from=builder --chown=65532:65532 /app/.next/standalone ./
 COPY --from=builder --chown=65532:65532 /app/.next/static ./.next/static
 USER 65532:65532
 EXPOSE 3000
+HEALTHCHECK --interval=5s --timeout=3s --start-period=15s --retries=12 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:3000/api/health/live').then((response) => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))"]
 CMD ["node", "server.js"]
