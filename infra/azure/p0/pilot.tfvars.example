@@ -1,0 +1,6 @@
+# Copy to an untracked .tfvars file and replace every placeholder before an
+# authorized plan. Keep credentials and subscription identifiers outside Git.
+expires_at  = "2026-08-30T00:00:00Z"
+core_image  = "REGISTRY/soaiacore-core@sha256:REPLACE_WITH_APPROVED_DIGEST"
+web_image   = "REGISTRY/soaiacore-web@sha256:REPLACE_WITH_APPROVED_DIGEST"
+worker_image = "REGISTRY/soaiacore-worker@sha256:REPLACE_WITH_APPROVED_DIGEST"
