@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.soaiacore.com/context/context-graph-edge-v0.1.schema.json",
+  "title": "SOAIACORE ContextGraph Edge v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "edge_id",
+    "from_ref",
+    "to_ref",
+    "relation_type",
+    "directed",
+    "valid_from",
+    "created_at"
+  ],
+  "properties": {
+    "edge_id": {
+      "type": "string",
+      "pattern": "^edge_[A-Za-z0-9_-]+$"
+    },
+    "from_ref": {
+      "type": "string"
+    },
+    "to_ref": {
+      "type": "string"
+    },
+    "relation_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "directed": {
+      "type": "boolean"
+    },
+    "valid_from": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "valid_until": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "weight": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "evidence_ref": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^evref_[A-Za-z0-9_-]+$"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

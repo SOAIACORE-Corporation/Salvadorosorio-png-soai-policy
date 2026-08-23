@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.soaiacore.com/claims/claim-v0.2.schema.json",
+  "title": "SOAIACORE Claim v0.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "claim_id",
+    "statement",
+    "claim_kind",
+    "epistemic_class",
+    "analysis_profile_id",
+    "supporting_evidence_refs",
+    "status",
+    "created_at"
+  ],
+  "properties": {
+    "claim_id": {
+      "type": "string",
+      "pattern": "^clm_[A-Za-z0-9_-]+$"
+    },
+    "subject_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "statement": {
+      "type": "string",
+      "minLength": 1
+    },
+    "claim_kind": {
+      "enum": [
+        "OBSERVATION",
+        "SIGNAL",
+        "PATTERN",
+        "RELATION",
+        "EVENT",
+        "ESTIMATE",
+        "FORECAST",
+        "SCENARIO"
+      ]
+    },
+    "epistemic_class": {
+      "enum": [
+        "DOCUMENTED_FACT",
+        "CONFIRMED_CONTEXT",
+        "INFERENCE",
+        "HYPOTHESIS",
+        "CONTRADICTION",
+        "UNKNOWN",
+        "STALE"
+      ]
+    },
+    "analysis_profile_id": {
+      "type": "string",
+      "pattern": "^AP-[0-9]{3}$"
+    },
+    "methodology_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "supporting_evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^evref_[A-Za-z0-9_-]+$"
+      },
+      "uniqueItems": true
+    },
+    "contradicting_evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^evref_[A-Za-z0-9_-]+$"
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "alternative_claim_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^clm_[A-Za-z0-9_-]+$"
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "falsifiers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "scope_boundary": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "confidence_score": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "confidence_semantics": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "probability_estimate": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "calibration_ref": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^cal_[A-Za-z0-9_-]+$"
+    },
+    "status": {
+      "enum": [
+        "DRAFT",
+        "ACTIVE",
+        "CONTESTED",
+        "SUPERSEDED",
+        "RETRACTED"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "metadata": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "probability_estimate"
+        ],
+        "properties": {
+          "probability_estimate": {
+            "type": "number"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "methodology_ref",
+          "calibration_ref"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "claim_kind": {
+            "const": "FORECAST"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "methodology_ref",
+          "calibration_ref"
+        ]
+      }
+    }
+  ]
+}

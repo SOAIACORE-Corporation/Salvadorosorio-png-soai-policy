@@ -1,0 +1,179 @@
+{
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 1352,
+      "sha256": "9333389b5e2c9251846578f911170283d02cdd660aafd7652fd8e26b0edd5521"
+    },
+    {
+      "path": "azure/AZURE_P0_INTEGRATION_BINDING_v0.1.md",
+      "bytes": 1667,
+      "sha256": "291b86f7ef8fa0e9e8b1f2aa506197795fc37719ba0b49332e9e52ea8e656727"
+    },
+    {
+      "path": "contracts/CALIBRATION_REGISTRY_CONTRACT_v0.1.md",
+      "bytes": 297,
+      "sha256": "0c0ca3f82cdcb0d47f542ec56569d2e6f0015d08c0d1e7a4c42bf54c69c87848"
+    },
+    {
+      "path": "contracts/CONTEXT_GRAPH_INTERFACE_v0.1.md",
+      "bytes": 323,
+      "sha256": "4f9fcbca46e3a9b345470f7c45b7aee0f3392d5ed387e348411328b2063e02ef"
+    },
+    {
+      "path": "contracts/DATA_MINIMIZATION_POLICY_v0.1.md",
+      "bytes": 325,
+      "sha256": "5fbd7ee463b778bccc758b450c799dc1486dbd76048c39a7f6020c0d9992f6d6"
+    },
+    {
+      "path": "contracts/EXTERNAL_SOURCE_REGISTRY_CONTRACT_v0.1.md",
+      "bytes": 239,
+      "sha256": "7a43e3b1523a7c5b37840b44737f89fb7a6dec937100a0f6519581fedf2007f6"
+    },
+    {
+      "path": "contracts/MODEL_EXECUTION_MODES_v0.1.md",
+      "bytes": 377,
+      "sha256": "daa7117f095bf128f1681cd72477726e9f19fc528185026401740ef31f17d0a8"
+    },
+    {
+      "path": "contracts/REVIEW_POLICY_CONTRACT_v0.1.md",
+      "bytes": 538,
+      "sha256": "2b630175bec7118baeb380d391d1658bbb761c061d66b96f151c846802f05c1d"
+    },
+    {
+      "path": "contracts/ZERO_FIRST_P0_POLICY_v0.1.md",
+      "bytes": 705,
+      "sha256": "f1184602ae675795775377a4684abd63b3df36eefd78b5e3574914beab1e04bb"
+    },
+    {
+      "path": "docs/SOAIACORE_CANONICAL_PERSISTENCE_MODEL_v1.0.md",
+      "bytes": 5881,
+      "sha256": "1588298e9394bd3c78401ce8ecaa62ee75d6812a99e5e07c142af0cddd688909"
+    },
+    {
+      "path": "local/docker-compose.persistence.yml",
+      "bytes": 498,
+      "sha256": "657f388a6d7978c7f2944fdb4d0e56e2b6da87d672776847caf8d11c3bb74df6"
+    },
+    {
+      "path": "local/run_local_gate.ps1",
+      "bytes": 2133,
+      "sha256": "120728b0965861e79adeb53af9b80789eaa9f55184468283ef964a26510ddaa8"
+    },
+    {
+      "path": "local/run_local_gate.sh",
+      "bytes": 1654,
+      "sha256": "0c0d8fa5f43411a45e2451ae94a88c7f02f018ab90f8541f14a557c8d4912d3c"
+    },
+    {
+      "path": "schemas/analysis-profile-v0.3.schema.json",
+      "bytes": 2772,
+      "sha256": "8c417a54c498318206af26655f91032adb6d85b4e5cfca0dc3e0c35183b1b2a2"
+    },
+    {
+      "path": "schemas/calibration-record-v0.1.schema.json",
+      "bytes": 1840,
+      "sha256": "2d47f5d50a6dbe31e01c5404450fb88f98c901b3a1ac14edc69256a6472d2dc0"
+    },
+    {
+      "path": "schemas/claim-v0.2.schema.json",
+      "bytes": 3564,
+      "sha256": "e04518dd7d852373872c90fde3c015663cf695c9231e44dcb889a69a53e1bd6e"
+    },
+    {
+      "path": "schemas/context-graph-edge-v0.1.schema.json",
+      "bytes": 1279,
+      "sha256": "aa507e6be78186f62850b509f4030a21b7ca5605f9576150c461c016fe690cc4"
+    },
+    {
+      "path": "schemas/data-minimization-decision-v0.1.schema.json",
+      "bytes": 1117,
+      "sha256": "e91606030fc02fee5c5bf07aa7f30e5708066f150579e72069a411f82b983d7d"
+    },
+    {
+      "path": "schemas/external-source-registry-v0.1.schema.json",
+      "bytes": 1095,
+      "sha256": "48706df649d8f4fa1fe73e8b7c784d7f91ee9ec81bf461890933da1fe0ff8a96"
+    },
+    {
+      "path": "schemas/review-policy-v0.1.schema.json",
+      "bytes": 1144,
+      "sha256": "230d77023bb90d7187fe6af80df5628d22b0cfabc8566bafeff93a0f79769607"
+    },
+    {
+      "path": "sql/migrations/0001_extensions_and_schemas.sql",
+      "bytes": 663,
+      "sha256": "b572aca7a63eb6f1fc336690fc1fca9b4c36829c5446a9c95014bd7f6442aba4"
+    },
+    {
+      "path": "sql/migrations/0002_core_identity_evidence.sql",
+      "bytes": 4526,
+      "sha256": "a934fddc7f51357e8c6bc34a653a82ac59865581339b2b67fb8d6eaecaa8da55"
+    },
+    {
+      "path": "sql/migrations/0003_intelligence.sql",
+      "bytes": 3718,
+      "sha256": "1a2e8569df79648bdc220e94b325ea61b8f52ab82d41ac7b69be486aa76ee717"
+    },
+    {
+      "path": "sql/migrations/0004_context_and_claims.sql",
+      "bytes": 3087,
+      "sha256": "9e6e337f8a8b297564be1bd0f409d976800ab3cbe30751289e0895fb9ecf9ea1"
+    },
+    {
+      "path": "sql/migrations/0005_context_graph.sql",
+      "bytes": 977,
+      "sha256": "0a9a9671766a3ca0bc637d3370ec2db1cccb4996342eacd94e3b643089909f67"
+    },
+    {
+      "path": "sql/migrations/0006_adjudication_and_ops.sql",
+      "bytes": 3576,
+      "sha256": "969b4ca488b2e3f40f6d55d98adc75dc7b4d91c2ce2589bbea2f01a7abe9e3ab"
+    },
+    {
+      "path": "sql/migrations/0007_indexes.sql",
+      "bytes": 1037,
+      "sha256": "67ae88a4fde49cf8eed8a7a5e093ea119adfc7481edcdfc3cca121b4e4edc030"
+    },
+    {
+      "path": "sql/tests/architecture_invariants.sql",
+      "bytes": 2394,
+      "sha256": "7253210b0e396532931a8fc09c502ba2a7160e8c4afd5d5147d5b3d886338cf8"
+    },
+    {
+      "path": "sql/tests/context_graph_recursive_example.sql",
+      "bytes": 714,
+      "sha256": "d8726be5f93abdcbc0f7b0217ca9525167664588651758bfd8b8b5120d13b14c"
+    },
+    {
+      "path": "sql/tests/integrity_checks.sql",
+      "bytes": 983,
+      "sha256": "ab734de117f0993b932acea97e916e5f6e3d39379362c894fbc6a54ddc5664c5"
+    },
+    {
+      "path": "sql/tests/seed_minimal.sql",
+      "bytes": 3512,
+      "sha256": "cdabf55211e7affb79a249d39d3f45f619852ad3a2e409b2e4257c0a48ce41d6"
+    },
+    {
+      "path": "validation/AR_v0.8_VALIDATION_RECEIPT.json",
+      "bytes": 6598,
+      "sha256": "ffa7f747f83bea6b3a81871525ebee170264d20223894c92dc813e472f37b70c"
+    },
+    {
+      "path": "validation/LOCAL_POSTGRES_GATE_PRECHECK.json",
+      "bytes": 800,
+      "sha256": "bec0bf95b5f9db63c756e2411b01d55640754ef91ba0d8762675c11c3e826222"
+    },
+    {
+      "path": "validation/STATIC_AND_SEMANTIC_GATE.json",
+      "bytes": 5608,
+      "sha256": "5d4990c1a38722532e6d77a8d3c1417a4b27b30e93e83b78cf2ab27f4de52d0c"
+    },
+    {
+      "path": "validation/static_gate.py",
+      "bytes": 3228,
+      "sha256": "847e2ee42257785d75eae82db566b90f83cc507846debe0a564c19c918e4edd1"
+    }
+  ]
+}

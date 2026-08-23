@@ -1,0 +1,306 @@
+{
+  "status": "PASS",
+  "checks": [
+    {
+      "name": "schema:analysis-profile-v0.3.schema.json",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "schema:calibration-record-v0.1.schema.json",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "schema:claim-v0.2.schema.json",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "schema:context-graph-edge-v0.1.schema.json",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "schema:data-minimization-decision-v0.1.schema.json",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "schema:external-source-registry-v0.1.schema.json",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "schema:review-policy-v0.1.schema.json",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "namespace:soa_core",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "namespace:soa_identity",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "namespace:soa_evidence",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "namespace:soa_intelligence",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "namespace:soa_adjudication",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "namespace:soa_ops",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "namespace:experimental",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:projects",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:corpora",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:contexts",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:context_capsules",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:relationships",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:claims",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:claim_relations",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:claim_evidence",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:context_graph_edges",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:observed_actors",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:canonical_subjects",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:aliases",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:identity_claims",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:identity_decisions",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:source_artifacts",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:evidence_objects",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:evidence_transforms",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:evidence_references",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:analysis_profiles",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:authorization_decisions",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:calibration_registry",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:external_source_registry",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:runs",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:model_runs",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:tool_runs",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:embeddings",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:adjudications",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:adjudication_ratings",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:ground_truth_ledgers",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:ground_truth_items",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:jobs",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:context_receipts",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:deployment_receipts",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "table:schema_registry",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "pgvector-extension",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "probability-guard",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "contextgraph-postgres",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "model-modes",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "no-cloud-vendor-in-ddl",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "no-destructive-ddl",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "identity-never-merge",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "evidence-admissible",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "conditional-human-review",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "maturity-M0-M3",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "epistemic-reservation",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "local-first",
+      "pass": true,
+      "detail": ""
+    }
+  ],
+  "errors": []
+}

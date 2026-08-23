@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.soaiacore.com/policy/review-policy-v0.1.schema.json",
+  "title": "SOAIACORE ReviewPolicy Decision v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "review_policy_id",
+    "mode",
+    "reason_codes",
+    "created_at"
+  ],
+  "properties": {
+    "review_policy_id": {
+      "type": "string",
+      "pattern": "^rpol_[A-Za-z0-9_-]+$"
+    },
+    "mode": {
+      "enum": [
+        "NONE",
+        "OPTIONAL",
+        "REQUIRED"
+      ]
+    },
+    "analysis_profile_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^AP-[0-9]{3}$"
+    },
+    "reason_codes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "identity_uncertainty": {
+      "type": "boolean"
+    },
+    "sensitivity_level": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "downstream_consequence": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.soaiacore.com/calibration/calibration-record-v0.1.schema.json",
+  "title": "SOAIACORE CalibrationRegistry Record v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "calibration_id",
+    "analysis_profile_id",
+    "methodology_ref",
+    "metric_name",
+    "metric_value",
+    "sample_size",
+    "created_at"
+  ],
+  "properties": {
+    "calibration_id": {
+      "type": "string",
+      "pattern": "^cal_[A-Za-z0-9_-]+$"
+    },
+    "model_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "model_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "analysis_profile_id": {
+      "type": "string",
+      "pattern": "^AP-[0-9]{3}$"
+    },
+    "methodology_ref": {
+      "type": "string"
+    },
+    "dataset_or_outcome": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "evaluation_window": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "temporal_horizon": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "metric_name": {
+      "type": "string"
+    },
+    "metric_value": {
+      "type": "number"
+    },
+    "sample_size": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "baseline": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "calibration_method": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "confidence_interval": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "backtest_metadata": {
+      "type": "object"
+    },
+    "supersedes": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^cal_[A-Za-z0-9_-]+$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
