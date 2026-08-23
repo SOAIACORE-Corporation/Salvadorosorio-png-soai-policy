@@ -28,10 +28,6 @@ Drive file id: `1EmOJFGv-1slm9GYtXD4V849wANxOYpaw`
 
 The package is an AR/readiness package, not Architecture v0.8.
 
-If the package is not accessible to Codex, stop with:
-
-`AR_PACKAGE_ACCESS=BLOCKED`
-
 Do **not** reconstruct missing package files from memory or from the historical PR.
 
 ## Objective
@@ -42,63 +38,71 @@ Reach a verifiable:
 
 on the Windows development machine using PostgreSQL + pgvector locally, with no cloud deployment and no billable cloud dependency.
 
-## Execution sequence
+## Execution mode — ONE-SHOT / IDEMPOTENT
 
-### 1. PRECHECK
+The canonical Windows entrypoint is:
 
-Verify and record:
+`deploy/local/SOAIACORE-RebuildP0-OneShot.ps1`
 
-- Windows host and current user.
-- Git installed and authenticated for the repository.
-- repository clean or explicitly identify local changes;
-- current branch is `rebuild/p0-v0.6-final`;
-- Docker CLI available;
-- `docker compose version` succeeds;
-- Docker engine is running;
-- no required secret is printed to console or committed.
+This replaces the previous manual multi-step remediation flow.
 
-Do not install or alter unrelated system software automatically. If Docker is unavailable, stop with a precise blocker instead of simulating a PASS.
+Required properties:
 
-### 2. Retrieve and verify AR v0.8
+1. One user/Codex task starts the workflow.
+2. Safe to rerun after failure, interruption or reboot.
+3. Detects existing prerequisites and does not reinstall them unnecessarily.
+4. Uses a durable checkpoint under `%ProgramData%\SOAIACORE\RebuildP0`.
+5. Elevates only when local prerequisite changes require administrator rights.
+6. May install/enable only prerequisites required for the local gate: WSL2/VirtualMachinePlatform and Docker Desktop/Compose.
+7. Must not install unrelated software.
+8. When a reboot is necessary, it registers a one-time resume command. `-AutoReboot` may be used only when the operator has explicitly authorized an automatic Windows restart.
+9. Reconciles the AR package into the rebuild tree by copy-if-different semantics.
+10. Executes the real PostgreSQL + pgvector gate, tears down the disposable runtime and writes receipts.
+11. Never executes Azure apply and never creates cloud resources.
 
-Obtain the authoritative ZIP from Drive.
+## Codex sequence
 
-Unpack into an isolated temporary workspace.
+### A. Obtain authoritative AR package
 
-Read:
+Use the connected Drive access to retrieve Drive file ID `1EmOJFGv-1slm9GYtXD4V849wANxOYpaw` to a local temporary/download path. Verify the expected file name and non-zero size.
 
-- `README.md`
-- `validation/AR_v0.8_MANIFEST_FINAL.json`
-- `validation/STATIC_AND_SEMANTIC_GATE.json`
-- `validation/LOCAL_POSTGRES_GATE_PRECHECK.json`
+If Drive access itself fails, return exactly:
 
-Verify hashes/manifest where available.
+`AR_PACKAGE_ACCESS=BLOCKED`
 
-### 3. Reconcile source tree
+Do not synthesize the package.
 
-Do not overwrite historical PR content blindly.
+### B. Execute the one-shot
 
-Normalize the new rebuild implementation toward this target structure:
+From branch `rebuild/p0-v0.6-final`, run:
 
-```text
-contracts/
-schemas/
-db/
-  migrations/
-  tests/
-docs/
-  architecture/
-  persistence/
-  governance/
-  azure/
-deploy/
-  local/
-  azure/
-validation/
-receipts/
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\deploy\local\SOAIACORE-RebuildP0-OneShot.ps1" -RepoPath "$PWD" -ArZip "<LOCAL_VERIFIED_AR_ZIP_PATH>"
 ```
 
-Rules:
+If the operator explicitly authorizes unattended restart, add `-AutoReboot`.
+
+The local AR path is an execution argument, not a committed configuration value.
+
+### C. Idempotent behavior
+
+The one-shot must:
+
+- verify repository + expected branch;
+- preserve/stop on unrelated dirty worktree changes;
+- enable WSL2/VirtualMachinePlatform only when missing;
+- install Docker Desktop via the Windows package manager only when missing;
+- start/wait for Docker engine only when needed;
+- verify Docker Compose;
+- expand AR v0.8 into an isolated workspace;
+- reconcile contracts/schemas/migrations/tests/docs into canonical rebuild paths by hash/copy-if-different;
+- execute the supplied real local PostgreSQL gate;
+- validate PostgreSQL + pgvector, migrations, identity, evidence/claims, ContextGraph, receipts and negative constraints;
+- tear down disposable containers/volumes unless explicitly preserving a failed runtime for debugging;
+- write BLOCKED/PASS receipts;
+- clear resume state after PASS.
+
+## Architecture constraints
 
 1. Preserve PostgreSQL + pgvector as the P0 persistence baseline.
 2. Preserve the three-deployable P0 architecture; do not create microservices per logical plane.
@@ -109,94 +113,60 @@ Rules:
 7. Do not introduce Neo4j, Kafka, Kubernetes, dedicated vector DB, GPU runtime or other deferred components.
 8. Historical `data/schema.sql` is delta/reference input only; it is not allowed to override the new canonical persistence model.
 
-When path normalization changes scripts, update their relative paths and re-test them.
+Any fix must remain implementation-level. If a fix would change canonical architecture semantics, STOP and report:
 
-### 4. Static validation
+`ARCHITECTURE_DELTA_REQUIRED`
 
-Run the supplied static/semantic validation. It must PASS before PostgreSQL execution.
+## Receipt
 
-Any fix must remain implementation-level. If a fix would change canonical architecture semantics, STOP and report `ARCHITECTURE_DELTA_REQUIRED` rather than modifying v0.6 silently.
-
-### 5. Local PostgreSQL + pgvector gate
-
-Use the supplied local Docker/PowerShell gate or an equivalent faithful execution of the same migrations/tests.
-
-Required behavior:
-
-1. Create a fresh disposable PostgreSQL + pgvector instance.
-2. Apply all migrations in order.
-3. Verify `vector` extension.
-4. Verify canonical schemas/tables.
-5. Load synthetic/minimal seed only.
-6. Test Identity persistence and decisions.
-7. Test Evidence → EvidenceReference → Claim provenance chain.
-8. Test ContextGraph edge persistence/traversal.
-9. Test ContextReceipt persistence.
-10. Confirm invalid probability without methodology/calibration is rejected.
-11. Confirm invalid evidence FK is rejected.
-12. Run architecture invariant and integrity tests.
-13. Tear down the disposable DB and volume.
-
-Do not use production or personal datasets.
-
-### 6. Receipt
-
-Create:
+Create/maintain:
 
 - `receipts/LOCAL_POSTGRES_GATE_2026-08-23.json`
 - `receipts/LOCAL_POSTGRES_GATE_2026-08-23.md`
 
-Receipt must include:
+Receipt must include architecture, branch/commit, safe host identifier, Docker/Compose and database versions when available, migrations/tests, timestamps, failures/fixes, retry/reboot counts and confirmations:
 
-- architecture version;
-- branch and commit SHA;
-- host identifier without sensitive credentials;
-- Docker/PostgreSQL/pgvector versions;
-- migrations applied;
-- tests executed;
-- PASS/FAIL per test group;
-- start/end timestamps;
-- failures/fixes performed;
-- confirmation `CLOUD_RESOURCES_CREATED=0`;
-- confirmation `AZURE_APPLY_EXECUTED=false`;
-- final status.
+- `CLOUD_RESOURCES_CREATED=0`
+- `AZURE_APPLY_EXECUTED=false`
 
 Only a real successful run may emit:
 
 `SOAIACORE_LOCAL_POSTGRES_GATE=PASS`
 
-### 7. Git discipline
+## Git discipline
 
 If PASS:
 
 - commit only to `rebuild/p0-v0.6-final`;
-- use a clear rebuild/P0 commit message;
+- include reconciled implementation files and receipts;
 - do not merge to `main`;
 - do not close or merge historical PR #1;
-- leave the branch ready for review.
+- leave branch ready for review.
 
-If FAIL:
+If BLOCKED:
 
-- preserve logs/receipt;
-- commit only safe diagnostic/fix changes if appropriate;
-- report exact blocker;
+- preserve the blocker receipt/logs;
+- commit only safe implementation/diagnostic changes if appropriate;
+- rerun the same one-shot after remediation;
 - do not proceed to Azure.
 
 ## Stop conditions
 
-Stop immediately on:
+Stop on:
 
 - architecture semantic conflict;
-- missing authoritative AR package;
-- inability to run PostgreSQL/pgvector for real;
+- Drive AR package inaccessible;
+- missing Windows package-manager capability needed to install Docker (`WINGET_UNAVAILABLE`);
+- virtualization/WSL failure that cannot be remediated safely;
 - credential/identity mismatch;
+- unrelated dirty repository state;
 - unexpected destructive operation;
 - cloud resource creation requirement;
 - requirement to merge historical PR as-is.
 
 ## Success condition
 
-This task is complete only when the repository contains a verifiable local execution receipt and the real Windows run reports:
+This task is complete only when the real Windows run reports:
 
 `SOAIACORE_LOCAL_POSTGRES_GATE=PASS`
 
