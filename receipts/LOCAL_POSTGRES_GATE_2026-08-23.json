@@ -1,17 +1,17 @@
 ﻿{
     "status":  "BLOCKED",
-    "blocker":  "No se encuentra la propiedad \u0027reboot_count\u0027 en este objeto. Compruebe que existe.",
+    "blocker":  "ERROR: Error response from daemon: Docker Desktop is unable to start",
     "architecture":  "v0.6 FINAL / FROZEN FOR P0",
     "branch":  "rebuild/p0-v0.6-final",
-    "commit_sha_before_receipt":  "7e56fb9a0ee6495f77fa9603f7470907f5b2e15e",
+    "commit_sha_before_receipt":  "0ef08135097b8b5240d165368a4dab555a3d866b",
     "host":  "AN-VCABRERA",
     "docker_version":  "",
     "docker_compose_version":  "",
     "started_at_utc":  "2026-08-23T05:40:32.6061994Z",
-    "ended_at_utc":  "2026-08-23T05:58:22.9312676Z",
-    "attempts":  4,
-    "reboot_count":  0,
+    "ended_at_utc":  "2026-08-23T08:00:05.6858166Z",
+    "attempts":  12,
+    "reboot_count":  3,
     "AZURE_APPLY_EXECUTED":  false,
     "CLOUD_RESOURCES_CREATED":  0,
-    "transcript":  "C:\\ProgramData\\SOAIACORE\\RebuildP0\\logs\\oneshot-20260822-234457.log"
+    "transcript":  "C:\\ProgramData\\SOAIACORE\\RebuildP0\\logs\\oneshot-20260823-015536.log"
 }
