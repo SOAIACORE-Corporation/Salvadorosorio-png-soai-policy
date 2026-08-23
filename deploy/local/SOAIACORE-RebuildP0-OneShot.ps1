@@ -182,8 +182,8 @@ function Ensure-WslPrereqs {
     $needsReboot = $false
     $features = @('Microsoft-Windows-Subsystem-Linux','VirtualMachinePlatform')
     foreach ($f in $features) {
-        $state = (Get-WindowsOptionalFeature -Online -FeatureName $f).State
-        if ($state -ne 'Enabled') {
+        $featureState = (Get-WindowsOptionalFeature -Online -FeatureName $f).State
+        if ($featureState -ne 'Enabled') {
             Write-Step "Enabling Windows feature $f"
             Enable-WindowsOptionalFeature -Online -FeatureName $f -All -NoRestart | Out-Null
             $needsReboot = $true

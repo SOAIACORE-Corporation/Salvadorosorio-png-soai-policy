@@ -1,0 +1,17 @@
+﻿{
+    "status":  "BLOCKED",
+    "blocker":  "No se encuentra la propiedad \u0027reboot_count\u0027 en este objeto. Compruebe que existe.",
+    "architecture":  "v0.6 FINAL / FROZEN FOR P0",
+    "branch":  "rebuild/p0-v0.6-final",
+    "commit_sha_before_receipt":  "7e56fb9a0ee6495f77fa9603f7470907f5b2e15e",
+    "host":  "AN-VCABRERA",
+    "docker_version":  "",
+    "docker_compose_version":  "",
+    "started_at_utc":  "2026-08-23T05:40:32.6061994Z",
+    "ended_at_utc":  "2026-08-23T05:58:22.9312676Z",
+    "attempts":  4,
+    "reboot_count":  0,
+    "AZURE_APPLY_EXECUTED":  false,
+    "CLOUD_RESOURCES_CREATED":  0,
+    "transcript":  "C:\\ProgramData\\SOAIACORE\\RebuildP0\\logs\\oneshot-20260822-234457.log"
+}
