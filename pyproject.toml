@@ -1,0 +1,36 @@
+[project]
+name = "soaiacore-p0-runtime-workspace"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "soaiacore-core",
+  "soaiacore-runtime",
+  "soaiacore-worker",
+]
+
+[dependency-groups]
+dev = [
+  "httpx>=0.28,<0.29",
+  "pytest>=8.3,<9",
+  "pytest-asyncio>=0.25,<1",
+]
+
+[tool.uv.workspace]
+members = [
+  "apps/core",
+  "apps/worker",
+  "packages/python-runtime",
+]
+
+[tool.uv.sources]
+soaiacore-core = { workspace = true }
+soaiacore-runtime = { workspace = true }
+soaiacore-worker = { workspace = true }
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers"
+testpaths = ["tests", "apps/core/tests", "apps/worker/tests"]
+markers = [
+  "integration: requires the disposable PostgreSQL+pgvector acceptance database",
+]
+

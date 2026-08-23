@@ -1,0 +1,16 @@
+.git
+.github
+.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/node_modules
+apps/web/.next
+infra
+receipts
+**/*.tfplan
+**/*.tfstate
+**/*.tfstate.*
+.env
+.env.*
+docs
