@@ -14,6 +14,7 @@ param(
     [string]$ArZip = "",
     [string]$GitExe = "",
     [switch]$AutoReboot,
+    [switch]$ContinueWithoutReboot,
     [switch]$KeepFailedRuntime
 )
 
@@ -92,6 +93,7 @@ function Relaunch-Elevated {
     if (-not [string]::IsNullOrWhiteSpace($ArZip)) { $argList += @('-ArZip',('"{0}"' -f $ArZip)) }
     if (-not [string]::IsNullOrWhiteSpace($GitExe)) { $argList += @('-GitExe',('"{0}"' -f $GitExe)) }
     if ($AutoReboot) { $argList += '-AutoReboot' }
+    if ($ContinueWithoutReboot) { $argList += '-ContinueWithoutReboot' }
     if ($KeepFailedRuntime) { $argList += '-KeepFailedRuntime' }
     Start-Process powershell.exe -Verb RunAs -ArgumentList ($argList -join ' ')
     Stop-Transcript | Out-Null
@@ -123,6 +125,7 @@ function Register-Resume {
     if (-not [string]::IsNullOrWhiteSpace($ArZip)) { $cmd += " -ArZip `"$ArZip`"" }
     if (-not [string]::IsNullOrWhiteSpace($GitExe)) { $cmd += " -GitExe `"$GitExe`"" }
     if ($AutoReboot) { $cmd += ' -AutoReboot' }
+    if ($ContinueWithoutReboot) { $cmd += ' -ContinueWithoutReboot' }
     if ($KeepFailedRuntime) { $cmd += ' -KeepFailedRuntime' }
     New-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name $ResumeName -PropertyType String -Value $cmd -Force | Out-Null
 }
@@ -185,7 +188,14 @@ function Ensure-WslPrereqs {
             $needsReboot = $true
         }
     }
-    if ($needsReboot -or (Test-PendingReboot)) { Request-Reboot 'WSL2/VirtualMachinePlatform feature activation' }
+    if ($needsReboot) { Request-Reboot 'WSL2/VirtualMachinePlatform feature activation' }
+    if (Test-PendingReboot) {
+        if ($ContinueWithoutReboot) {
+            Write-Step 'Pending Windows reboot detected; operator authorized attempting the active WSL2 backend without restarting.'
+        } else {
+            Request-Reboot 'WSL2/VirtualMachinePlatform feature activation'
+        }
+    }
     try { wsl.exe --set-default-version 2 | Out-Null } catch { }
 }
 
@@ -211,7 +221,13 @@ function Ensure-DockerDesktop {
         Ensure-Winget
         winget.exe install --exact --id Docker.DockerDesktop --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
         if ($LASTEXITCODE -ne 0) { throw "DOCKER_INSTALL_FAILED exit=$LASTEXITCODE" }
-        if (Test-PendingReboot) { Request-Reboot 'Docker Desktop installation requested a reboot' }
+        if (Test-PendingReboot) {
+            if ($ContinueWithoutReboot) {
+                Write-Step 'Docker Desktop installation left a pending reboot; operator authorized a real engine readiness attempt without restarting.'
+            } else {
+                Request-Reboot 'Docker Desktop installation requested a reboot'
+            }
+        }
         $docker = Resolve-DockerCli
         if (-not $docker) { throw 'DOCKER_CLI_MISSING_AFTER_INSTALL' }
     } else {
