@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM --platform=linux/amd64 docker.io/library/python:3.12.10-slim-bookworm@sha256:97983fa8cc88343512862c62307159a82261c3528dc025f79e5a3f7af43e50b4 AS builder
+FROM --platform=linux/amd64 docker.io/library/python:3.12-slim-trixie@sha256:2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -16,7 +16,7 @@ COPY apps/worker/pyproject.toml apps/worker/pyproject.toml
 COPY apps/worker/src apps/worker/src
 RUN uv sync --frozen --no-dev --no-editable --package soaiacore-worker
 
-FROM --platform=linux/amd64 docker.io/library/python:3.12.10-slim-bookworm@sha256:97983fa8cc88343512862c62307159a82261c3528dc025f79e5a3f7af43e50b4 AS runtime
+FROM --platform=linux/amd64 docker.io/library/python:3.12-slim-trixie@sha256:2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a AS runtime
 ARG VCS_REF=uncommitted
 LABEL org.opencontainers.image.title="SOAIACORE Worker" \
       org.opencontainers.image.revision="$VCS_REF" \
