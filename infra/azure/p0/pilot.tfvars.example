@@ -1,6 +1,7 @@
-# Copy to an untracked .tfvars file and replace every placeholder before an
-# authorized plan. Keep credentials and subscription identifiers outside Git.
-expires_at  = "2026-08-30T00:00:00Z"
-core_image  = "REGISTRY/soaiacore-core@sha256:REPLACE_WITH_APPROVED_DIGEST"
-web_image   = "REGISTRY/soaiacore-web@sha256:REPLACE_WITH_APPROVED_DIGEST"
-worker_image = "REGISTRY/soaiacore-worker@sha256:REPLACE_WITH_APPROVED_DIGEST"
+# Copy to an untracked .tfvars file before an authorized plan. Keep credentials
+# and subscription identifiers outside Git. These references are immutable and
+# correspond to OCI workflow commit 2a8c516ff3010d7763750199f1c4c368e7bbc757.
+expires_at   = "2026-08-31T01:00:00Z"
+core_image   = "ghcr.io/soaiacore-corporation/soaiacore-core@sha256:e6564cad60afa7f7e1828c193c3512c7f1b0ce53aed26459e0a61b8ac33fb467"
+web_image    = "ghcr.io/soaiacore-corporation/soaiacore-web@sha256:da26fd8bcf6cb2a4c242d380a28c682b19c6f094f0a898258a727ef558fa6c58"
+worker_image = "ghcr.io/soaiacore-corporation/soaiacore-worker@sha256:971dc02fd1ba2306cd6e1d4864e8d7de0d447169256f7d89071bc5c94ccde9a1"

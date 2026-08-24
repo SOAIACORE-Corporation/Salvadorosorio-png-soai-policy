@@ -1,0 +1,72 @@
+{
+  "receipt_id": "p0_preapply_20260824T002542Z",
+  "schema_version": "P0-DEPLOYMENT-1",
+  "recorded_at": "2026-08-24T00:25:42Z",
+  "architecture": "v0.6_FINAL_FROZEN",
+  "branch": "rebuild/p0-06a-runtime",
+  "p0_06a": {
+    "status": "PASS",
+    "implementation_sha": "6402676cb7944a5bf4288b2e8323d0e4b0d85d73",
+    "remote_sha_verified": true
+  },
+  "p0_06b_oci": {
+    "status": "BLOCKED",
+    "workflow_commit": "2a8c516ff3010d7763750199f1c4c368e7bbc757",
+    "workflow_run_id": 32675937909,
+    "tests": "PASS",
+    "builds": "PASS",
+    "critical_vulnerability_and_secret_gate": "PASS_WITH_TIME_BOUNDED_SCOPED_EXCEPTIONS",
+    "publication": "PASS_PRIVATE",
+    "anonymous_public_read": "BLOCKED_PRIVATE_VISIBILITY",
+    "exceptions_expire_at": "2026-08-31",
+    "images": {
+      "core": "ghcr.io/soaiacore-corporation/soaiacore-core@sha256:e6564cad60afa7f7e1828c193c3512c7f1b0ce53aed26459e0a61b8ac33fb467",
+      "web": "ghcr.io/soaiacore-corporation/soaiacore-web@sha256:da26fd8bcf6cb2a4c242d380a28c682b19c6f094f0a898258a727ef558fa6c58",
+      "worker": "ghcr.io/soaiacore-corporation/soaiacore-worker@sha256:971dc02fd1ba2306cd6e1d4864e8d7de0d447169256f7d89071bc5c94ccde9a1"
+    }
+  },
+  "azure_precheck": {
+    "account_state": "Enabled",
+    "resource_providers": {
+      "Microsoft.App": "Registered",
+      "Microsoft.DBforPostgreSQL": "Registered",
+      "Microsoft.OperationalInsights": "Registered"
+    },
+    "azure_resources_created": 0
+  },
+  "terraform": {
+    "version": "1.15.0",
+    "fmt": "PASS",
+    "init_backend_false": "PASS",
+    "validate": "PASS",
+    "placeholder_images": 0,
+    "plan": {
+      "status": "PASS",
+      "sha256": "920bb064d06a8333b3401fdebe64e71ab169c5f28f95e7b2f43448a214a2f625",
+      "add": 24,
+      "change": 0,
+      "destroy": 0
+    },
+    "protected_remote_backend": "BLOCKED_NOT_CONFIGURED",
+    "apply": "NOT_EXECUTED"
+  },
+  "cost": {
+    "currency": "USD",
+    "hours": 168,
+    "mode": "ZERO_FIRST",
+    "estimated_range": "3.82-20.28",
+    "material_increase_from_prior_range": false
+  },
+  "cloud_validation": {
+    "core": "NOT_RUN",
+    "web": "NOT_RUN",
+    "worker": "NOT_RUN",
+    "e2e": "NOT_RUN",
+    "live_provider_calls": 0
+  },
+  "blockers": [
+    "The three GHCR packages remain private; anonymous pulls return HTTP 401. GitHub exposes the irreversible public visibility change only through an authenticated package-admin UI, and no signed-in GitHub browser session is available.",
+    "No approved protected remote Terraform backend is configured or supplied. Applying with the current local backend would persist the generated PostgreSQL password and other sensitive values in local state, which the deployment authorization explicitly prohibits."
+  ],
+  "next_action": "Sign in to GitHub in Chrome with package-admin access for SOAIACORE-Corporation, then tell Codex to continue so the three named GHCR packages can be changed to public and verified anonymously."
+}

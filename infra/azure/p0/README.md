@@ -45,7 +45,22 @@ The exact proposal contains **22 Azure resources**. Terraform-local `random_stri
 | `azurerm_container_app` (Web) | Public pilot Web entry point in MOCK mode | East US 2 | Consumption, 0.25 vCPU / 0.5 GiB, 0-1 replicas | Ephemeral | Active/idle vCPU-seconds, GiB-seconds, requests, and free-grant eligibility | 168h / explicit `expires_at` | Same |
 | `azurerm_container_app_job` (Worker) | Manual disposable execution worker in MOCK mode | East US 2 | Consumption, 0.25 vCPU / 0.5 GiB, single replica | Ephemeral | Job execution vCPU-seconds and GiB-seconds | 168h / explicit `expires_at` | Same |
 
-Total monthly cost is `NOT_YET_VERIFIED`: Azure prices vary by agreement, currency, billing region, runtime seconds, operations, log ingestion, transfer, and free-grant eligibility. P0-06 must record an authenticated Azure Pricing Calculator estimate using the actual subscription offer before authorizing apply.
+## P0 168-hour cost envelope
+
+The recalculated public-list-price envelope is **USD 3.82-20.28 for 168
+hours**, with `COST_MODE=ZERO_FIRST`. The lower bound assumes Core and Web
+scale to zero outside validation windows, one short Worker execution, minimal
+Blob and Log Analytics use, and eligibility for the Container Apps monthly free
+grant. The upper bound allows materially longer active validation windows,
+additional log ingestion, storage operations, DNS queries, and modest network
+transfer without changing the P0 resource envelope.
+
+The fixed compute basis is PostgreSQL Flexible Server B1ms at USD 12.41 per
+730-hour month, or approximately USD 2.86 for 168 hours. The remaining lower
+bound covers the 32-GiB P4 storage and low-volume supporting services. Actual
+charges can vary by subscription agreement, offer, billing currency, free-grant
+consumption elsewhere in the subscription, runtime seconds, operations, log
+ingestion, and transfer. This is a deployment gate estimate, not a price quote.
 
 ## Static validation and read-only plan
 
