@@ -126,6 +126,64 @@ jobs:
           cache-from: type=gha,scope=worker-amd64
           cache-to: type=gha,mode=max,scope=worker-amd64
 
+      - name: Scan Core for critical vulnerabilities and secrets
+        id: scan_core
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        with:
+          image-ref: ${{ env.CORE_IMAGE }}:${{ github.sha }}
+          format: json
+          output: trivy-core.json
+          scanners: vuln,secret
+          severity: CRITICAL
+          exit-code: 1
+
+      - name: Scan Web for critical vulnerabilities and secrets
+        id: scan_web
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        with:
+          image-ref: ${{ env.WEB_IMAGE }}:${{ github.sha }}
+          format: json
+          output: trivy-web.json
+          scanners: vuln,secret
+          severity: CRITICAL
+          exit-code: 1
+
+      - name: Scan Worker for critical vulnerabilities and secrets
+        id: scan_worker
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        with:
+          image-ref: ${{ env.WORKER_IMAGE }}:${{ github.sha }}
+          format: json
+          output: trivy-worker.json
+          scanners: vuln,secret
+          severity: CRITICAL
+          exit-code: 1
+
+      - name: Upload private-image security reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: oci-security-scan-${{ github.sha }}
+          path: trivy-*.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce the private-image security gate
+        if: always()
+        env:
+          CORE_SCAN: ${{ steps.scan_core.outcome }}
+          WEB_SCAN: ${{ steps.scan_web.outcome }}
+          WORKER_SCAN: ${{ steps.scan_worker.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${CORE_SCAN}" = success
+          test "${WEB_SCAN}" = success
+          test "${WORKER_SCAN}" = success
+
       - name: Log in to GHCR after every test and build passed
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
