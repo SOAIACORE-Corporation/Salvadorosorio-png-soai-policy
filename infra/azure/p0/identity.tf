@@ -13,7 +13,7 @@ resource "azurerm_user_assigned_identity" "deployer" {
 }
 
 resource "azurerm_federated_identity_credential" "github_branch" {
-  name                      = "github-${replace(var.github_branch, "/", "-")}"
+  name                      = "github-${replace(var.github_branch, "/[^0-9A-Za-z-]/", "-")}"
   audience                  = ["api://AzureADTokenExchange"]
   issuer                    = "https://token.actions.githubusercontent.com"
   subject                   = "repo:${var.github_repository}:ref:refs/heads/${var.github_branch}"

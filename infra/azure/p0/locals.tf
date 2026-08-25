@@ -13,8 +13,9 @@ locals {
     architecture = "v0.6_FINAL_FROZEN_P0"
   }
 
-  database_host = azurerm_postgresql_flexible_server.pilot.fqdn
-  database_name = azurerm_postgresql_flexible_server_database.soaiacore.name
+  database_host    = azurerm_postgresql_flexible_server.pilot.fqdn
+  database_name    = azurerm_postgresql_flexible_server_database.soaiacore.name
+  ghcr_secret_name = "ghcr-pull-token"
 }
 
 resource "random_string" "suffix" {

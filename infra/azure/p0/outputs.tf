@@ -15,12 +15,12 @@ output "workload_client_id" {
 
 output "web_url" {
   description = "Pilot Web endpoint."
-  value       = "https://${azurerm_container_app.web.latest_revision_fqdn}"
+  value       = "https://${azurerm_container_app.web.ingress[0].fqdn}"
 }
 
 output "core_internal_url" {
   description = "Internal Core API endpoint."
-  value       = "https://${azurerm_container_app.core.latest_revision_fqdn}"
+  value       = "https://${azurerm_container_app.core.ingress[0].fqdn}"
 }
 
 output "postgresql_fqdn" {

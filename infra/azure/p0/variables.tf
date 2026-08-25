@@ -51,32 +51,53 @@ variable "expires_at" {
 }
 
 variable "core_image" {
-  description = "Approved immutable Core API OCI image reference, preferably pinned by sha256 digest."
+  description = "Approved immutable Core API GHCR image reference pinned to the P0 sha256 digest."
   type        = string
 
   validation {
-    condition     = length(trimspace(var.core_image)) > 0
-    error_message = "core_image must be an approved non-empty OCI image reference."
+    condition     = var.core_image == "ghcr.io/soaiacore-corporation/soaiacore-core@sha256:e6564cad60afa7f7e1828c193c3512c7f1b0ce53aed26459e0a61b8ac33fb467"
+    error_message = "core_image must equal the exact approved P0 digest reference."
   }
 }
 
 variable "web_image" {
-  description = "Approved immutable Web OCI image reference, preferably pinned by sha256 digest."
+  description = "Approved immutable Web GHCR image reference pinned to the P0 sha256 digest."
   type        = string
 
   validation {
-    condition     = length(trimspace(var.web_image)) > 0
-    error_message = "web_image must be an approved non-empty OCI image reference."
+    condition     = var.web_image == "ghcr.io/soaiacore-corporation/soaiacore-web@sha256:da26fd8bcf6cb2a4c242d380a28c682b19c6f094f0a898258a727ef558fa6c58"
+    error_message = "web_image must equal the exact approved P0 digest reference."
   }
 }
 
 variable "worker_image" {
-  description = "Approved immutable Worker OCI image reference, preferably pinned by sha256 digest."
+  description = "Approved immutable Worker GHCR image reference pinned to the P0 sha256 digest."
   type        = string
 
   validation {
-    condition     = length(trimspace(var.worker_image)) > 0
-    error_message = "worker_image must be an approved non-empty OCI image reference."
+    condition     = var.worker_image == "ghcr.io/soaiacore-corporation/soaiacore-worker@sha256:971dc02fd1ba2306cd6e1d4864e8d7de0d447169256f7d89071bc5c94ccde9a1"
+    error_message = "worker_image must equal the exact approved P0 digest reference."
+  }
+}
+
+variable "ghcr_username" {
+  description = "GitHub account name whose P0 pull credential has read access to the three approved private GHCR packages."
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.ghcr_username)) > 0
+    error_message = "ghcr_username must be supplied outside source control."
+  }
+}
+
+variable "ghcr_token" {
+  description = "Short-lived GitHub PAT classic with read:packages only, supplied outside Git for private GHCR pulls."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(var.ghcr_token) >= 1
+    error_message = "ghcr_token must be supplied outside source control."
   }
 }
 

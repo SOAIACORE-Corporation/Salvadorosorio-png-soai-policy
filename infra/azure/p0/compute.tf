@@ -25,6 +25,7 @@ resource "azurerm_container_app_environment" "pilot" {
 resource "azurerm_container_app" "core" {
   name                         = "ca-${local.name_prefix}-core-${random_string.suffix.result}"
   container_app_environment_id = azurerm_container_app_environment.pilot.id
+  workload_profile_name        = "Consumption"
   resource_group_name          = azurerm_resource_group.pilot.name
   revision_mode                = "Single"
   tags                         = local.required_tags
@@ -37,6 +38,17 @@ resource "azurerm_container_app" "core" {
   secret {
     name  = "postgres-password"
     value = random_password.postgresql.result
+  }
+
+  secret {
+    name  = local.ghcr_secret_name
+    value = var.ghcr_token
+  }
+
+  registry {
+    server               = "ghcr.io"
+    username             = var.ghcr_username
+    password_secret_name = local.ghcr_secret_name
   }
 
   ingress {
@@ -59,6 +71,11 @@ resource "azurerm_container_app" "core" {
       image  = var.core_image
       cpu    = 0.25
       memory = "0.5Gi"
+
+      env {
+        name  = "PYTHONPATH"
+        value = "/app/.venv/lib/python3.12/site-packages"
+      }
 
       env {
         name  = "SOAIACORE_PROVIDER_MODE"
@@ -106,6 +123,7 @@ resource "azurerm_container_app" "core" {
 resource "azurerm_container_app" "web" {
   name                         = "ca-${local.name_prefix}-web-${random_string.suffix.result}"
   container_app_environment_id = azurerm_container_app_environment.pilot.id
+  workload_profile_name        = "Consumption"
   resource_group_name          = azurerm_resource_group.pilot.name
   revision_mode                = "Single"
   tags                         = local.required_tags
@@ -113,6 +131,17 @@ resource "azurerm_container_app" "web" {
   identity {
     type         = "UserAssigned"
     identity_ids = [azurerm_user_assigned_identity.workload.id]
+  }
+
+  secret {
+    name  = local.ghcr_secret_name
+    value = var.ghcr_token
+  }
+
+  registry {
+    server               = "ghcr.io"
+    username             = var.ghcr_username
+    password_secret_name = local.ghcr_secret_name
   }
 
   ingress {
@@ -143,7 +172,7 @@ resource "azurerm_container_app" "web" {
 
       env {
         name  = "CORE_API_BASE_URL"
-        value = "https://${azurerm_container_app.core.latest_revision_fqdn}"
+        value = "https://${azurerm_container_app.core.ingress[0].fqdn}"
       }
     }
   }
@@ -154,6 +183,7 @@ resource "azurerm_container_app_job" "worker" {
   location                     = azurerm_resource_group.pilot.location
   resource_group_name          = azurerm_resource_group.pilot.name
   container_app_environment_id = azurerm_container_app_environment.pilot.id
+  workload_profile_name        = "Consumption"
   replica_timeout_in_seconds   = 1800
   replica_retry_limit          = 1
   tags                         = local.required_tags
@@ -168,6 +198,17 @@ resource "azurerm_container_app_job" "worker" {
     value = random_password.postgresql.result
   }
 
+  secret {
+    name  = local.ghcr_secret_name
+    value = var.ghcr_token
+  }
+
+  registry {
+    server               = "ghcr.io"
+    username             = var.ghcr_username
+    password_secret_name = local.ghcr_secret_name
+  }
+
   manual_trigger_config {
     parallelism              = 1
     replica_completion_count = 1
@@ -179,6 +220,11 @@ resource "azurerm_container_app_job" "worker" {
       image  = var.worker_image
       cpu    = 0.25
       memory = "0.5Gi"
+
+      env {
+        name  = "PYTHONPATH"
+        value = "/app/.venv/lib/python3.12/site-packages"
+      }
 
       env {
         name  = "SOAIACORE_PROVIDER_MODE"

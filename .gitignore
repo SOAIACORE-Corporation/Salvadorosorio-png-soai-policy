@@ -10,4 +10,7 @@ apps/web/.next/
 .env
 .env.*
 !.env.example
-
+terraform.tfstate
+terraform.tfstate.*
+*.tfstate
+*.tfstate.*

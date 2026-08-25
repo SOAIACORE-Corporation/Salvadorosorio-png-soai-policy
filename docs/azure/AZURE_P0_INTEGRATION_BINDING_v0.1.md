@@ -2,7 +2,13 @@
 
 **Architecture:** v0.6 FINAL / FROZEN FOR P0
 
-**Status:** SPECIFICATION ONLY — NO RESOURCES CREATED
+**Status:** HISTORICAL DESIGN INPUT — SUPERSEDED FOR P0 AS-IS BY
+`SOAIACORE_ARCHITECTURE_v0.6-R2_AZURE_P0_AS_IS_2026-08-25.md`
+
+The original table below records the pre-deployment target mapping. The live P0
+implementation uses private GHCR rather than ACR, Container Apps secrets rather
+than Key Vault, and Log Analytics for the deployed minimal observability path.
+These P0 bindings do not authorize the corresponding production patterns.
 
 ## Mapping
 
@@ -15,8 +21,8 @@
 | Canonical evidence | Blob Storage |
 | AI workspace | Blob/Data Lake-compatible workspace semantics |
 | Events | Event Grid + Service Bus only when required |
-| Secrets | Key Vault when required |
-| Container images | Azure Container Registry |
+| Secrets | Container Apps secrets in P0; Key Vault remains a production decision |
+| Container images | Private GHCR by immutable digest in P0; no ACR created |
 | GitHub federation | Entra / GitHub OIDC |
 | Models | Foundry/model adapters; MOCK/REPLAY/LIVE |
 | Tools | Azure/native/MCP adapters |
