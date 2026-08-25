@@ -2,8 +2,7 @@
 
 **Architecture:** v0.6 FINAL / FROZEN FOR P0
 
-**Status:** HISTORICAL DESIGN INPUT — SUPERSEDED FOR P0 AS-IS BY
-`SOAIACORE_ARCHITECTURE_v0.6-R2_AZURE_P0_AS_IS_2026-08-25.md`
+**Status:** HISTORICAL DESIGN INPUT
 
 The original table below records the pre-deployment target mapping. The live P0
 implementation uses private GHCR rather than ACR, Container Apps secrets rather

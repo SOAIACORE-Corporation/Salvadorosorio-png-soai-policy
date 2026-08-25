@@ -2,9 +2,6 @@
 
 This directory is the minimum, disposable Azure binding for Architecture v0.6 FINAL/FROZEN. It keeps PostgreSQL plus `pgvector` as canonical memory, Blob Storage as canonical evidence bytes, and runs Core, Web, and Worker in MOCK mode. It does not create Kubernetes, Kafka, GPU, a graph database, a separate vector database, or permanent environment tiers.
 
-The effective live topology and production deltas are captured in
-`docs/azure/SOAIACORE_ARCHITECTURE_v0.6-R2_AZURE_P0_AS_IS_2026-08-25.md`.
-
 P0-07 was applied after the authorized P0-06 GO decision. The live pilot is in
 P0-08 observation and remains bounded by its explicit expiry and teardown
 contract. This configuration is not a production pattern.
