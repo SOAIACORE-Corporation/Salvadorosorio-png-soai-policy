@@ -9,7 +9,7 @@ export default function HomePage() {
         This interface submits synthetic runs through the server-side Web BFF. It never
         connects to PostgreSQL, Blob Storage, or a model provider.
       </p>
-      <Link className="button" href="/runs/new">Create a synthetic run</Link>
+      <Link className="button" href="/workflow">Open operator workflow</Link>
     </section>
   );
 }

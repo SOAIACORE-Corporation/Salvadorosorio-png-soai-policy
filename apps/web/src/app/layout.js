@@ -1,3 +1,4 @@
+import Link from "next/link";
 import "./styles.css";
 
 export const metadata = {
@@ -10,7 +11,7 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body>
         <header>
-          <strong>SOAIACORE P0</strong>
+          <Link className="brand" href="/">SOAIACORE P0</Link>
           <span>MOCK · SYNTHETIC DATA ONLY</span>
         </header>
         <main>{children}</main>

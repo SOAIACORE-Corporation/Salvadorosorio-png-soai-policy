@@ -28,6 +28,27 @@ test("WEB_BFF rejects credentials embedded in Core URL", () => {
   );
 });
 
+test("WEB_BFF exposes only safe idempotency response metadata", async () => {
+  const result = await coreRequest("/v1/projects/prj_test", {
+    method: "PUT",
+    body: { name: "Synthetic project" },
+    idempotencyKey: "web-create-project-request-1",
+    includeResponseMetadata: true,
+    environment: { CORE_API_BASE_URL: "https://core.internal" },
+    fetchImpl: async (_url, options) => {
+      assert.equal(options.headers["Idempotency-Key"], "web-create-project-request-1");
+      return new Response(JSON.stringify({ project_id: "prj_test" }), {
+        status: 200,
+        headers: { "Idempotency-Replayed": "true" },
+      });
+    },
+  });
+  assert.deepEqual(result, {
+    data: { project_id: "prj_test" },
+    idempotencyReplayed: true,
+  });
+});
+
 test("WEB_BFF source contains no direct persistence or public Core variable", () => {
   const sourceRoot = path.resolve(import.meta.dirname, "../src");
   const files = [];
