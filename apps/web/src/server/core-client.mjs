@@ -34,6 +34,7 @@ export async function coreRequest(
     method = "GET",
     body,
     idempotencyKey,
+    includeResponseMetadata = false,
     fetchImpl = globalThis.fetch,
     environment = process.env,
   } = {},
@@ -71,6 +72,12 @@ export async function coreRequest(
       response.status,
       error.details ?? {},
     );
+  }
+  if (includeResponseMetadata) {
+    return {
+      data: payload,
+      idempotencyReplayed: response.headers.get("Idempotency-Replayed") === "true",
+    };
   }
   return payload;
 }
