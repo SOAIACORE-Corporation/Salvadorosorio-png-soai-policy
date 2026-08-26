@@ -33,9 +33,10 @@ receives Core, database, Blob, or provider credentials.
 
 ## Delivery state
 
-`COMMIT=NOT_CREATED`
+`IMPLEMENTATION_COMMIT=0e18947`
 
-`PUSH=NOT_PERFORMED`
+`PUBLISHED_BRANCH=feat/p1-02-web-workflow-codex`
+
+`PULL_REQUEST=23`
 
 `READY_FOR_REVIEW=YES`
-
