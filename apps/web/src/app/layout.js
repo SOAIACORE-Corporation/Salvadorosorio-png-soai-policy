@@ -1,8 +1,8 @@
 import "./styles.css";
 
 export const metadata = {
-  title: "SOAIACORE P0",
-  description: "Synthetic-only SOAIACORE P0 runtime pilot",
+  title: "SOAIACORE Operator",
+  description: "Synthetic-only SOAIACORE internal operator workflow",
 };
 
 export default function RootLayout({ children }) {
@@ -10,7 +10,7 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body>
         <header>
-          <strong>SOAIACORE P0</strong>
+          <strong>SOAIACORE</strong>
           <span>MOCK · SYNTHETIC DATA ONLY</span>
         </header>
         <main>{children}</main>

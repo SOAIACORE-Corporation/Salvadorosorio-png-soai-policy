@@ -3,6 +3,15 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { CoreApiError, coreBaseUrl, coreRequest } from "../src/server/core-client.mjs";
+import {
+  deterministicResourceId,
+  idempotencyKey,
+  profileFromCapsule,
+  publicErrorCode,
+  requiredProfileSelection,
+  requiredRequestToken,
+  workflowPath,
+} from "../src/server/operator-workflow.mjs";
 
 test("WEB_BFF uses CORE_API_BASE_URL only on the server request", async () => {
   let captured;
@@ -44,4 +53,38 @@ test("WEB_BFF source contains no direct persistence or public Core variable", ()
   assert.equal(source.includes("DATABASE_URL"), false);
   assert.equal(source.includes("POSTGRES_PASSWORD"), false);
   assert.equal(source.includes("AZURE_STORAGE_CONNECTION_STRING"), false);
+});
+
+test("operator workflow derives replay-safe resource and idempotency identifiers", () => {
+  const token = "123e4567-e89b-42d3-a456-426614174000";
+  assert.equal(
+    deterministicResourceId("prj", token),
+    "prj_123e4567e89b42d3a456426614174000",
+  );
+  assert.equal(idempotencyKey("project", token), `web-project-${token}`);
+  assert.equal(requiredRequestToken(token.toUpperCase()), token);
+  assert.throws(() => requiredRequestToken("not-a-token"), /INVALID_REQUEST_TOKEN/);
+});
+
+test("operator workflow keeps selections in Web URLs and sanitizes error codes", () => {
+  assert.equal(
+    workflowPath({ project_id: "prj one", corpus_id: "cor/one", notice: "READY" }),
+    "/runs/new?project_id=prj+one&corpus_id=cor%2Fone&notice=READY",
+  );
+  assert.equal(publicErrorCode({ code: "RESOURCE_NOT_FOUND" }), "RESOURCE_NOT_FOUND");
+  assert.equal(publicErrorCode({ message: "unsafe error detail" }), "REQUEST_FAILED");
+});
+
+test("operator workflow resolves the profile from an immutable capsule", () => {
+  assert.deepEqual(requiredProfileSelection("AP-101@1.0.0"), {
+    analysis_profile_id: "AP-101",
+    analysis_profile_version: "1.0.0",
+  });
+  assert.deepEqual(
+    profileFromCapsule({
+      payload: { analysis_profile_id: "AP-101", analysis_profile_version: "1.0.0" },
+    }),
+    { analysis_profile_id: "AP-101", analysis_profile_version: "1.0.0" },
+  );
+  assert.equal(profileFromCapsule({ payload: { analysis_profile_id: "bad" } }), null);
 });
