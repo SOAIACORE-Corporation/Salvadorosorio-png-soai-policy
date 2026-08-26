@@ -27,6 +27,14 @@ from soaiacore_runtime.operations import (
     create_context_capsule,
     create_run_job,
     get_run,
+    evidence_metadata,
+    get_context_capsule,
+    list_analysis_profiles,
+    list_context_capsules,
+    list_contexts,
+    list_corpora,
+    list_projects,
+    list_runs,
     put_analysis_profile,
     register_evidence,
     resolve_identity,
@@ -45,6 +53,12 @@ from .models import (
     ProjectRequest,
     RunRequest,
     TraverseRequest,
+)
+
+
+_RUN_STATUS_PATTERN = (
+    r"^(QUEUED|RUNNING|COMPLETED|REVIEW_REQUIRED|FAILED_PRECHECK|DENIED|"
+    r"FAILED_EXECUTION|FAILED_VALIDATION|FAILED_RECEIPT)$"
 )
 
 
@@ -135,6 +149,19 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
         response.headers["Idempotency-Replayed"] = str(replayed).lower()
         return result
 
+    @app.get("/v1/projects")
+    def projects_list(limit: int = Query(50, ge=1, le=100)) -> list[dict[str, Any]]:
+        with database.connect(autocommit=True) as connection:
+            return list_projects(connection, limit)
+
+    @app.get("/v1/projects/{project_id}")
+    def project_get(project_id: str) -> dict[str, Any]:
+        with database.connect(autocommit=True) as connection:
+            result = list_projects(connection, 1, project_id=project_id)
+        if not result:
+            raise contract_error("RESOURCE_NOT_FOUND", "Project does not exist", "CORE_API", status_code=404)
+        return result[0]
+
     @app.put("/v1/projects/{project_id}/corpora/{corpus_id}")
     def corpus_put(
         project_id: str,
@@ -158,6 +185,19 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
             )
         response.headers["Idempotency-Replayed"] = str(replayed).lower()
         return result
+
+    @app.get("/v1/projects/{project_id}/corpora")
+    def project_corpora_list(project_id: str, limit: int = Query(50, ge=1, le=100)) -> list[dict[str, Any]]:
+        with database.connect(autocommit=True) as connection:
+            return list_corpora(connection, project_id, limit)
+
+    @app.get("/v1/projects/{project_id}/corpora/{corpus_id}")
+    def corpus_get(project_id: str, corpus_id: str) -> dict[str, Any]:
+        with database.connect(autocommit=True) as connection:
+            result = list_corpora(connection, project_id, 1, corpus_id=corpus_id)
+        if not result:
+            raise contract_error("RESOURCE_NOT_FOUND", "Corpus does not exist", "CORE_API", status_code=404)
+        return result[0]
 
     @app.put("/v1/analysis-profiles/{profile_id}/versions/{version}")
     def profile_put(
@@ -189,6 +229,11 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
             )
         response.headers["Idempotency-Replayed"] = str(replayed).lower()
         return result
+
+    @app.get("/v1/analysis-profiles")
+    def profiles_list(limit: int = Query(50, ge=1, le=100)) -> list[dict[str, Any]]:
+        with database.connect(autocommit=True) as connection:
+            return list_analysis_profiles(connection, limit)
 
     @app.post("/v1/identity/resolve")
     def identity_resolve(
@@ -253,6 +298,23 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
         response.headers["Idempotency-Replayed"] = str(replayed).lower()
         return result
 
+    @app.get("/v1/contexts")
+    def contexts_list(
+        project_id: str | None = Query(None, min_length=1),
+        corpus_id: str | None = Query(None, min_length=1),
+        limit: int = Query(50, ge=1, le=100),
+    ) -> list[dict[str, Any]]:
+        with database.connect(autocommit=True) as connection:
+            return list_contexts(connection, project_id, corpus_id, limit)
+
+    @app.get("/v1/contexts/{context_id}")
+    def context_get(context_id: str) -> dict[str, Any]:
+        with database.connect(autocommit=True) as connection:
+            result = list_contexts(connection, None, None, 1, context_id=context_id)
+        if not result:
+            raise contract_error("RESOURCE_NOT_FOUND", "Context does not exist", "CORE_API", status_code=404)
+        return result[0]
+
     @app.post("/v1/context-capsules")
     def capsule_post(
         body: ContextCapsuleRequest,
@@ -273,6 +335,22 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
                 ),
             )
         response.headers["Idempotency-Replayed"] = str(replayed).lower()
+        return result
+
+    @app.get("/v1/context-capsules")
+    def capsules_list(
+        context_id: str | None = Query(None, min_length=1),
+        limit: int = Query(50, ge=1, le=100),
+    ) -> list[dict[str, Any]]:
+        with database.connect(autocommit=True) as connection:
+            return list_context_capsules(connection, context_id, limit)
+
+    @app.get("/v1/context-capsules/{context_capsule_id}")
+    def capsule_get(context_capsule_id: str) -> dict[str, Any]:
+        with database.connect(autocommit=True) as connection:
+            result = get_context_capsule(connection, context_capsule_id)
+        if not result:
+            raise contract_error("RESOURCE_NOT_FOUND", "ContextCapsule does not exist", "CORE_API", status_code=404)
         return result
 
     @app.post("/v1/runs", status_code=202)
@@ -296,6 +374,15 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
             )
         response.headers["Idempotency-Replayed"] = str(replayed).lower()
         return result
+
+    @app.get("/v1/runs")
+    def runs_list(
+        project_id: str | None = Query(None, min_length=1),
+        status: str | None = Query(None, min_length=1, max_length=40, pattern=_RUN_STATUS_PATTERN),
+        limit: int = Query(50, ge=1, le=100),
+    ) -> list[dict[str, Any]]:
+        with database.connect(autocommit=True) as connection:
+            return list_runs(connection, project_id, status, limit)
 
     @app.get("/v1/runs/{run_id}")
     def run_get(run_id: str) -> dict[str, Any]:
@@ -322,6 +409,14 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
             claim = claim_to_schema(connection, claim_id)
         validate_payload("claim-v0.2.schema.json", claim, stage="CORE_API")
         return claim
+
+    @app.get("/v1/evidence/{evidence_ref_id}")
+    def evidence_reference_get(evidence_ref_id: str) -> dict[str, Any]:
+        with database.connect(autocommit=True) as connection:
+            result = evidence_metadata(connection, evidence_ref_id)
+        if not result:
+            raise contract_error("RESOURCE_NOT_FOUND", "Evidence reference does not exist", "CORE_API", status_code=404)
+        return result
 
     @app.get("/v1/runs/{run_id}/receipt")
     def run_receipt(run_id: str) -> dict[str, Any]:
@@ -418,4 +513,3 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
 
 
 app = create_app()
-

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from psycopg import Connection
 from psycopg.types.json import Jsonb
@@ -19,6 +20,20 @@ LIFECYCLE_STAGES = (
     "AUTOMATED_VALIDATION",
     "REVIEW_POLICY",
     "RECEIPT",
+)
+
+_SENSITIVE_KEY_FRAGMENTS = (
+    "password",
+    "secret",
+    "token",
+    "credential",
+    "authorization",
+    "connectionstring",
+    "accountkey",
+    "apikey",
+    "accesskey",
+    "privatekey",
+    "saskey",
 )
 
 
@@ -416,6 +431,195 @@ def get_run(connection: Connection, run_id: str) -> dict[str, Any] | None:
     return result
 
 
+def _sanitize_read_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _sanitize_read_value(item)
+            for key, item in value.items()
+            if not any(
+                fragment in "".join(character for character in str(key).lower() if character.isalnum())
+                for fragment in _SENSITIVE_KEY_FRAGMENTS
+            )
+        }
+    if isinstance(value, list):
+        return [_sanitize_read_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_sanitize_read_value(item) for item in value]
+    if isinstance(value, str) and "://" in value:
+        parsed = urlsplit(value)
+        safe_netloc = parsed.netloc.rsplit("@", 1)[-1]
+        return urlunsplit((parsed.scheme, safe_netloc, parsed.path, "", ""))
+    return value
+
+
+def _rows_with_times(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    result = []
+    for row in rows:
+        item = _sanitize_read_value(dict(row))
+        for field in ("created_at", "started_at", "completed_at", "valid_from", "valid_until"):
+            if item.get(field) is not None:
+                item[field] = utc_iso(item[field])
+        result.append(item)
+    return result
+
+
+def list_projects(
+    connection: Connection, limit: int, *, project_id: str | None = None
+) -> list[dict[str, Any]]:
+    if project_id:
+        rows = connection.execute(
+            "SELECT project_id,name,status,metadata,created_at FROM soa_core.projects WHERE project_id=%s ORDER BY created_at DESC,project_id LIMIT %s",
+            (project_id, limit),
+        ).fetchall()
+    else:
+        rows = connection.execute(
+            "SELECT project_id,name,status,metadata,created_at FROM soa_core.projects ORDER BY created_at DESC,project_id LIMIT %s",
+            (limit,),
+        ).fetchall()
+    return _rows_with_times(rows)
+
+
+def list_corpora(
+    connection: Connection, project_id: str, limit: int, *, corpus_id: str | None = None
+) -> list[dict[str, Any]]:
+    if corpus_id:
+        rows = connection.execute(
+            "SELECT corpus_id,project_id,name,metadata,created_at FROM soa_core.corpora WHERE project_id=%s AND corpus_id=%s ORDER BY created_at DESC,corpus_id LIMIT %s",
+            (project_id, corpus_id, limit),
+        ).fetchall()
+    else:
+        rows = connection.execute(
+            "SELECT corpus_id,project_id,name,metadata,created_at FROM soa_core.corpora WHERE project_id=%s ORDER BY created_at DESC,corpus_id LIMIT %s",
+            (project_id, limit),
+        ).fetchall()
+    return _rows_with_times(rows)
+
+
+def list_contexts(
+    connection: Connection,
+    project_id: str | None,
+    corpus_id: str | None,
+    limit: int,
+    *,
+    context_id: str | None = None,
+) -> list[dict[str, Any]]:
+    if context_id:
+        rows = connection.execute(
+            "SELECT context_id,project_id,context_type,valid_from,valid_until,dimensions,created_at FROM soa_core.contexts WHERE context_id=%s ORDER BY created_at DESC,context_id LIMIT %s",
+            (context_id, limit),
+        ).fetchall()
+    elif project_id and corpus_id:
+        rows = connection.execute(
+            "SELECT context_id,project_id,context_type,valid_from,valid_until,dimensions,created_at FROM soa_core.contexts WHERE project_id=%s AND dimensions->>'corpus_id'=%s ORDER BY created_at DESC,context_id LIMIT %s",
+            (project_id, corpus_id, limit),
+        ).fetchall()
+    elif project_id:
+        rows = connection.execute(
+            "SELECT context_id,project_id,context_type,valid_from,valid_until,dimensions,created_at FROM soa_core.contexts WHERE project_id=%s ORDER BY created_at DESC,context_id LIMIT %s",
+            (project_id, limit),
+        ).fetchall()
+    elif corpus_id:
+        rows = connection.execute(
+            "SELECT context_id,project_id,context_type,valid_from,valid_until,dimensions,created_at FROM soa_core.contexts WHERE dimensions->>'corpus_id'=%s ORDER BY created_at DESC,context_id LIMIT %s",
+            (corpus_id, limit),
+        ).fetchall()
+    else:
+        rows = connection.execute(
+            "SELECT context_id,project_id,context_type,valid_from,valid_until,dimensions,created_at FROM soa_core.contexts ORDER BY created_at DESC,context_id LIMIT %s",
+            (limit,),
+        ).fetchall()
+    return _rows_with_times(rows)
+
+
+def list_context_capsules(
+    connection: Connection, context_id: str | None, limit: int, *, context_capsule_id: str | None = None
+) -> list[dict[str, Any]]:
+    if context_capsule_id:
+        rows = connection.execute(
+            "SELECT context_capsule_id,context_id,schema_version,input_hash,created_at FROM soa_core.context_capsules WHERE context_capsule_id=%s ORDER BY created_at DESC,context_capsule_id LIMIT %s",
+            (context_capsule_id, limit),
+        ).fetchall()
+    elif context_id:
+        rows = connection.execute(
+            "SELECT context_capsule_id,context_id,schema_version,input_hash,created_at FROM soa_core.context_capsules WHERE context_id=%s ORDER BY created_at DESC,context_capsule_id LIMIT %s",
+            (context_id, limit),
+        ).fetchall()
+    else:
+        rows = connection.execute(
+            "SELECT context_capsule_id,context_id,schema_version,input_hash,created_at FROM soa_core.context_capsules ORDER BY created_at DESC,context_capsule_id LIMIT %s",
+            (limit,),
+        ).fetchall()
+    return _rows_with_times(rows)
+
+
+def get_context_capsule(connection: Connection, context_capsule_id: str) -> dict[str, Any] | None:
+    row = connection.execute(
+        "SELECT context_capsule_id,context_id,schema_version,payload,input_hash,created_at FROM soa_core.context_capsules WHERE context_capsule_id=%s",
+        (context_capsule_id,),
+    ).fetchone()
+    if not row:
+        return None
+    return _rows_with_times([row])[0]
+
+
+def list_analysis_profiles(connection: Connection, limit: int) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        "SELECT config FROM soa_intelligence.analysis_profiles ORDER BY analysis_profile_id,version LIMIT %s",
+        (limit,),
+    ).fetchall()
+    return [_sanitize_read_value(dict(row["config"])) for row in rows]
+
+
+def list_runs(
+    connection: Connection, project_id: str | None, status: str | None, limit: int
+) -> list[dict[str, Any]]:
+    clauses = []
+    params: list[Any] = []
+    if project_id:
+        clauses.append("r.project_id=%s")
+        params.append(project_id)
+    if status:
+        clauses.append("r.status=%s")
+        params.append(status)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    params.append(limit)
+    rows = connection.execute(
+        """
+        SELECT r.run_id,r.project_id,r.context_capsule_id,r.analysis_profile_id,
+               r.analysis_profile_version,r.purpose,r.status,r.mode,r.started_at,r.completed_at
+        FROM soa_intelligence.runs r
+        """ + where + " ORDER BY r.started_at DESC,r.run_id LIMIT %s",
+        params,
+    ).fetchall()
+    return _rows_with_times(rows)
+
+
+def evidence_metadata(connection: Connection, evidence_ref_id: str) -> dict[str, Any] | None:
+    row = connection.execute(
+        """
+        SELECT er.evidence_ref_id,er.locator,er.support_type,er.relationship,
+               er.evidence_state_snapshot,er.admissibility_scope,er.excerpt_hash,
+               er.provenance_chain_ref,er.created_at AS reference_created_at,
+               eo.evidence_id,eo.evidence_state,eo.object_locator,eo.content_sha256,
+               eo.modality,eo.metadata AS evidence_metadata,eo.created_at AS evidence_created_at,
+               sa.source_id,sa.corpus_id,sa.source_type,sa.source_locator,sa.byte_size,
+               sa.metadata AS source_metadata,sa.created_at AS source_created_at
+        FROM soa_evidence.evidence_references er
+        JOIN soa_evidence.evidence_objects eo ON eo.evidence_id=er.evidence_id
+        LEFT JOIN soa_evidence.source_artifacts sa ON sa.source_id=er.source_id
+        WHERE er.evidence_ref_id=%s
+        """,
+        (evidence_ref_id,),
+    ).fetchone()
+    if not row:
+        return None
+    result = dict(row)
+    for field in ("reference_created_at", "evidence_created_at", "source_created_at"):
+        result[field] = utc_iso(result[field]) if result[field] else None
+    result["content_availability"] = "METADATA_ONLY_BLOB_OBJECT_CONTENT_NOT_IMPLEMENTED"
+    return _sanitize_read_value(result)
+
+
 def claim_to_schema(connection: Connection, claim_id: str) -> dict[str, Any]:
     row = connection.execute("SELECT * FROM soa_core.claims WHERE claim_id=%s", (claim_id,)).fetchone()
     if not row:
@@ -462,4 +666,3 @@ def claim_to_schema(connection: Connection, claim_id: str) -> dict[str, Any]:
         "metadata": row["metadata"],
     }
     return payload
-

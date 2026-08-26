@@ -57,6 +57,7 @@ def bootstrap(
     synthetic_only: bool = True,
     evidence_state: str = "ADMISSIBLE",
     run_key: str | None = None,
+    include_sensitive_metadata: bool = False,
 ) -> dict[str, Any]:
     project_id = f"prj_{suffix}"
     corpus_id = f"cor_{suffix}"
@@ -66,10 +67,34 @@ def bootstrap(
     evidence_ref_id = f"evref_{suffix}"
     content = f"SOAIACORE deterministic synthetic evidence {suffix}".encode()
     content_hash = hashlib.sha256(content).hexdigest()
+    project_metadata: dict[str, Any] = {"synthetic": True}
+    source_locator = f"fixture://source/{suffix}"
+    object_locator = f"fixture://object/{suffix}"
+    source_metadata: dict[str, Any] = {}
+    evidence_metadata: dict[str, Any] = {}
+    if include_sensitive_metadata:
+        project_metadata["password"] = "must-not-escape"
+        project_metadata["nested"] = {"access_token": "must-not-escape", "visible": True}
+        project_metadata["accountKey"] = "must-not-escape"
+        source_locator = f"https://blob.example/source/{suffix}?sig=must-not-escape"
+        object_locator = (
+            f"https://user:must-not-escape@blob.example/object/{suffix}"
+            "?credential=must-not-escape#fragment"
+        )
+        source_metadata = {
+            "connection_string": "must-not-escape",
+            "connectionString": "must-not-escape",
+            "visible": True,
+        }
+        evidence_metadata = {
+            "api_key": "must-not-escape",
+            "apiKey": "must-not-escape",
+            "nested": {"visible": True},
+        }
 
     assert client.put(
         f"/v1/projects/{project_id}",
-        json={"name": f"Project {suffix}", "metadata": {"synthetic": True}},
+        json={"name": f"Project {suffix}", "metadata": project_metadata},
         headers=idem(f"project-{suffix}"),
     ).status_code == 200
     assert client.put(
@@ -106,13 +131,15 @@ def bootstrap(
             "source_id": f"src_{suffix}",
             "corpus_id": corpus_id,
             "source_type": "TEXT",
-            "source_locator": f"fixture://source/{suffix}",
+            "source_locator": source_locator,
             "content_sha256": content_hash,
             "byte_size": len(content),
+            "source_metadata": source_metadata,
             "evidence_id": f"ev_{suffix}",
             "evidence_state": evidence_state,
-            "object_locator": f"fixture://object/{suffix}",
+            "object_locator": object_locator,
             "modality": "TEXT",
+            "evidence_metadata": evidence_metadata,
             "evidence_ref_id": evidence_ref_id,
             "locator": "bytes:0-*",
             "support_type": "DIRECT",
@@ -198,12 +225,18 @@ def test_CORE_API_exposes_required_openapi_operations(client):
         "/health/live",
         "/health/ready",
         "/v1/projects/{project_id}",
+        "/v1/projects",
+        "/v1/projects/{project_id}/corpora",
         "/v1/projects/{project_id}/corpora/{corpus_id}",
         "/v1/analysis-profiles/{profile_id}/versions/{version}",
+        "/v1/analysis-profiles",
         "/v1/identity/resolve",
         "/v1/evidence/register",
         "/v1/contexts",
+        "/v1/contexts/{context_id}",
         "/v1/context-capsules",
+        "/v1/context-capsules/{context_capsule_id}",
+        "/v1/evidence/{evidence_ref_id}",
         "/v1/runs",
         "/v1/runs/{run_id}/claims",
         "/v1/runs/{run_id}/receipt",
@@ -211,6 +244,100 @@ def test_CORE_API_exposes_required_openapi_operations(client):
         "/v1/context-graph/traverse",
     }
     assert required.issubset(openapi["paths"])
+
+
+def test_INTERNAL_QUERY_SURFACE_lists_gets_filters_and_sanitizes(client):
+    resources = bootstrap(client, suffix="query-surface", include_sensitive_metadata=True)
+
+    projects = client.get("/v1/projects?limit=1")
+    assert projects.status_code == 200
+    assert [item["project_id"] for item in projects.json()] == [resources["project_id"]]
+    project = client.get(f"/v1/projects/{resources['project_id']}").json()
+    assert project["name"] == "Project query-surface"
+    assert project["metadata"] == {"synthetic": True, "nested": {"visible": True}}
+
+    corpora = client.get(f"/v1/projects/{resources['project_id']}/corpora?limit=1")
+    assert corpora.status_code == 200
+    assert corpora.json()[0]["corpus_id"] == resources["corpus_id"]
+    corpus = client.get(
+        f"/v1/projects/{resources['project_id']}/corpora/{resources['corpus_id']}"
+    )
+    assert corpus.status_code == 200
+    assert corpus.json()["project_id"] == resources["project_id"]
+
+    contexts = client.get(
+        f"/v1/contexts?project_id={resources['project_id']}&corpus_id={resources['corpus_id']}&limit=1"
+    )
+    assert contexts.status_code == 200
+    assert contexts.json()[0]["context_id"] == resources["context_id"]
+    assert client.get(f"/v1/contexts/{resources['context_id']}").json()["dimensions"]["corpus_id"] == resources["corpus_id"]
+    contexts_by_corpus = client.get(f"/v1/contexts?corpus_id={resources['corpus_id']}&limit=1")
+    assert contexts_by_corpus.status_code == 200
+    assert contexts_by_corpus.json()[0]["context_id"] == resources["context_id"]
+
+    capsules = client.get(f"/v1/context-capsules?context_id={resources['context_id']}&limit=1")
+    assert capsules.status_code == 200
+    assert capsules.json()[0]["context_capsule_id"] == resources["capsule_id"]
+    capsule = client.get(f"/v1/context-capsules/{resources['capsule_id']}")
+    assert capsule.status_code == 200
+    assert capsule.json()["payload"]["evidence_refs"] == [resources["evidence_ref_id"]]
+
+    profiles = client.get("/v1/analysis-profiles?limit=1")
+    assert profiles.status_code == 200
+    assert profiles.json()[0]["analysis_profile_id"] == "AP-101"
+    validate_payload("analysis-profile-v0.3.schema.json", profiles.json()[0])
+
+    runs = client.get(f"/v1/runs?project_id={resources['project_id']}&status=QUEUED&limit=1")
+    assert runs.status_code == 200
+    assert runs.json()[0]["run_id"] == resources["run_id"]
+    assert runs.json()[0]["context_capsule_id"] == resources["capsule_id"]
+    assert "job_id" not in runs.json()[0]
+    assert "job_status" not in runs.json()[0]
+    assert "context_receipt_id" not in runs.json()[0]
+    assert runs.json()[0]["started_at"].endswith("Z")
+
+    evidence = client.get(f"/v1/evidence/{resources['evidence_ref_id']}")
+    assert evidence.status_code == 200
+    payload = evidence.json()
+    assert payload["evidence_ref_id"] == resources["evidence_ref_id"]
+    assert payload["content_availability"] == "METADATA_ONLY_BLOB_OBJECT_CONTENT_NOT_IMPLEMENTED"
+    assert payload["source_locator"] == "https://blob.example/source/query-surface"
+    assert payload["object_locator"] == "https://blob.example/object/query-surface"
+    assert payload["source_metadata"] == {"visible": True}
+    assert payload["evidence_metadata"] == {"nested": {"visible": True}}
+    serialized = json.dumps(payload).lower()
+    assert "password" not in serialized
+    assert "connection_string" not in serialized
+    assert "must-not-escape" not in serialized
+
+
+def test_INTERNAL_QUERY_SURFACE_returns_sanitized_not_found_and_bounded_validation(client):
+    missing = client.get("/v1/projects/prj_missing")
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
+    assert "traceback" not in missing.text.lower()
+
+    wrong_parent = client.get("/v1/projects/prj_wrong/corpora/cor_missing")
+    assert wrong_parent.status_code == 404
+    assert wrong_parent.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
+
+    for path in (
+        "/v1/contexts/ctx_missing",
+        "/v1/context-capsules/cap_missing",
+        "/v1/evidence/evref_missing",
+    ):
+        response = client.get(path)
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
+        assert "traceback" not in response.text.lower()
+
+    assert client.get("/v1/projects?limit=0").status_code == 422
+    assert client.get("/v1/runs?limit=101").status_code == 422
+    assert client.get("/v1/runs?status=NOT_A_RUNTIME_STATUS").status_code == 422
+    assert client.get("/v1/runs?project_id=").status_code == 422
+    assert client.get("/v1/contexts?project_id=").status_code == 422
+    assert client.get("/v1/contexts?corpus_id=").status_code == 422
+    assert client.get("/v1/context-capsules?context_id=").status_code == 422
 
 
 def test_IDEMPOTENCY_replays_same_request_and_rejects_conflict(client):
