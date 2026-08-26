@@ -238,16 +238,20 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Verify anonymous public-read access by digest
+      - name: Verify authenticated private-read access by digest
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          docker logout ghcr.io
-          anonymous_config="$(mktemp -d)"
-          trap 'rm -rf "${anonymous_config}"' EXIT
-          DOCKER_CONFIG="${anonymous_config}" docker buildx imagetools inspect "${CORE_IMAGE}@${CORE_DIGEST}"
-          DOCKER_CONFIG="${anonymous_config}" docker buildx imagetools inspect "${WEB_IMAGE}@${WEB_DIGEST}"
-          DOCKER_CONFIG="${anonymous_config}" docker buildx imagetools inspect "${WORKER_IMAGE}@${WORKER_DIGEST}"
+          private_config="$(mktemp -d)"
+          trap 'rm -rf "${private_config}"' EXIT
+          printf '%s' "${GHCR_TOKEN}" |
+            DOCKER_CONFIG="${private_config}" docker login ghcr.io \
+              --username "${GITHUB_ACTOR}" --password-stdin
+          DOCKER_CONFIG="${private_config}" docker buildx imagetools inspect "${CORE_IMAGE}@${CORE_DIGEST}"
+          DOCKER_CONFIG="${private_config}" docker buildx imagetools inspect "${WEB_IMAGE}@${WEB_DIGEST}"
+          DOCKER_CONFIG="${private_config}" docker buildx imagetools inspect "${WORKER_IMAGE}@${WORKER_DIGEST}"
 
       - name: Record deployment-ready references
         shell: bash
@@ -260,6 +264,6 @@ jobs:
             echo "- Worker: \`${WORKER_IMAGE}@${WORKER_DIGEST}\`"
             echo "- Commit: \`${GITHUB_SHA}\`"
             echo '- Platform: `linux/amd64`'
-            echo '- Anonymous public-read: `PASS`'
+            echo '- Authenticated private-read: `PASS`'
             echo '- LIVE_PROVIDER_CALLS: `0`'
           } >> "${GITHUB_STEP_SUMMARY}"
