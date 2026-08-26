@@ -1,0 +1,152 @@
+{
+  "receipt_id": "p0_azure_apply_e2e_20260825T060249Z",
+  "schema_version": "P0-AZURE-EXECUTION-1",
+  "recorded_at": "2026-08-25T06:02:49Z",
+  "status": "P0_08_OBSERVATION_ACTIVE",
+  "architecture": "v0.6_FINAL_FROZEN",
+  "environment_class": "INTERNAL_ENGINEERING_PILOT",
+  "scope": "P0_ONLY",
+  "production_pattern": false,
+  "ghcr": {
+    "visibility": "PRIVATE",
+    "auth_method": "GHCR_USERNAME_AND_PAT_CLASSIC_READ_PACKAGES",
+    "auth_validation": "PASS",
+    "azure_private_registry_bindings": "3/3",
+    "acr_created": false,
+    "packages_made_public": false,
+    "digests_unchanged": true,
+    "images": {
+      "core": "ghcr.io/soaiacore-corporation/soaiacore-core@sha256:e6564cad60afa7f7e1828c193c3512c7f1b0ce53aed26459e0a61b8ac33fb467",
+      "web": "ghcr.io/soaiacore-corporation/soaiacore-web@sha256:da26fd8bcf6cb2a4c242d380a28c682b19c6f094f0a898258a727ef558fa6c58",
+      "worker": "ghcr.io/soaiacore-corporation/soaiacore-worker@sha256:971dc02fd1ba2306cd6e1d4864e8d7de0d447169256f7d89071bc5c94ccde9a1"
+    },
+    "temporary_credential": {
+      "classification": "P0_TEMPORARY",
+      "local_storage": "WINDOWS_DPAPI_CURRENT_USER_OUTSIDE_GIT",
+      "terraform_input": "SENSITIVE_OUTSIDE_GIT",
+      "azure_storage": "CONTAINER_APPS_SECRET",
+      "revocation_required_at_teardown": true
+    }
+  },
+  "terraform": {
+    "version": "1.15.0",
+    "fmt": "PASS",
+    "validate": "PASS",
+    "initial_exact_plan": {
+      "sha256": "6da3c3f4bbf5c213bc27d8f7d712d091acb62da5193e6938a027dcc6aa38ddad",
+      "add": 24,
+      "change": 0,
+      "destroy": 0,
+      "private_registry_bindings": "3/3",
+      "placeholder_images": 0
+    },
+    "recovery_plan": {
+      "sha256": "c705804e8305b581603afd4328c49fa5cc1d3aa7ae1e835915fdbf5011717aa9",
+      "add": 13,
+      "change": 0,
+      "destroy": 0
+    },
+    "runtime_binding_plan": {
+      "sha256": "4ed2cd73c8c88eec29a7c62157428760914f62494719dbd8b707e3de3e6fb7e5",
+      "add": 0,
+      "change": 2,
+      "destroy": 0,
+      "targets": [
+        "core",
+        "worker"
+      ]
+    },
+    "stable_core_binding_plan": {
+      "sha256": "be4a0223fc7c3797e6000b64eada5a4ac600de2d0e1c06634928229841a84c2f",
+      "add": 0,
+      "change": 1,
+      "destroy": 0,
+      "target": "web"
+    },
+    "final_drift_plan": {
+      "sha256": "e2eeca5d9c54bf2f43ee208d0bee7fce48da6f3c8e1b533323917fe60b54a658",
+      "result": "NO_CHANGES",
+      "detailed_exit_code": 0
+    },
+    "state_resources": 24,
+    "apply": "PASS",
+    "local_state_exception": "AUTHORIZED",
+    "tracked_tfstate_current": 0,
+    "tracked_tfstate_history": 0,
+    "local_operator_restricted": true,
+    "state_retention": "P0_LIFECYCLE_ONLY",
+    "sanitize_after_teardown": true
+  },
+  "azure": {
+    "microsoft_network_registration": "REGISTERED_EXPLICITLY",
+    "core_provisioning": "Succeeded",
+    "web_provisioning": "Succeeded",
+    "worker_provisioning": "Succeeded",
+    "postgresql_state": "Ready",
+    "provider_mode": "MOCK",
+    "live_provider_calls": 0,
+    "migrations": {
+      "status": "PASS",
+      "count": 8
+    },
+    "health": {
+      "web_live": "PASS",
+      "web_ready": "PASS",
+      "core_ready": "PASS",
+      "database": "PASS",
+      "pgvector": "PASS"
+    },
+    "worker_precheck": {
+      "status": "PASS",
+      "migrations": 8,
+      "provider_mode": "MOCK"
+    },
+    "e2e_mock_cloud": {
+      "executions": 1,
+      "status": "PASS",
+      "run_id": "run_e02e9b6f7abf1a8ef4a14e9b",
+      "run_status": "COMPLETED",
+      "claims": 1,
+      "lifecycle_stages": 7,
+      "lifecycle_all_pass": true,
+      "receipt_id": "cr_d3a6bf8a72c00b544dd7843e"
+    }
+  },
+  "p0_08_observation": {
+    "status": "ACTIVE_BASELINE_RECORDED",
+    "ready_latency_ms": [
+      741,
+      384,
+      400
+    ],
+    "scale_to_zero_reactivation": "PASS",
+    "persistence_after_reactivation": "PASS",
+    "evidence_lineage": "PASS",
+    "load_benchmark": "NOT_RUN_BASELINE_ONLY",
+    "image_pull_failures_30m": 0,
+    "database_sku": "Standard_B1ms",
+    "database_storage_gib": 32,
+    "database_high_availability": "Disabled",
+    "cost": {
+      "currency": "USD",
+      "estimated_168h_range": "3.82-20.28",
+      "actual_records": 0,
+      "actual_observation": "PENDING_AZURE_INGESTION"
+    },
+    "expires_at": "2026-09-01T04:00:00Z"
+  },
+  "failures_and_corrections": [
+    "Federated credential name was sanitized to Azure-supported characters.",
+    "Microsoft.Network was registered explicitly after the initial partial apply.",
+    "Core and Worker received a non-secret PYTHONPATH Azure runtime binding without changing image digests.",
+    "Web was rebound to the stable internal Core ingress FQDN.",
+    "Migration command overrides were corrected without persisting or printing credentials."
+  ],
+  "guardrails": {
+    "mass_production_deployment": false,
+    "live_providers": false,
+    "architecture_v0_7": false,
+    "remote_backend_required_before_production": true
+  },
+  "blocker": "none"
+}

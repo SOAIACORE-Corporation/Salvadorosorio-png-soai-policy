@@ -1,0 +1,22 @@
+{
+  "fixture_id": "documented-observation",
+  "fixture_version": "1.0.0",
+  "created_at": "2026-08-23T12:00:00Z",
+  "model_id": "soaiacore-deterministic-fixture",
+  "tool_name": "mock-context-analyzer",
+  "graph_relation_type": "OBSERVED_IN",
+  "claim": {
+    "statement_template": "Synthetic evidence {evidence_ref_id} supports context {context_id}.",
+    "claim_kind": "OBSERVATION",
+    "epistemic_class": "DOCUMENTED_FACT",
+    "methodology_ref": "p0-mock-documented-observation-v1",
+    "assumptions": [],
+    "falsifiers": [
+      "A content hash mismatch invalidates this synthetic observation."
+    ],
+    "scope_boundary": "P0 synthetic fixture only",
+    "confidence_score": 0.95,
+    "confidence_semantics": "Deterministic fixture confidence; not a probability"
+  }
+}
+

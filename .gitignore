@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+node_modules/
+apps/web/.next/
+*.log
+.env
+.env.*
+!.env.example
+terraform.tfstate
+terraform.tfstate.*
+*.tfstate
+*.tfstate.*

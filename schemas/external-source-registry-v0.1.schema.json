@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.soaiacore.com/source/external-source-registry-v0.1.schema.json",
+  "title": "SOAIACORE ExternalSourceRegistry Record v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "external_source_id",
+    "provider",
+    "source_role",
+    "freshness",
+    "purpose_restrictions",
+    "created_at"
+  ],
+  "properties": {
+    "external_source_id": {
+      "type": "string",
+      "pattern": "^extsrc_[A-Za-z0-9_-]+$"
+    },
+    "provider": {
+      "type": "string"
+    },
+    "source_role": {
+      "type": "string"
+    },
+    "license": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "freshness": {
+      "type": "string"
+    },
+    "quality_metadata": {
+      "type": "object"
+    },
+    "purpose_restrictions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "trust_profile": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

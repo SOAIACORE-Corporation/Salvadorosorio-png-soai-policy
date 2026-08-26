@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.soaiacore.com/policy/data-minimization-decision-v0.1.schema.json",
+  "title": "SOAIACORE DataMinimizationPolicy Decision v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "decision_id",
+    "action",
+    "purpose",
+    "provider_eligibility",
+    "created_at"
+  ],
+  "properties": {
+    "decision_id": {
+      "type": "string",
+      "pattern": "^dmin_[A-Za-z0-9_-]+$"
+    },
+    "action": {
+      "enum": [
+        "MINIMIZE",
+        "TOKENIZE",
+        "ALLOW",
+        "DENY"
+      ]
+    },
+    "purpose": {
+      "type": "string"
+    },
+    "provider_eligibility": {
+      "type": "boolean"
+    },
+    "fields_removed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "fields_tokenized": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reason_codes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

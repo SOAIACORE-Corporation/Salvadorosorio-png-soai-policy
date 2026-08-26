@@ -1,0 +1,19 @@
+{
+  "fixture_id": "invalid-output",
+  "fixture_version": "1.0.0",
+  "created_at": "2026-08-23T12:00:00Z",
+  "model_id": "soaiacore-deterministic-fixture",
+  "tool_name": "mock-context-analyzer",
+  "graph_relation_type": "OBSERVED_IN",
+  "claim": {
+    "statement_template": "",
+    "claim_kind": "OBSERVATION",
+    "epistemic_class": "DOCUMENTED_FACT",
+    "methodology_ref": "p0-mock-invalid-v1",
+    "assumptions": [],
+    "falsifiers": [],
+    "scope_boundary": "Negative acceptance fixture",
+    "confidence_score": 0.5,
+    "confidence_semantics": "Negative fixture confidence; not a probability"
+  }
+}

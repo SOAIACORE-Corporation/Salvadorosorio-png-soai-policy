@@ -1,0 +1,13 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+p0-ghcr-credential.clixml
+$planFile
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

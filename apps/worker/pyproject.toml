@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "soaiacore-worker"
+version = "0.1.0"
+description = "SOAIACORE P0 finite lifecycle worker"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "soaiacore-runtime",
+]
+
+[project.scripts]
+soaiacore-worker = "soaiacore_worker.__main__:main"
+
+[tool.uv.sources]
+soaiacore-runtime = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/soaiacore_worker"]
