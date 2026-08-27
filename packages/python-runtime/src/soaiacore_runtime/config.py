@@ -45,6 +45,12 @@ class RuntimeSettings:
     fixture_dir: Path
     storage_account_name: str | None
     storage_container_name: str | None
+    dispatch_mode: str = "LOCAL"
+    azure_subscription_id: str | None = None
+    azure_resource_group: str | None = None
+    azure_container_app_job_name: str | None = None
+    azure_management_api_version: str = "2024-03-01"
+    dispatch_timeout_seconds: float = 10.0
 
     @classmethod
     def from_env(cls) -> "RuntimeSettings":
@@ -64,5 +70,15 @@ class RuntimeSettings:
             ),
             storage_account_name=os.getenv("AZURE_STORAGE_ACCOUNT_NAME"),
             storage_container_name=os.getenv("AZURE_STORAGE_CONTAINER_NAME"),
+            dispatch_mode=os.getenv("SOAIACORE_DISPATCH_MODE", "LOCAL").upper(),
+            azure_subscription_id=os.getenv("AZURE_SUBSCRIPTION_ID"),
+            azure_resource_group=os.getenv("AZURE_RESOURCE_GROUP"),
+            azure_container_app_job_name=os.getenv("AZURE_CONTAINER_APP_JOB_NAME"),
+            azure_management_api_version=os.getenv(
+                "AZURE_MANAGEMENT_API_VERSION", "2024-03-01"
+            ),
+            dispatch_timeout_seconds=float(
+                os.getenv("SOAIACORE_DISPATCH_TIMEOUT_SECONDS", "10")
+            ),
         )
 
