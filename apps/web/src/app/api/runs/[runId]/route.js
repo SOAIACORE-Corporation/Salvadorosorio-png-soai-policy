@@ -12,7 +12,15 @@ export async function GET(_request, { params }) {
     });
   } catch {
     return NextResponse.json(
-      { error: { code: "RUN_STATUS_UNAVAILABLE", message: "Unable to load run status." } },
+      {
+        error: {
+          code: "RUN_STATUS_UNAVAILABLE",
+          message: "The Core service is temporarily unavailable.",
+          stage: "RUN_STATUS",
+          retryable: true,
+          correlation_id: null,
+        },
+      },
       { status: 502, headers: { "Cache-Control": "no-store" } },
     );
   }
