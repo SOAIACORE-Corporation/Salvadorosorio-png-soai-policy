@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { requirePageSession } from "../../../server/auth-next.js";
 
-export default function NewRunPage() {
+export default async function NewRunPage() {
+  await requirePageSession("/runs/new");
   return (
     <section className="empty-state-page">
       <p className="eyebrow">Operator workflow</p>

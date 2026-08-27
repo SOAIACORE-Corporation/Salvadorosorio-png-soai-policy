@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import hashlib
 import uuid
 from typing import Any
 
@@ -45,6 +46,7 @@ from soaiacore_runtime.operations import (
 from soaiacore_runtime.schemas import validate_payload
 
 from .dispatcher import DispatchResult, build_dispatcher
+from .auth import OperatorAuthError, verify_operator_context
 from .models import (
     ContextCapsuleRequest,
     ContextRequest,
@@ -85,10 +87,51 @@ def _receipt_payload(row: dict[str, Any]) -> dict[str, Any]:
 def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     active_settings = settings or RuntimeSettings.from_env()
     database = Database(active_settings.database_url)
-    app = FastAPI(title="SOAIACORE Core", version="0.1.0")
+
+    async def require_operator(request: Request) -> None:
+        if not active_settings.internal_auth_required or not request.url.path.startswith("/v1/"):
+            return
+        try:
+            operator = verify_operator_context(
+                active_settings.internal_auth_secret,
+                method=request.method,
+                path=request.url.path + (f"?{request.url.query}" if request.url.query else ""),
+                timestamp=request.headers.get("X-SOAIA-Auth-Timestamp"),
+                correlation_id=request.headers.get("X-Correlation-ID"),
+                operator_id=request.headers.get("X-SOAIA-Operator-ID"),
+                role=request.headers.get("X-SOAIA-Operator-Role"),
+                signature=request.headers.get("X-SOAIA-Auth-Signature"),
+                content_sha256=request.headers.get("X-SOAIA-Content-SHA256"),
+                actual_content_sha256=hashlib.sha256(await request.body()).hexdigest(),
+            )
+        except OperatorAuthError as exc:
+            raise contract_error(
+                exc.code,
+                str(exc),
+                "AUTHORIZATION",
+                status_code=exc.status_code,
+                retryable=exc.status_code == 503,
+            ) from exc
+        request.state.operator = operator
+
+    app = FastAPI(
+        title="SOAIACORE Core",
+        version="0.1.0",
+        dependencies=[Depends(require_operator)],
+    )
     app.state.settings = active_settings
     app.state.database = database
     app.state.job_dispatcher = build_dispatcher(active_settings)
+
+    @app.middleware("http")
+    async def operator_audit_headers(request: Request, call_next):
+        response = await call_next(request)
+        operator = getattr(request.state, "operator", None)
+        if operator is not None:
+            response.headers["X-SOAIA-Audit-Operator"] = operator.operator_id
+            response.headers["X-SOAIA-Audit-Role"] = operator.role
+            response.headers["X-Correlation-ID"] = operator.correlation_id
+        return response
 
     @app.exception_handler(RuntimeContractError)
     async def runtime_error_handler(request: Request, exc: RuntimeContractError):

@@ -51,6 +51,8 @@ class RuntimeSettings:
     azure_container_app_job_name: str | None = None
     azure_management_api_version: str = "2024-03-01"
     dispatch_timeout_seconds: float = 10.0
+    internal_auth_required: bool = True
+    internal_auth_secret: str | None = None
 
     @classmethod
     def from_env(cls) -> "RuntimeSettings":
@@ -80,5 +82,10 @@ class RuntimeSettings:
             dispatch_timeout_seconds=float(
                 os.getenv("SOAIACORE_DISPATCH_TIMEOUT_SECONDS", "10")
             ),
+            internal_auth_required=os.getenv(
+                "SOAIACORE_INTERNAL_AUTH_REQUIRED", "true"
+            ).lower()
+            not in {"0", "false", "no"},
+            internal_auth_secret=os.getenv("SOAIACORE_INTERNAL_AUTH_SECRET"),
         )
 

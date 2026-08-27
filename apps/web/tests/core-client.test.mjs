@@ -4,10 +4,17 @@ import path from "node:path";
 import test from "node:test";
 import { CoreApiError, coreBaseUrl, coreRequest } from "../src/server/core-client.mjs";
 
+const internalSecret = "test-only-internal-auth-secret-32-bytes-minimum";
+const operatorContext = { operatorId: "op_0123456789abcdef01234567", role: "OPERATOR" };
+
 test("WEB_BFF uses CORE_API_BASE_URL only on the server request", async () => {
   let captured;
   const payload = await coreRequest("/v1/runs/run_test", {
-    environment: { CORE_API_BASE_URL: "https://core.internal" },
+    environment: {
+      CORE_API_BASE_URL: "https://core.internal",
+      SOAIACORE_INTERNAL_AUTH_SECRET: internalSecret,
+    },
+    operatorContext,
     fetchImpl: async (url, options) => {
       captured = { url, options };
       return new Response(JSON.stringify({ run_id: "run_test", status: "QUEUED" }), {
@@ -18,6 +25,10 @@ test("WEB_BFF uses CORE_API_BASE_URL only on the server request", async () => {
   });
   assert.equal(captured.url, "https://core.internal/v1/runs/run_test");
   assert.equal(captured.options.cache, "no-store");
+  assert.equal(captured.options.headers["X-SOAIA-Operator-ID"], operatorContext.operatorId);
+  assert.equal(captured.options.headers["X-SOAIA-Operator-Role"], "OPERATOR");
+  assert.match(captured.options.headers["X-SOAIA-Auth-Signature"], /^[a-f0-9]{64}$/);
+  assert.equal(JSON.stringify(captured).includes(internalSecret), false);
   assert.equal(payload.run_id, "run_test");
 });
 
@@ -34,7 +45,11 @@ test("WEB_BFF exposes only safe idempotency response metadata", async () => {
     body: { name: "Synthetic project" },
     idempotencyKey: "web-create-project-request-1",
     includeResponseMetadata: true,
-    environment: { CORE_API_BASE_URL: "https://core.internal" },
+    environment: {
+      CORE_API_BASE_URL: "https://core.internal",
+      SOAIACORE_INTERNAL_AUTH_SECRET: internalSecret,
+    },
+    operatorContext,
     fetchImpl: async (_url, options) => {
       assert.equal(options.headers["Idempotency-Key"], "web-create-project-request-1");
       return new Response(JSON.stringify({ project_id: "prj_test" }), {
