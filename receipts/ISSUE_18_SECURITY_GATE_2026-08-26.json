@@ -1,0 +1,33 @@
+{
+  "issue": "#18",
+  "issue_18_status": "PASS_LOCAL_READY_FOR_IDP_BINDING",
+  "recorded_utc": "2026-08-27T03:30:19.8089165Z",
+  "branch": "feat/p1-sec-oidc-session-rbac",
+  "baseline_commit": "b81f45e",
+  "authentication": "PASS (OIDC Authorization Code + PKCE; RS256 validation)",
+  "server_side_session": "PASS (opaque HttpOnly/Secure cookie; process-local store; expiry and logout verified)",
+  "rbac": "PASS (OPERATOR and ADMIN; ADMIN negative/positive enforcement verified)",
+  "web_bff_boundary": "PASS (all product pages and BFF routes require authenticated context)",
+  "core_authorization": "PASS (fail-closed signed operator context on /v1/*)",
+  "operator_audit_identity": "PASS (pseudonymous operator_id and correlation_id; no provider subject retained)",
+  "provider_mode": "MOCK",
+  "tests": {
+    "python_gate": "37 passed, 0 failed, 0 skipped, 1 deprecation warning",
+    "web_suite": "26 passed, 0 failed, 0 skipped",
+    "web_production_build": "PASS",
+    "total_test_cases_executed": 63,
+    "pass": 63,
+    "fail": 0,
+    "skipped": 0,
+    "blocked": 0
+  },
+  "live_oidc_provider_binding": "NOT_CONFIGURED_IN_LOCAL_GATE",
+  "files_changed_this_execution": 36,
+  "final_diff_stat": "36 files changed, 1330 insertions(+), 91 deletions(-)",
+  "architecture_change_required": "NO",
+  "security_regression": "NONE",
+  "azure_terraform_ghcr_changed": false,
+  "ready_for_commit": "YES",
+  "blocker": "Live controlled-pilot deployment remains blocked until approved IdP values and secrets are mounted by #19.",
+  "next_action": "Commit and open the Issue #18 PR. After merge, execute #19 production hardening and bind the approved OIDC provider without increasing Web above one replica."
+}

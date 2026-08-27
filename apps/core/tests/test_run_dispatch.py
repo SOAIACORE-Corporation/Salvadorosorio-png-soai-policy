@@ -51,6 +51,7 @@ def test_run_dispatch_happens_after_database_commit(monkeypatch):
         fixture_dir=Path("fixtures"),
         storage_account_name=None,
         storage_container_name=None,
+        internal_auth_required=False,
     )
     app = core_main.create_app(settings)
     app.state.job_dispatcher = Dispatcher()

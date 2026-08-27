@@ -1,11 +1,17 @@
 import { coreRequest } from "../../../server/core-client.mjs";
 import Link from "next/link";
+import { requirePageSession } from "../../../server/auth-next.js";
+import { withOperatorContext } from "../../../server/operator-context.mjs";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReceiptPage({ params }) {
   const { runId } = await params;
-  const receipt = await coreRequest(`/v1/runs/${encodeURIComponent(runId)}/receipt`);
+  const returnTo = `/receipts/${encodeURIComponent(runId)}`;
+  const session = await requirePageSession(returnTo);
+  const receipt = await withOperatorContext(session, () =>
+    coreRequest(`/v1/runs/${encodeURIComponent(runId)}/receipt`),
+  );
   return (
     <section className="receipt-page">
       <p className="eyebrow">ContextReceipt</p>

@@ -29,6 +29,7 @@ def settings() -> RuntimeSettings:
         fixture_dir=ROOT / "packages" / "mock-fixtures" / "v1",
         storage_account_name=None,
         storage_container_name=None,
+        internal_auth_required=False,
     )
 
 

@@ -211,6 +211,13 @@ pre { background: #101d30; border-radius: .5rem; overflow: auto; padding: 1rem; 
 .history-card-heading h2 { font-size: 1.1rem; margin: .35rem 0 0; overflow-wrap: anywhere; }
 .history-state { color: #8fa3bf; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
 .history-card dl { grid-template-columns: 8rem 1fr; margin: 1rem 0 0; }
+.operator-session { align-items: center; display: flex; gap: .65rem; }
+.operator-session span { color: #8fa3bf; font-size: .72rem; }
+.operator-session form { margin: 0; }
+.text-button { background: transparent; border: 0; color: #75d7ff; cursor: pointer; padding: 0; text-decoration: underline; }
+.auth-page { background: #0d1929; border: 1px solid #24334a; border-radius: .9rem; display: grid; gap: 1rem; max-width: 680px; padding: 2rem; }
+.auth-page h1, .auth-page p { margin: 0; }
+.auth-page .button, .auth-page form { justify-self: start; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }

@@ -1,10 +1,13 @@
 import OperatorWorkflow from "./workflow-client";
 import { loadOperatorWorkflow } from "../../server/operator-workflow.mjs";
+import { requirePageSession } from "../../server/auth-next.js";
+import { withOperatorContext } from "../../server/operator-context.mjs";
 
 export const dynamic = "force-dynamic";
 
 export default async function OperatorWorkflowPage() {
-  const initialData = await loadOperatorWorkflow();
+  const session = await requirePageSession("/workflow");
+  const initialData = await withOperatorContext(session, () => loadOperatorWorkflow());
   return (
     <section className="workflow-shell">
       <div className="workflow-hero">

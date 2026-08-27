@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { requirePageSession } from "../server/auth-next.js";
 
-export default function HomePage() {
+export default async function HomePage() {
+  await requirePageSession("/");
   return (
     <section className="portal-home">
       <div className="portal-hero">
