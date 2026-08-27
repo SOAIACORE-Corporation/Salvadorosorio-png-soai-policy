@@ -83,6 +83,31 @@ resource "azurerm_container_app" "core" {
       }
 
       env {
+        name  = "SOAIACORE_DISPATCH_MODE"
+        value = "AZURE"
+      }
+
+      env {
+        name  = "AZURE_SUBSCRIPTION_ID"
+        value = var.subscription_id
+      }
+
+      env {
+        name  = "AZURE_CLIENT_ID"
+        value = azurerm_user_assigned_identity.workload.client_id
+      }
+
+      env {
+        name  = "AZURE_RESOURCE_GROUP"
+        value = azurerm_resource_group.pilot.name
+      }
+
+      env {
+        name  = "AZURE_CONTAINER_APP_JOB_NAME"
+        value = azurerm_container_app_job.worker.name
+      }
+
+      env {
         name  = "POSTGRES_HOST"
         value = local.database_host
       }

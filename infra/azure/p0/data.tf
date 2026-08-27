@@ -25,6 +25,13 @@ resource "azurerm_role_assignment" "workload_blob_data" {
   principal_type       = "ServicePrincipal"
 }
 
+resource "azurerm_role_assignment" "workload_container_apps_job_operator" {
+  scope                = azurerm_container_app_job.worker.id
+  role_definition_name = "Container Apps Jobs Operator"
+  principal_id         = azurerm_user_assigned_identity.workload.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
 resource "azurerm_postgresql_flexible_server" "pilot" {
   name                          = "psql-${local.name_prefix}-${random_string.suffix.result}"
   resource_group_name           = azurerm_resource_group.pilot.name

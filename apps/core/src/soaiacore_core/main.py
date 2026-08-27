@@ -44,6 +44,7 @@ from soaiacore_runtime.operations import (
 )
 from soaiacore_runtime.schemas import validate_payload
 
+from .dispatcher import DispatchResult, build_dispatcher
 from .models import (
     ContextCapsuleRequest,
     ContextRequest,
@@ -87,6 +88,7 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     app = FastAPI(title="SOAIACORE Core", version="0.1.0")
     app.state.settings = active_settings
     app.state.database = database
+    app.state.job_dispatcher = build_dispatcher(active_settings)
 
     @app.exception_handler(RuntimeContractError)
     async def runtime_error_handler(request: Request, exc: RuntimeContractError):
@@ -372,8 +374,18 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
                     created,
                 ),
             )
+        try:
+            dispatch: DispatchResult = app.state.job_dispatcher.dispatch(
+                run_id=result["run_id"], job_id=result["job_id"]
+            )
+        except Exception:
+            dispatch = DispatchResult.pending(
+                getattr(app.state.job_dispatcher, "provider", "UNKNOWN"),
+                error_code="DISPATCHER_INTERNAL_ERROR",
+            )
         response.headers["Idempotency-Replayed"] = str(replayed).lower()
-        return result
+        response.headers["X-Dispatch-Status"] = dispatch.status
+        return {**result, **dispatch.as_dict()}
 
     @app.get("/v1/runs")
     def runs_list(
