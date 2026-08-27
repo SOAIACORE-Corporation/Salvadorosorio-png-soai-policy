@@ -1,0 +1,219 @@
+{
+  "schema_version": "1.0",
+  "revision": "2026-08-26-correction-1",
+  "project": "SOAIACORE",
+  "architecture": {
+    "version": "v0.6",
+    "status": "FINAL_FROZEN",
+    "architecture_change_required": false
+  },
+  "source_control": {
+    "integration_branch": "main",
+    "baseline_sha": "aa97503093eed3728c458ce6f239bcc73f45a01d",
+    "require_baseline_ancestor": true,
+    "expected_remote_contains": "SOAIACORE-Corporation/Salvadorosorio-png-soai-policy",
+    "historical_branch": "rebuild/p0-06a-runtime",
+    "historical_baseline_sha": "a9fa2c6782ce935943fe16df2fceff9dfb680c9c"
+  },
+  "lifecycle": {
+    "p0_07": "PASS",
+    "p0_08": "PARTIAL",
+    "provider_mode": "MOCK",
+    "live_provider_calls_allowed": false,
+    "production_data_allowed": false,
+    "production_authorized": false
+  },
+  "runtime": {
+    "deployables": ["web", "core", "worker"],
+    "paths": {
+      "web": "apps/web",
+      "core": "apps/core",
+      "worker": "apps/worker",
+      "python_runtime": "packages/python-runtime",
+      "database": "db",
+      "tests": "tests",
+      "azure_p0": "infra/azure/p0"
+    },
+    "web": {
+      "technology": "Next.js",
+      "public_ingress": true,
+      "core_access": "SERVER_SIDE_BFF_ONLY"
+    },
+    "core": {
+      "technology": "FastAPI",
+      "public_ingress": false
+    },
+    "worker": {
+      "type": "Azure Container Apps Job",
+      "retry_limit": 1,
+      "timeout_seconds": 1800,
+      "automatic_wakeup": true,
+      "canonical_command": "precheck"
+    }
+  },
+  "persistence": {
+    "engine": "PostgreSQL",
+    "major_version": 17,
+    "pgvector_required": true,
+    "canonical_job_queue": "PostgreSQL",
+    "migrations_expected": 8,
+    "verification_authority": "apps/worker/src/soaiacore_worker/__main__.py precheck"
+  },
+  "azure_p0": {
+    "managed_by": "terraform",
+    "cost_mode": "ZERO_FIRST",
+    "budget_usd": 200,
+    "current_expiry_expected": "2026-09-01T04:00:00Z",
+    "production_environment": false
+  },
+  "registry": {
+    "provider": "GHCR",
+    "visibility": "private",
+    "temporary_auth": "PAT_read_packages"
+  },
+  "terraform": {
+    "p0_apply": "PASS",
+    "expected_drift": "NO_CHANGES",
+    "state": "LOCAL_PROTECTED_P0_EXCEPTION",
+    "remote_backend_required_for_production": true
+  },
+  "storage": {
+    "canonical_physical_container": "evidence",
+    "evidence_workspace_separation": "LOGICAL",
+    "anonymous_blob_access": false,
+    "public_network_access": true,
+    "private_endpoint": false
+  },
+  "security": {
+    "oidc_required_before_wider_internal_access": true,
+    "key_vault_required_for_production_hardening": true,
+    "secrets_in_git_allowed": false,
+    "tfstate_in_git_allowed": false,
+    "tfplan_in_git_allowed": false,
+    "browser_core_direct_access_allowed": false,
+    "browser_database_access_allowed": false,
+    "browser_blob_credentials_allowed": false
+  },
+  "p1": {
+    "parent_issue": 7,
+    "completed_at_baseline": [8, 9, 10],
+    "next_critical_issue": 11,
+    "critical_path": [11, 15, 18, 19, 16, 20],
+    "p1_1_nonblocking": [12, 13, 14],
+    "iteration_01_issues": [8, 9, 10, 11, 12, 13, 14, 15]
+  },
+  "execution_policy": {
+    "P1_ITERATION_01": {
+      "issue_required": true,
+      "allowed_issues": [8, 9, 10, 11, 12, 13, 14, 15],
+      "required_tools": ["git"],
+      "azure_read": false,
+      "azure_write": false,
+      "terraform_write": false,
+      "required_gates": ["GATE_00", "GATE_01", "GATE_02", "GATE_03", "GATE_04", "GATE_05", "GATE_06", "GATE_21", "GATE_22"]
+    },
+    "P0_OPS_HARDENING": {
+      "issue_required": false,
+      "required_tools": ["git", "az", "terraform"],
+      "azure_read": true,
+      "azure_write": true,
+      "terraform_write": true,
+      "required_gates": ["GATE_00", "GATE_01", "GATE_02", "GATE_03", "GATE_11", "GATE_12", "GATE_13", "GATE_15", "GATE_16", "GATE_17", "GATE_18", "GATE_19", "GATE_20"]
+    },
+    "INTERNAL_ACCESS_GATE": {
+      "issue_required": false,
+      "required_tools": ["git", "node", "npm", "az", "terraform"],
+      "azure_read": true,
+      "azure_write": true,
+      "terraform_write": true,
+      "required_gates": ["GATE_00", "GATE_01", "GATE_02", "GATE_03", "GATE_05", "GATE_09", "GATE_11", "GATE_12", "GATE_13", "GATE_18", "GATE_20", "GATE_21"]
+    },
+    "PRODUCTION_HARDENING": {
+      "issue_required": false,
+      "required_tools": ["git", "python", "az", "terraform"],
+      "azure_read": true,
+      "azure_write": true,
+      "terraform_write": true,
+      "remote_tfstate_required": true,
+      "required_gates": ["GATE_00", "GATE_01", "GATE_02", "GATE_03", "GATE_05", "GATE_11", "GATE_12", "GATE_13", "GATE_14", "GATE_15", "GATE_16", "GATE_17", "GATE_18", "GATE_19", "GATE_20", "GATE_21"]
+    },
+    "ALL_READINESS": {
+      "issue_required": false,
+      "required_tools": ["git", "python", "node", "npm", "docker", "terraform", "az", "gh"],
+      "azure_read": true,
+      "azure_write": false,
+      "terraform_write": false,
+      "remote_tfstate_required": true,
+      "required_gates": ["GATE_00", "GATE_01", "GATE_02", "GATE_03", "GATE_04", "GATE_05", "GATE_06", "GATE_07", "GATE_08", "GATE_09", "GATE_10", "GATE_11", "GATE_12", "GATE_13", "GATE_14", "GATE_15", "GATE_16", "GATE_17", "GATE_18", "GATE_19", "GATE_20", "GATE_21", "GATE_22"]
+    }
+  },
+  "issue_policy": {
+    "8": {
+      "required_tools": ["python"],
+      "extra_gates": ["GATE_07", "GATE_08"],
+      "baseline_tests": [
+        {"exe": "python", "args": ["-m", "pytest", "tests/acceptance/test_runtime_acceptance.py", "-q"]},
+        {"exe": "python", "args": ["-m", "pytest", "tests/test_container_runtime_contracts.py", "-q"]}
+      ]
+    },
+    "9": {
+      "required_tools": ["node", "npm"],
+      "extra_gates": ["GATE_09"],
+      "baseline_tests": [
+        {"exe": "npm", "args": ["--prefix", "apps/web", "test"]}
+      ]
+    },
+    "10": {
+      "required_tools": ["python"],
+      "extra_gates": ["GATE_07", "GATE_10"],
+      "baseline_tests": [
+        {"exe": "python", "args": ["-m", "pytest", "apps/core/tests/test_dispatcher.py", "apps/core/tests/test_run_dispatch.py", "-q"]}
+      ]
+    },
+    "11": {
+      "required_tools": ["node", "npm"],
+      "extra_gates": ["GATE_09", "GATE_10"],
+      "baseline_tests": [
+        {"exe": "npm", "args": ["--prefix", "apps/web", "test"]}
+      ]
+    },
+    "12": {
+      "required_tools": ["python", "node", "npm"],
+      "extra_gates": ["GATE_07", "GATE_08", "GATE_09"],
+      "baseline_tests": [
+        {"exe": "python", "args": ["-m", "pytest", "tests/acceptance/test_runtime_acceptance.py", "-q"]},
+        {"exe": "npm", "args": ["--prefix", "apps/web", "test"]}
+      ]
+    },
+    "13": {
+      "required_tools": ["python", "node", "npm"],
+      "extra_gates": ["GATE_07", "GATE_08", "GATE_09"],
+      "baseline_tests": [
+        {"exe": "python", "args": ["-m", "pytest", "tests/acceptance/test_runtime_acceptance.py", "-q"]},
+        {"exe": "npm", "args": ["--prefix", "apps/web", "test"]}
+      ]
+    },
+    "14": {
+      "required_tools": ["python", "node", "npm"],
+      "extra_gates": ["GATE_07", "GATE_08", "GATE_09"],
+      "baseline_tests": [
+        {"exe": "python", "args": ["-m", "pytest", "tests/acceptance/test_runtime_acceptance.py", "-q"]},
+        {"exe": "npm", "args": ["--prefix", "apps/web", "test"]}
+      ]
+    },
+    "15": {
+      "required_tools": ["python", "node", "npm"],
+      "extra_gates": ["GATE_07", "GATE_08", "GATE_09", "GATE_10"],
+      "baseline_tests": [
+        {"exe": "python", "args": ["-m", "pytest", "tests/acceptance/test_runtime_acceptance.py", "-q"]},
+        {"exe": "npm", "args": ["--prefix", "apps/web", "test"]}
+      ]
+    }
+  },
+  "ttl_policy_hours": {
+    "pass_above": 168,
+    "warn_above": 72,
+    "soft_block_above": 24,
+    "hard_block_at_or_below": 24
+  }
+}
