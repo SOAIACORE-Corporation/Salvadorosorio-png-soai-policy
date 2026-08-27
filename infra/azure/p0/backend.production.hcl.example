@@ -1,0 +1,5 @@
+resource_group_name  = "REPLACE_WITH_PROTECTED_STATE_RESOURCE_GROUP"
+storage_account_name = "REPLACE_WITH_PROTECTED_STATE_STORAGE_ACCOUNT"
+container_name       = "tfstate"
+key                  = "soaiacore/controlled-pilot/terraform.tfstate"
+use_azuread_auth     = true

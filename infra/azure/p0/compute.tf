@@ -72,6 +72,24 @@ resource "azurerm_container_app" "core" {
       cpu    = 0.25
       memory = "0.5Gi"
 
+      liveness_probe {
+        transport               = "HTTP"
+        port                    = 8000
+        path                    = "/health/live"
+        interval_seconds        = 30
+        timeout                 = 5
+        failure_count_threshold = 3
+      }
+
+      readiness_probe {
+        transport               = "HTTP"
+        port                    = 8000
+        path                    = "/health/ready"
+        interval_seconds        = 15
+        timeout                 = 5
+        failure_count_threshold = 3
+      }
+
       env {
         name  = "PYTHONPATH"
         value = "/app/.venv/lib/python3.12/site-packages"
@@ -189,6 +207,24 @@ resource "azurerm_container_app" "web" {
       image  = var.web_image
       cpu    = 0.25
       memory = "0.5Gi"
+
+      liveness_probe {
+        transport               = "HTTP"
+        port                    = 3000
+        path                    = "/api/health/live"
+        interval_seconds        = 30
+        timeout                 = 5
+        failure_count_threshold = 3
+      }
+
+      readiness_probe {
+        transport               = "HTTP"
+        port                    = 3000
+        path                    = "/api/health/ready"
+        interval_seconds        = 15
+        timeout                 = 5
+        failure_count_threshold = 3
+      }
 
       env {
         name  = "SOAIACORE_PROVIDER_MODE"
