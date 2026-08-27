@@ -79,6 +79,10 @@ terraform validate
 terraform plan -out=p0.tfplan -var-file=pilot.tfvars
 ```
 
+`terraform init -backend=false` remains valid only for the explicitly accepted P0 local-state exception. Controlled pilot production must initialize the declared `azurerm` backend with an operator-restricted copy of `backend.production.hcl.example`; it must never carry the P0 local state forward as the production source of truth.
+
+Production authority is blocked until `validation/prod_hardening_gate.py` returns `PASS` from real, untracked provider evidence and a reviewed plan JSON without delete/replace actions.
+
 Before planning, set `TF_VAR_ghcr_token` in the operator process from the
 approved secret source. Never place the token on the command line, in a tracked
 file, or in captured logs. `ghcr_username` may be supplied in the ignored pilot

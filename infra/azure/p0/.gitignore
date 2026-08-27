@@ -5,6 +5,9 @@
 *.tfvars
 !*.tfvars.example
 p0-ghcr-credential.clixml
+backend.production.hcl
+production-evidence.json
+*.tfplan.json
 $planFile
 crash.log
 override.tf

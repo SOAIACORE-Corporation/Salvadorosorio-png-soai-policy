@@ -1,0 +1,13 @@
+{
+  "managed_secret_store_bound": false,
+  "credentials_rotated": false,
+  "remote_backend_initialized": false,
+  "plan_no_destroy_verified": false,
+  "blob_private_path_verified": false,
+  "alerts_verified": false,
+  "budget_alert_verified": false,
+  "postgres_restore_verified": false,
+  "evidence_backup_verified": false,
+  "rollback_verified": false,
+  "approved_idp_bound": false
+}

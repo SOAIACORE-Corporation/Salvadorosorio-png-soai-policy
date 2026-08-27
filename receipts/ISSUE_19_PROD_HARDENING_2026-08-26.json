@@ -1,0 +1,54 @@
+{
+  "issue": "#19",
+  "issue_19_status": "BLOCKED",
+  "recorded_utc": "2026-08-27T03:50:08.7110954Z",
+  "branch": "feat/prod-hardening-controlled-pilot",
+  "baseline_commit": "63df2bc",
+  "control_families": {
+    "secrets_credentials": {
+      "status": "CONDITIONAL",
+      "implemented": ["browser secret boundary", "secret/state ignore rules"],
+      "missing": ["managed secret store binding", "credential rotation", "approved live IdP binding"]
+    },
+    "terraform_state_change_control": {
+      "status": "CONDITIONAL",
+      "implemented": ["azurerm backend declaration", "Azure AD backend example", "no-destroy plan gate"],
+      "missing": ["remote backend initialization proof", "reviewed provider plan proof"]
+    },
+    "network_data_access": {
+      "status": "CONDITIONAL",
+      "implemented": ["private PostgreSQL", "internal Core ingress", "private Blob container", "anonymous/shared-key Blob disabled"],
+      "missing": ["verified Blob private endpoint and public-network shutdown"]
+    },
+    "observability": {
+      "status": "CONDITIONAL",
+      "implemented": ["Log Analytics", "Web/Core liveness and readiness probes", "correlation identifiers"],
+      "missing": ["trigger-tested failure alerts", "budget alert"]
+    },
+    "backup_restore_rollback": {
+      "status": "CONDITIONAL",
+      "implemented": ["PostgreSQL seven-day backup", "Blob versioning and seven-day soft delete", "restore and rollback runbook"],
+      "missing": ["isolated PostgreSQL restore proof", "evidence object restore proof", "immutable-image rollback proof"]
+    }
+  },
+  "new_tests": {
+    "total": 3,
+    "pass": 3,
+    "fail": 0,
+    "skipped": 0
+  },
+  "files_changed_this_execution": 12,
+  "final_diff_stat": "12 files changed, 384 insertions(+)",
+  "architecture_change_required": "NO",
+  "security_regression": "NONE_DETECTED",
+  "azure_resources_changed": false,
+  "terraform_applied": false,
+  "production_go": false,
+  "accepted_residual_risk": [
+    "single region",
+    "no database HA unless #20 requires it",
+    "Web limited to one replica until shared encrypted sessions exist"
+  ],
+  "blocker": "Provider-backed Key Vault, remote state, Blob private path, alerts/budget and restore/rollback evidence are not available in this local execution.",
+  "next_action": "Review and merge repository-side hardening, then execute the runbook in the authorized Azure subscription. Keep #19 open until every evidence flag is true."
+}
