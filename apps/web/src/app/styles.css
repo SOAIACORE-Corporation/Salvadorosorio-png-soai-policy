@@ -168,6 +168,23 @@ pre { background: #101d30; border-radius: .5rem; overflow: auto; padding: 1rem; 
 .status-review-required { background: #332c18; border-color: #897039; color: #ffe8a8; }
 .status-denied, .status-failed-precheck, .status-failed-execution, .status-failed-validation { background: #391c24; border-color: #8e4354; color: #ffd1da; }
 .status-queued, .status-running, .status-in-progress, .status-pending, .status-unknown { background: #10283a; border-color: #2f6f86; color: #75d7ff; }
+.status-failed-receipt { background: #391c24; border-color: #8e4354; color: #ffd1da; }
+.status-queued-dispatch-pending { background: #332c18; border-color: #897039; color: #ffe8a8; }
+.lifecycle-panel { background: #0d1929; border: 1px solid #24334a; border-radius: .9rem; margin-top: 1.5rem; padding: 1.25rem; }
+.section-heading { align-items: center; display: flex; justify-content: space-between; }
+.section-heading h2 { margin: 0; }
+.section-heading span { color: #8fa3bf; font-size: .82rem; }
+.lifecycle-map { display: grid; gap: .6rem; grid-template-columns: repeat(7, minmax(0, 1fr)); list-style: none; margin: 1.25rem 0 0; padding: 0; }
+.lifecycle-map li { border: 1px solid #334968; border-radius: .55rem; display: grid; gap: .4rem; min-height: 4.5rem; padding: .65rem; }
+.lifecycle-map li span { color: #b7c4d8; font-size: .7rem; line-height: 1.25; text-transform: uppercase; }
+.lifecycle-map li strong { font-size: .75rem; }
+.lifecycle-pass { background: #143025; border-color: #397a5c !important; color: #bff3d3; }
+.lifecycle-fail { background: #391c24; border-color: #8e4354 !important; color: #ffd1da; }
+.lifecycle-pending { background: #101d30; color: #8fa3bf; }
+.error-details { display: grid; gap: .45rem; margin-top: 1rem; }
+.error-details span, .notice.warning span { color: inherit; display: block; }
+.notice.warning { background: #332c18; border: 1px solid #897039; color: #ffe8a8; }
+.notice button, .loading-panel button { justify-self: start; margin-top: .3rem; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
@@ -185,5 +202,10 @@ pre { background: #101d30; border-radius: .5rem; overflow: auto; padding: 1rem; 
   .run-summary dd, dd { margin-bottom: .5rem; }
   .portal-hero, .portal-grid { grid-template-columns: 1fr; }
   .run-heading { align-items: flex-start; flex-direction: column; }
+  .lifecycle-map { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 420px) {
+  .lifecycle-map { grid-template-columns: 1fr; }
 }
 

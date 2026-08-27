@@ -171,6 +171,19 @@ test("operator UI uses the Web BFF and does not expose manual resource ID inputs
   assert.equal(styles.includes("@media (max-width: 760px)"), true);
 });
 
+test("run status UI has bounded polling and lifecycle visibility", () => {
+  const appRoot = path.resolve(import.meta.dirname, "../src/app");
+  const source = fs.readFileSync(path.join(appRoot, "runs/[runId]/run-status-client.js"), "utf8");
+  const route = fs.readFileSync(path.join(appRoot, "api/runs/[runId]/route.js"), "utf8");
+  assert.equal(source.includes("MAX_AUTO_REFRESHES = 12"), true);
+  assert.equal(source.includes("MAX_REFRESH_DELAY_MS = 15000"), true);
+  assert.equal(source.includes("Retry status check"), true);
+  assert.equal(source.includes("lifecycle-map"), true);
+  assert.equal(source.includes("correlationId"), true);
+  assert.equal(route.includes("RUN_STATUS_UNAVAILABLE"), true);
+  assert.equal(route.includes("retryable: true"), true);
+});
+
 test("idempotency key derivation is stable and rejects malformed request IDs", () => {
   assert.equal(
     workflowIdempotencyKey("create_context", "request_same_123"),
