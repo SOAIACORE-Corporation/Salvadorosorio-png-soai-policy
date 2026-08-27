@@ -18,6 +18,10 @@ import {
   loadEvidenceExplorer,
   publicEvidenceExplorerError,
 } from "../src/server/evidence-explorer.mjs";
+import {
+  loadRunsHistory,
+  publicRunsHistoryError,
+} from "../src/server/runs-history.mjs";
 
 test("operator snapshot uses filtered Core read APIs through the server", async () => {
   const calls = [];
@@ -114,6 +118,29 @@ test("evidence explorer errors are deterministic and sanitized", () => {
   const failure = publicEvidenceExplorerError(new Error("storage secret"));
   assert.equal(failure.status, 500);
   assert.equal(failure.error.code, "EVIDENCE_EXPLORER_FAILED");
+  assert.equal(JSON.stringify(failure).includes("secret"), false);
+});
+
+test("runs history applies bounded filters and exposes safe audit fields", async () => {
+  const calls = [];
+  const responses = new Map([
+    ["/v1/runs?limit=25&status=COMPLETED&project_id=prj_one", [{ run_id: "run_one", project_id: "prj_one", context_capsule_id: "cap_one", analysis_profile_id: "AP-101", analysis_profile_version: "1.0.0", status: "COMPLETED", mode: "MOCK" }]],
+    ["/v1/projects?limit=100", [{ project_id: "prj_one", name: "Synthetic" }]],
+    ["/v1/analysis-profiles?limit=100", [{ analysis_profile_id: "AP-101", version: "1.0.0", name: "Default" }]],
+    ["/v1/runs/run_one", { run_id: "run_one", project_id: "prj_one", context_capsule_id: "cap_one", analysis_profile_id: "AP-101", analysis_profile_version: "1.0.0", status: "COMPLETED", mode: "MOCK", job_status: "COMPLETED", attempts: 1, started_at: "2026-08-26T00:00:00Z", completed_at: "2026-08-26T00:01:00Z", metadata: { secret: "drop" } }],
+    ["/v1/runs/run_one/receipt", { output_status: "COMPLETED", review_mode: "NONE" }],
+  ]);
+  const result = await loadRunsHistory({ status: "COMPLETED", projectId: "prj_one", profileId: "AP-101" }, { coreRequestImpl: async (requestPath) => { calls.push(requestPath); return responses.get(requestPath); } });
+  assert.equal(result.runs[0].attempts, 1);
+  assert.equal(result.runs[0].output_status, "COMPLETED");
+  assert.equal(result.runs[0].metadata, undefined);
+  assert.equal(calls.includes("/v1/runs?limit=25&status=COMPLETED&project_id=prj_one"), true);
+});
+
+test("runs history rejects invalid filters without leaking internals", async () => {
+  await assert.rejects(() => loadRunsHistory({ status: "DROP TABLE" }, { coreRequestImpl: async () => [] }));
+  const failure = publicRunsHistoryError(new Error("connection secret"));
+  assert.equal(failure.error.code, "RUN_HISTORY_FAILED");
   assert.equal(JSON.stringify(failure).includes("secret"), false);
 });
 

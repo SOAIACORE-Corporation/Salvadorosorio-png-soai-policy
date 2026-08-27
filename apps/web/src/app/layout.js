@@ -16,6 +16,7 @@ export default function RootLayout({ children }) {
             <nav aria-label="Primary navigation">
               <Link href="/">Portal</Link>
               <Link href="/workflow">Operator workflow</Link>
+              <Link href="/runs">Runs history</Link>
             </nav>
             <span className="environment-badge">MOCK · SYNTHETIC DATA ONLY</span>
           </div>

@@ -200,6 +200,17 @@ pre { background: #101d30; border-radius: .5rem; overflow: auto; padding: 1rem; 
 .evidence-list li a:hover { text-decoration: underline; }
 .evidence-list li strong { color: #75d7ff; overflow-wrap: anywhere; }
 .evidence-list li span, .evidence-list li small { color: #b7c4d8; }
+.history-page { display: grid; gap: 1.5rem; }
+.history-filters { align-items: end; background: #0d1929; border: 1px solid #24334a; border-radius: .9rem; display: grid; gap: 1rem; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; padding: 1rem; }
+.history-filters button { min-height: 2.75rem; }
+.run-history-list { display: grid; gap: 1rem; }
+.history-card { background: #0d1929; border: 1px solid #24334a; border-radius: .9rem; padding: 1.25rem; }
+.history-card.active { border-color: #2f6f86; }
+.history-card.terminal { border-color: #397a5c; }
+.history-card-heading { align-items: start; display: flex; gap: 1rem; justify-content: space-between; }
+.history-card-heading h2 { font-size: 1.1rem; margin: .35rem 0 0; overflow-wrap: anywhere; }
+.history-state { color: #8fa3bf; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
+.history-card dl { grid-template-columns: 8rem 1fr; margin: 1rem 0 0; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
@@ -219,6 +230,7 @@ pre { background: #101d30; border-radius: .5rem; overflow: auto; padding: 1rem; 
   .run-heading { align-items: flex-start; flex-direction: column; }
   .lifecycle-map { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .inspector-grid { grid-template-columns: 1fr; }
+  .history-filters { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 420px) {
