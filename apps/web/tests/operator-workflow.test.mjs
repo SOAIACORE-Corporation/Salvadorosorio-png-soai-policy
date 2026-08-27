@@ -14,6 +14,10 @@ import {
   loadContextInspector,
   publicContextInspectorError,
 } from "../src/server/context-inspector.mjs";
+import {
+  loadEvidenceExplorer,
+  publicEvidenceExplorerError,
+} from "../src/server/evidence-explorer.mjs";
 
 test("operator snapshot uses filtered Core read APIs through the server", async () => {
   const calls = [];
@@ -81,6 +85,35 @@ test("context inspector rejects malformed capsule IDs without exposing internals
   await assert.rejects(() => loadContextInspector("cap one", { coreRequestImpl: async () => ({}) }));
   const failure = publicContextInspectorError(new Error("secret connection string"));
   assert.equal(failure.error.code, "CONTEXT_INSPECTOR_FAILED");
+  assert.equal(JSON.stringify(failure).includes("secret"), false);
+});
+
+test("evidence explorer returns metadata-first lineage and claim role", async () => {
+  const calls = [];
+  const responses = new Map([
+    ["/v1/evidence/evref_one", {
+      evidence_ref_id: "evref_one", locator: "synthetic://fixture/one", support_type: "DIRECT",
+      relationship: "SUPPORTS", evidence_state_snapshot: "VERIFIED", admissibility_scope: "P0_MOCK",
+      excerpt_hash: "excerpt_hash", provenance_chain_ref: "prov_one", evidence_id: "ev_one",
+      evidence_state: "VERIFIED", modality: "TEXT", content_sha256: "content_hash", object_locator: "blob://redacted",
+      evidence_metadata: { synthetic: true, secret: "must-not-pass" }, source_id: "src_one", corpus_id: "cor_one",
+      source_type: "FIXTURE", source_locator: "synthetic://source", byte_size: 42, source_metadata: { title: "Fixture" },
+      content_availability: "METADATA_ONLY",
+    }],
+    ["/v1/claims/clm_one", { claim_id: "clm_one", statement: "Synthetic claim", claim_kind: "OBSERVATION", epistemic_class: "SUPPORTED", status: "ACTIVE", supporting_evidence_refs: ["evref_one"], contradicting_evidence_refs: [] }],
+  ]);
+  const result = await loadEvidenceExplorer("evref_one", { claimId: "clm_one", coreRequestImpl: async (requestPath) => { calls.push(requestPath); return responses.get(requestPath); } });
+  assert.equal(result.evidence_object.evidence_state, "VERIFIED");
+  assert.equal(result.evidence_object.metadata.secret, undefined);
+  assert.equal(result.claim.role, "SUPPORTING");
+  assert.equal(result.content.raw_blob_access, "NOT_IMPLEMENTED");
+  assert.deepEqual(calls.sort(), [...responses.keys()].sort());
+});
+
+test("evidence explorer errors are deterministic and sanitized", () => {
+  const failure = publicEvidenceExplorerError(new Error("storage secret"));
+  assert.equal(failure.status, 500);
+  assert.equal(failure.error.code, "EVIDENCE_EXPLORER_FAILED");
   assert.equal(JSON.stringify(failure).includes("secret"), false);
 });
 
