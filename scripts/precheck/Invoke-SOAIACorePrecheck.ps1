@@ -37,6 +37,14 @@ function Stop-ContextFailure {
     exit 1
 }
 
+function Get-OptionalProperty {
+    param($Object, [string]$Name, $Default = $null)
+    if ($null -eq $Object) { return $Default }
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property) { return $Default }
+    return $property.Value
+}
+
 if (-not (Test-Path -LiteralPath $MasterJsonPath -PathType Leaf)) {
     Stop-ContextFailure "PC-CTX-001" "MASTER_CONTEXT_FILE_MISSING" "RESTORE_PRECHECK_MASTER_JSON"
 }
@@ -176,18 +184,18 @@ function Get-PhasePolicy {
     return $prop.Value
 }
 
-$PhasePolicy = Get-PhasePolicy
-if ($null -eq $PhasePolicy) {
-    Stop-ContextFailure "PC-CTX-008" "TARGET_PHASE_POLICY_MISSING" "ADD_TARGET_PHASE_POLICY"
-}
-
 function Get-IssuePolicy {
     if ($Issue -le 0) { return $null }
-    $prop = $Master.issue_policy.PSObject.Properties[[string]$Issue]
+    $issueKey = [string]$Issue
+    $prop = $Master.issue_policy.PSObject.Properties[$issueKey]
     if ($null -eq $prop) { return $null }
     return $prop.Value
 }
 
+$PhasePolicy = Get-PhasePolicy
+if ($null -eq $PhasePolicy) {
+    Stop-ContextFailure "PC-CTX-008" "TARGET_PHASE_POLICY_MISSING" "ADD_TARGET_PHASE_POLICY"
+}
 $IssuePolicy = Get-IssuePolicy
 
 $EnabledGates = New-Object System.Collections.Generic.List[string]
@@ -220,9 +228,9 @@ function Get-RequiredTools {
 
 function Test-GitGrep {
     param([string]$Pattern, [string[]]$Paths)
-    $args = @("grep", "-n", "-I", "-E", $Pattern, "--") + $Paths
-    $r = Invoke-Native "git" $args
-    return [pscustomobject]@{ Found = ($r.ExitCode -eq 0); Output = $r.Output }
+    $grepArgs = @("grep", "-n", "-I", "-E", $Pattern, "--") + $Paths
+    $r = Invoke-Native "git" $grepArgs
+    return [pscustomobject]@{ Found = ($r.ExitCode -eq 0); ExitCode = $r.ExitCode }
 }
 
 # GATE 00 — execution contract
@@ -277,6 +285,7 @@ if (Test-GateEnabled "GATE_02") {
         $Receipt.authority.origin = $origin.Output
 
         $gitFailures = @()
+        if ((Resolve-Path -LiteralPath $root.Output).Path -ne (Resolve-Path -LiteralPath $RepoRoot).Path) { $gitFailures += "REPO_ROOT_MISMATCH" }
         if ($origin.ExitCode -ne 0 -or $origin.Output -notlike "*$($Master.source_control.expected_remote_contains)*") { $gitFailures += "ORIGIN_MISMATCH" }
 
         $base = [string]$Master.source_control.baseline_sha
@@ -315,7 +324,7 @@ if (Test-GateEnabled "GATE_02") {
     }
 }
 
-# GATE 03 — tracked secret/state hygiene; never emit matched value
+# GATE 03 — tracked secret/state hygiene; never emit matched values
 if (Test-GateEnabled "GATE_03") {
     $tracked = (Invoke-Native "git" @("ls-files")).Output -split "`r?`n"
     $tracked = @($tracked | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
@@ -325,18 +334,18 @@ if (Test-GateEnabled "GATE_03") {
     $secretFindings = @()
     $binaryExtensions = @(".png", ".jpg", ".jpeg", ".gif", ".ico", ".pdf", ".zip", ".gz", ".woff", ".woff2", ".pyc")
     $secretPatterns = @(
-        [pscustomobject]@{ Name = "OPENSSH_PRIVATE_KEY"; Regex = "-----BEGIN (OPENSSH |RSA |EC |DSA )?PRIVATE KEY-----" },
-        [pscustomobject]@{ Name = "GITHUB_CLASSIC_PAT"; Regex = "ghp_[0-9A-Za-z]{30,}" },
-        [pscustomobject]@{ Name = "GITHUB_FINE_GRAINED_PAT"; Regex = "github_pat_[0-9A-Za-z_]{30,}" },
-        [pscustomobject]@{ Name = "GOOGLE_CLIENT_SECRET"; Regex = "GOCSPX-[0-9A-Za-z_-]{20,}" },
-        [pscustomobject]@{ Name = "POSTGRES_URI_PASSWORD"; Regex = "postgres(?:ql)?://[^\s:/]+:[^\s@]+@" },
-        [pscustomobject]@{ Name = "AZURE_CLIENT_SECRET"; Regex = "AZURE_CLIENT_SECRET\s*=\s*['\"]?[^'\"\s]+" }
+        [pscustomobject]@{ Name = "OPENSSH_PRIVATE_KEY"; Regex = '-----BEGIN (OPENSSH |RSA |EC |DSA )?PRIVATE KEY-----' },
+        [pscustomobject]@{ Name = "GITHUB_CLASSIC_PAT"; Regex = 'ghp_[0-9A-Za-z]{30,}' },
+        [pscustomobject]@{ Name = "GITHUB_FINE_GRAINED_PAT"; Regex = 'github_pat_[0-9A-Za-z_]{30,}' },
+        [pscustomobject]@{ Name = "GOOGLE_CLIENT_SECRET"; Regex = 'GOCSPX-[0-9A-Za-z_-]{20,}' },
+        [pscustomobject]@{ Name = "POSTGRES_URI_PASSWORD"; Regex = 'postgres(?:ql)?://[^\s:/]+:[^\s@]+@' },
+        [pscustomobject]@{ Name = "AZURE_CLIENT_SECRET"; Regex = 'AZURE_CLIENT_SECRET\s*=\s*[^\s#]+' }
     )
 
     foreach ($rel in $tracked) {
-        if ($rel -match "(^|/).*\.tfstate(?:\.|$)" -or $rel -match "terraform\.tfstate") { $stateFindings += $rel; continue }
-        if ($rel -match "\.tfplan(?:\.|$)" -or $rel -match "(^|/)tfplan$") { $planFindings += $rel; continue }
-        if ($rel -match "\.(pem|pfx|p12|key)$") { $keyFindings += $rel; continue }
+        if ($rel -match '(^|/).*\.tfstate(?:\.|$)' -or $rel -match 'terraform\.tfstate') { $stateFindings += $rel; continue }
+        if ($rel -match '\.tfplan(?:\.|$)' -or $rel -match '(^|/)tfplan$') { $planFindings += $rel; continue }
+        if ($rel -match '\.(pem|pfx|p12|key)$') { $keyFindings += $rel; continue }
         $full = Join-Path $RepoRoot $rel
         if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { continue }
         $ext = [System.IO.Path]::GetExtension($full).ToLowerInvariant()
@@ -352,7 +361,7 @@ if (Test-GateEnabled "GATE_03") {
                 }
             }
         } catch {
-            # Unreadable tracked text is handled conservatively as a warning below, not as secret content.
+            # Unreadable text is not promoted to a secret finding without evidence.
         }
     }
 
@@ -391,13 +400,13 @@ if (Test-GateEnabled "GATE_05") {
     if (-not (Test-Path -LiteralPath $coreClient)) { $violations += "SERVER_SIDE_CORE_CLIENT_MISSING" }
     if (-not (Test-Path -LiteralPath $workerMain)) { $violations += "WORKER_ENTRYPOINT_MISSING" }
 
-    $nextPublic = Test-GitGrep "NEXT_PUBLIC_.*CORE|NEXT_PUBLIC_CORE" @("apps/web")
+    $nextPublic = Test-GitGrep 'NEXT_PUBLIC_.*CORE|NEXT_PUBLIC_CORE' @("apps/web")
     if ($nextPublic.Found) { $violations += "BROWSER_CORE_URL_EXPOSURE" }
-    $newQueue = Test-GitGrep "ServiceBusClient|KafkaProducer|KafkaConsumer|EventGridPublisherClient" @("apps/core", "apps/worker")
+    $newQueue = Test-GitGrep 'ServiceBusClient|KafkaProducer|KafkaConsumer|EventGridPublisherClient' @("apps/core", "apps/worker")
     if ($newQueue.Found -and $TargetPhase -eq "P1_ITERATION_01") { $violations += "SECOND_CLOUD_QUEUE_OR_EVENT_BUS_INTRODUCED" }
-    $createRunJob = Test-GitGrep "create_run_job" @("apps/core", "packages/python-runtime")
+    $createRunJob = Test-GitGrep 'create_run_job' @("apps/core", "packages/python-runtime")
     if (-not $createRunJob.Found) { $violations += "CANONICAL_RUN_JOB_TRANSACTION_MISSING" }
-    $runOne = Test-GitGrep "run-one|run_one" @("apps/worker", "packages/python-runtime")
+    $runOne = Test-GitGrep 'run-one|run_one' @("apps/worker", "packages/python-runtime")
     if (-not $runOne.Found) { $violations += "WORKER_SINGLE_JOB_PATH_MISSING" }
     if ($Issue -ge 11 -and $TargetPhase -eq "P1_ITERATION_01" -and -not (Test-Path -LiteralPath $dispatcher)) { $violations += "DISPATCHER_BASELINE_MISSING" }
 
@@ -420,9 +429,9 @@ if (Test-GateEnabled "GATE_06") {
         foreach ($test in $tests) {
             $index++
             $exe = [string]$test.exe
-            $args = @($test.args | ForEach-Object { [string]$_ })
-            $r = Invoke-Native $exe $args
-            $Receipt.baseline_tests += [ordered]@{ index = $index; exe = $exe; args = $args; exit_code = $r.ExitCode }
+            $testArgs = @($test.args | ForEach-Object { [string]$_ })
+            $r = Invoke-Native $exe $testArgs
+            $Receipt.baseline_tests += [ordered]@{ index = $index; exe = $exe; args = $testArgs; exit_code = $r.ExitCode }
             if ($r.ExitCode -ne 0) { $failures += "TEST_$index exit=$($r.ExitCode)" }
         }
         if ($failures.Count -gt 0) {
@@ -464,7 +473,7 @@ print(json.dumps({"server_version": server, "pgvector": vector[0] if vector else
             } else {
                 $workerJson = $workerCheck.Output | ConvertFrom-Json
                 $probeJson = $probe.Output | ConvertFrom-Json
-                $major = ([string]$probeJson.server_version -split "\.")[0]
+                $major = ([string]$probeJson.server_version -split '\.')[0]
                 $Receipt.runtime.postgres = "READY"
                 $Receipt.runtime.postgres_version = [string]$probeJson.server_version
                 $Receipt.runtime.pgvector = $(if ($null -ne $probeJson.pgvector) { "READY" } else { "MISSING" })
@@ -506,9 +515,9 @@ if (Test-GateEnabled "GATE_09") {
     $violations = @()
     $client = Join-Path $RepoRoot "apps/web/src/server/core-client.mjs"
     if (-not (Test-Path -LiteralPath $client)) { $violations += "CORE_CLIENT_MISSING" }
-    $directCore = Test-GitGrep "NEXT_PUBLIC_.*CORE|NEXT_PUBLIC_CORE_API_BASE_URL" @("apps/web")
+    $directCore = Test-GitGrep 'NEXT_PUBLIC_.*CORE|NEXT_PUBLIC_CORE_API_BASE_URL' @("apps/web")
     if ($directCore.Found) { $violations += "CORE_URL_BROWSER_EXPOSURE" }
-    $dbClient = Test-GitGrep "psycopg|postgresql://|DATABASE_URL" @("apps/web/src/app")
+    $dbClient = Test-GitGrep 'psycopg|postgresql://|DATABASE_URL' @("apps/web/src/app")
     if ($dbClient.Found) { $violations += "DATABASE_MATERIAL_IN_BROWSER_APP" }
     if ($violations.Count -gt 0) {
         Add-GateResult "GATE_09" "Web BFF Boundary" "HARD_BLOCK" "PC-WEB-001" "Web/BFF security boundary violation(s): $($violations -join ', ')" "SERVER_SIDE_BFF_ONLY" $violations
@@ -521,14 +530,13 @@ if (Test-GateEnabled "GATE_09") {
 # GATE 10 — Worker/dispatcher semantics
 if (Test-GateEnabled "GATE_10") {
     $missing = @()
-    foreach ($tuple in @(
-        @("create_run_job", @("apps/core", "packages/python-runtime")),
-        @("run-one|run_one", @("apps/worker", "packages/python-runtime")),
-        @("JobDispatcher|dispatch", @("apps/core/src/soaiacore_core/dispatcher.py", "apps/core/src/soaiacore_core/main.py"))
-    )) {
-        $found = Test-GitGrep ([string]$tuple[0]) ([string[]]$tuple[1])
-        if (-not $found.Found) { $missing += [string]$tuple[0] }
-    }
+    $createRunJob = Test-GitGrep 'create_run_job' @("apps/core", "packages/python-runtime")
+    if (-not $createRunJob.Found) { $missing += "create_run_job" }
+    $runOne = Test-GitGrep 'run-one|run_one' @("apps/worker", "packages/python-runtime")
+    if (-not $runOne.Found) { $missing += "run-one/run_one" }
+    $dispatch = Test-GitGrep 'JobDispatcher|dispatch' @("apps/core/src/soaiacore_core/dispatcher.py", "apps/core/src/soaiacore_core/main.py")
+    if (-not $dispatch.Found) { $missing += "JobDispatcher/dispatch" }
+
     if ($missing.Count -gt 0) {
         Add-GateResult "GATE_10" "Worker Dispatch Semantics" "HARD_BLOCK" "PC-WRK-001" "Worker/dispatcher canonical symbols missing" "DB commit -> wake-up -> DB claim" $missing
     } else {
@@ -545,8 +553,8 @@ if (Test-GateEnabled "GATE_11") {
     } else {
         $a = $account.Output | ConvertFrom-Json
         $Receipt.azure.checked = $true
-        $Receipt.azure.subscription = [string]$a.id
-        $Receipt.azure.tenant = [string]$a.tenantId
+        $Receipt.azure.subscription = [string](Get-OptionalProperty $a "id" "")
+        $Receipt.azure.tenant = [string](Get-OptionalProperty $a "tenantId" "")
         Add-GateResult "GATE_11" "Azure Identity" "PASS" "PC-AZ-000" "Azure read session verified"
     }
 }
@@ -558,7 +566,7 @@ if (Test-GateEnabled "GATE_12") {
         Add-GateResult "GATE_12" "Azure Inventory" "HARD_BLOCK" "PC-AZ-002" "Azure resource inventory could not be read"
     } else {
         $all = @($list.Output | ConvertFrom-Json)
-        $soa = @($all | Where-Object { ([string]$_.name -match "soaiacore") -or ([string]$_.resourceGroup -match "soaiacore") })
+        $soa = @($all | Where-Object { ([string](Get-OptionalProperty $_ "name" "") -match "soaiacore") -or ([string](Get-OptionalProperty $_ "resourceGroup" "") -match "soaiacore") })
         $Receipt.azure.resource_count = $soa.Count
         if ($soa.Count -eq 0) {
             Add-GateResult "GATE_12" "Azure Inventory" "HARD_BLOCK" "PC-AZ-003" "No SOAIACORE Azure resources were discoverable for an Azure-targeted phase" ">0" 0
@@ -577,9 +585,9 @@ if (Test-GateEnabled "GATE_13") {
     } else {
         $appItems = @($apps.Output | ConvertFrom-Json)
         $jobItems = @($jobs.Output | ConvertFrom-Json)
-        $web = @($appItems | Where-Object { [string]$_.name -match "soaiacore.*web|web.*soaiacore" })
-        $core = @($appItems | Where-Object { [string]$_.name -match "soaiacore.*core|core.*soaiacore" })
-        $worker = @($jobItems | Where-Object { [string]$_.name -match "soaiacore.*worker|worker.*soaiacore" })
+        $web = @($appItems | Where-Object { [string](Get-OptionalProperty $_ "name" "") -match "soaiacore.*web|web.*soaiacore" })
+        $core = @($appItems | Where-Object { [string](Get-OptionalProperty $_ "name" "") -match "soaiacore.*core|core.*soaiacore" })
+        $worker = @($jobItems | Where-Object { [string](Get-OptionalProperty $_ "name" "") -match "soaiacore.*worker|worker.*soaiacore" })
         if ($web.Count -eq 0 -or $core.Count -eq 0 -or $worker.Count -eq 0) {
             Add-GateResult "GATE_13" "Container Apps" "HARD_BLOCK" "PC-AZ-005" "Expected Web/Core/Worker Azure runtime units not all present" "web=1 core=1 worker=1" "web=$($web.Count) core=$($core.Count) worker=$($worker.Count)"
         } else {
@@ -590,8 +598,8 @@ if (Test-GateEnabled "GATE_13") {
 
 # GATE 14 — GHCR binding static contract
 if (Test-GateEnabled "GATE_14") {
-    $ghcr = Test-GitGrep "ghcr\.io/soaiacore-corporation/" @("infra/azure/p0")
-    $latest = Test-GitGrep "ghcr\.io/[^\s\"']+:latest" @("infra/azure/p0")
+    $ghcr = Test-GitGrep 'ghcr\.io/soaiacore-corporation/' @("infra/azure/p0")
+    $latest = Test-GitGrep 'ghcr\.io/.*:latest' @("infra/azure/p0")
     if (-not $ghcr.Found -or $latest.Found) {
         Add-GateResult "GATE_14" "GHCR Binding" "HARD_BLOCK" "PC-REG-001" "Private GHCR immutable-image binding contract is missing or :latest is referenced" "GHCR_BY_DIGEST_NO_LATEST" "INVALID"
     } else {
@@ -603,9 +611,8 @@ if (Test-GateEnabled "GATE_14") {
 if (Test-GateEnabled "GATE_15") {
     $tfDir = Join-Path $RepoRoot "infra/azure/p0"
     $validate = Invoke-Native "terraform" @("-chdir=$tfDir", "validate", "-no-color")
-    $backend = Test-GitGrep "backend\s+\"azurerm\"" @("infra/azure/p0")
-    $remoteRequired = $false
-    if ($PhasePolicy.PSObject.Properties["remote_tfstate_required"]) { $remoteRequired = [bool]$PhasePolicy.remote_tfstate_required }
+    $backend = Test-GitGrep 'backend\s+"azurerm"' @("infra/azure/p0")
+    $remoteRequired = [bool](Get-OptionalProperty $PhasePolicy "remote_tfstate_required" $false)
     if ($validate.ExitCode -ne 0) {
         Add-GateResult "GATE_15" "Terraform Control Plane" "HARD_BLOCK" "PC-TF-001" "terraform validate failed" "VALID" "INVALID"
     } elseif ($remoteRequired -and -not $backend.Found) {
@@ -626,8 +633,12 @@ if (Test-GateEnabled "GATE_16") {
         $items = @($list.Output | ConvertFrom-Json)
         $expiries = @()
         foreach ($item in $items) {
-            if (([string]$item.name -match "soaiacore" -or [string]$item.resourceGroup -match "soaiacore") -and $null -ne $item.tags -and $item.tags.PSObject.Properties["expires_at"]) {
-                try { $expiries += [DateTime]::Parse([string]$item.tags.expires_at).ToUniversalTime() } catch { }
+            $itemName = [string](Get-OptionalProperty $item "name" "")
+            $itemRg = [string](Get-OptionalProperty $item "resourceGroup" "")
+            $tags = Get-OptionalProperty $item "tags" $null
+            $expiresAt = Get-OptionalProperty $tags "expires_at" $null
+            if (($itemName -match "soaiacore" -or $itemRg -match "soaiacore") -and $null -ne $expiresAt) {
+                try { $expiries += [DateTime]::Parse([string]$expiresAt).ToUniversalTime() } catch { }
             }
         }
         if ($expiries.Count -eq 0) {
@@ -657,8 +668,10 @@ if (Test-GateEnabled "GATE_17") {
     if ($pricing.ExitCode -ne 0) {
         Add-GateResult "GATE_17" "Defender Pricing" "WARN" "PC-FIN-010" "Defender pricing inventory unavailable through current Azure CLI/session" "READABLE" "UNAVAILABLE"
     } else {
-        $obj = $pricing.Output | ConvertFrom-Json
-        $paid = @($obj.value | Where-Object { [string]$_.pricingTier -eq "Standard" } | ForEach-Object { [string]$_.name })
+        $rawPricing = $pricing.Output | ConvertFrom-Json
+        $valueProperty = $rawPricing.PSObject.Properties["value"]
+        $pricingItems = if ($null -ne $valueProperty) { @($valueProperty.Value) } else { @($rawPricing) }
+        $paid = @($pricingItems | Where-Object { [string](Get-OptionalProperty $_ "pricingTier" "") -eq "Standard" } | ForEach-Object { [string](Get-OptionalProperty $_ "name" "") })
         Add-GateResult "GATE_17" "Defender Pricing" $(if ($paid.Count -gt 0) { "WARN" } else { "PASS" }) "PC-FIN-011" "Defender paid-plan inventory captured; precheck made no pricing changes" "SCOPED_TO_USED_SERVICES" $paid
     }
 }
@@ -690,15 +703,18 @@ if (Test-GateEnabled "GATE_19") {
     if ($pg.ExitCode -ne 0) {
         Add-GateResult "GATE_19" "Azure PostgreSQL" "HARD_BLOCK" "PC-DB-010" "Azure PostgreSQL inventory unavailable"
     } else {
-        $servers = @($pg.Output | ConvertFrom-Json | Where-Object { [string]$_.name -match "soaiacore" })
+        $servers = @($pg.Output | ConvertFrom-Json | Where-Object { [string](Get-OptionalProperty $_ "name" "") -match "soaiacore" })
         if ($servers.Count -eq 0) {
             Add-GateResult "GATE_19" "Azure PostgreSQL" "HARD_BLOCK" "PC-DB-011" "SOAIACORE PostgreSQL Flexible Server not found"
         } else {
             $s = $servers[0]
-            $versionOk = ([string]$s.version -eq "17")
-            $publicOff = ([string]$s.network.publicNetworkAccess -eq "Disabled" -or [string]$s.publicNetworkAccess -eq "Disabled")
+            $serverVersion = [string](Get-OptionalProperty $s "version" "")
+            $network = Get-OptionalProperty $s "network" $null
+            $publicAccess = [string](Get-OptionalProperty $network "publicNetworkAccess" (Get-OptionalProperty $s "publicNetworkAccess" ""))
+            $versionOk = ($serverVersion -eq "17")
+            $publicOff = ($publicAccess -eq "Disabled")
             if (-not $versionOk -or -not $publicOff) {
-                Add-GateResult "GATE_19" "Azure PostgreSQL" "HARD_BLOCK" "PC-DB-012" "PostgreSQL version/network posture differs from P0 baseline" "version=17 publicNetworkAccess=Disabled" "version=$($s.version)"
+                Add-GateResult "GATE_19" "Azure PostgreSQL" "HARD_BLOCK" "PC-DB-012" "PostgreSQL version/network posture differs from P0 baseline" "version=17 publicNetworkAccess=Disabled" "version=$serverVersion publicNetworkAccess=$publicAccess"
             } else {
                 Add-GateResult "GATE_19" "Azure PostgreSQL" "PASS" "PC-DB-000" "PostgreSQL 17 private-network posture verified"
             }
@@ -712,15 +728,16 @@ if (Test-GateEnabled "GATE_20") {
     if ($sa.ExitCode -ne 0) {
         Add-GateResult "GATE_20" "Blob Storage" "WARN" "PC-AZ-020" "Storage account inventory unavailable"
     } else {
-        $accounts = @($sa.Output | ConvertFrom-Json | Where-Object { [string]$_.name -match "soaiacore" -or [string]$_.resourceGroup -match "soaiacore" })
+        $accounts = @($sa.Output | ConvertFrom-Json | Where-Object { [string](Get-OptionalProperty $_ "name" "") -match "soaiacore" -or [string](Get-OptionalProperty $_ "resourceGroup" "") -match "soaiacore" })
         if ($accounts.Count -eq 0) {
             Add-GateResult "GATE_20" "Blob Storage" "HARD_BLOCK" "PC-AZ-021" "SOAIACORE storage account not found"
         } else {
             $acct = $accounts[0]
-            $anonDisabled = ($acct.allowBlobPublicAccess -eq $false -or $null -eq $acct.allowBlobPublicAccess)
-            $publicNetwork = [string]$acct.publicNetworkAccess
+            $allowBlobPublicAccess = Get-OptionalProperty $acct "allowBlobPublicAccess" $null
+            $publicNetwork = [string](Get-OptionalProperty $acct "publicNetworkAccess" "")
+            $anonDisabled = ($allowBlobPublicAccess -eq $false -or $null -eq $allowBlobPublicAccess)
             if (-not $anonDisabled) {
-                Add-GateResult "GATE_20" "Blob Storage" "HARD_BLOCK" "PC-AZ-022" "Anonymous Blob public access appears enabled" $false $acct.allowBlobPublicAccess
+                Add-GateResult "GATE_20" "Blob Storage" "HARD_BLOCK" "PC-AZ-022" "Anonymous Blob public access appears enabled" $false $allowBlobPublicAccess
             } elseif ($TargetPhase -eq "PRODUCTION_HARDENING" -and $publicNetwork -eq "Enabled") {
                 Add-GateResult "GATE_20" "Blob Storage" "SOFT_BLOCK" "PC-AZ-023" "Blob public network remains enabled and requires explicit production disposition" "MINIMUM_REQUIRED_EXPOSURE" $publicNetwork
             } elseif ($publicNetwork -eq "Enabled") {
@@ -759,7 +776,7 @@ if (Test-GateEnabled "GATE_22") {
     Add-GateResult "GATE_22" "Acceptance Scope" "PASS" "PC-TST-010" "Active acceptance set generated without loading unrelated issue context" "ISSUE_SPECIFIC" $Receipt.active_acceptance_set
 }
 
-# Authorization: any HARD_BLOCK denies mutation. SOFT_BLOCK is phase debt but does not override explicit hard rules.
+# Authorization: any HARD_BLOCK denies mutation. SOFT_BLOCK represents debt to close within the authorized phase.
 $IsGo = ($Receipt.summary.hard_block -eq 0)
 $Receipt.authorization.go = $IsGo
 if ($IsGo) {
