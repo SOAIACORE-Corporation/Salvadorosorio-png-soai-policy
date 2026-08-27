@@ -1,0 +1,39 @@
+{
+  "issue": "#15",
+  "issue_15_status": "PASS",
+  "recorded_utc": "2026-08-27T02:43:48.3698675Z",
+  "branch": "feat/p1-08-acceptance-gate",
+  "baseline_commit": "b1a13ad",
+  "postgresql_runtime": "PASS",
+  "postgresql_version": "17.11",
+  "pgvector": "PASS (0.8.6; vector cast verified)",
+  "migrations": "PASS (8/8)",
+  "dispatcher_mode": "MOCK",
+  "local_e2e": {
+    "run_id": "run_8b2eda9c36501310d93dcb36",
+    "receipt_id": "cr_b529948a4d633656a298e942",
+    "status": "COMPLETED",
+    "lifecycle_stages": 7,
+    "external_provider_calls": 0
+  },
+  "tests": {
+    "python_command": "python -m pytest tests/acceptance/test_runtime_acceptance.py tests/test_container_runtime_contracts.py apps/core/tests -q",
+    "python_pass": 34,
+    "web_command": "npm test (apps/web)",
+    "web_pass": 19,
+    "total": 53,
+    "pass": 53,
+    "fail": 0,
+    "skipped": 0,
+    "blocked": 0,
+    "warnings": 1
+  },
+  "files_changed_this_execution": 2,
+  "architecture_change_required": "NO",
+  "security_regression": "NONE",
+  "oci_recommendation": "DO_NOT_PUBLISH_YET",
+  "azure_production_candidate": "DO_NOT_DEPLOY",
+  "blocker": "NONE",
+  "ready_for_commit": "YES",
+  "next_action": "Commit and publish the Issue #15 receipt; merge only after PR checks pass. Production remains gated by #18, #19, #16, #20 and explicit deployment approval."
+}
