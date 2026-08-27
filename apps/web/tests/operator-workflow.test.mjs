@@ -10,6 +10,10 @@ import {
   publicOperatorError,
   workflowIdempotencyKey,
 } from "../src/server/operator-workflow.mjs";
+import {
+  loadContextInspector,
+  publicContextInspectorError,
+} from "../src/server/context-inspector.mjs";
 
 test("operator snapshot uses filtered Core read APIs through the server", async () => {
   const calls = [];
@@ -28,6 +32,56 @@ test("operator snapshot uses filtered Core read APIs through the server", async 
   assert.equal(snapshot.projects[0].project_id, "prj_one");
   assert.equal(snapshot.selectedCapsule.context_capsule_id, "cap_one");
   assert.deepEqual(calls.sort(), [...responses.keys()].sort());
+});
+
+test("context inspector reads capsule lineage and evidence metadata through the BFF", async () => {
+  const calls = [];
+  const responses = new Map([
+    ["/v1/context-capsules/cap_one", {
+      context_capsule_id: "cap_one",
+      context_id: "ctx_one",
+      schema_version: "P0-RUNTIME-1",
+      input_hash: "hash_one",
+      created_at: "2026-08-26T00:00:00Z",
+      payload: {
+        project_id: "prj_one",
+        analysis_profile_id: "AP-101",
+        analysis_profile_version: "1.0.0",
+        purpose: "Synthetic",
+        synthetic_only: true,
+        identity_refs: [],
+        evidence_refs: ["evref_one"],
+      },
+    }],
+    ["/v1/contexts/ctx_one", {
+      context_id: "ctx_one",
+      project_id: "prj_one",
+      context_type: "P1_SYNTHETIC_OPERATOR",
+      dimensions: { corpus_id: "cor_one", label: "Bounded context" },
+    }],
+    ["/v1/evidence/evref_one", {
+      evidence_ref_id: "evref_one",
+      evidence_state: "VERIFIED",
+      content_availability: "METADATA_ONLY",
+      modality: "TEXT",
+      locator: "synthetic://fixture/one",
+    }],
+  ]);
+  const snapshot = await loadContextInspector("cap_one", {
+    coreRequestImpl: async (requestPath) => { calls.push(requestPath); return responses.get(requestPath); },
+  });
+  assert.equal(snapshot.integrity.immutable, true);
+  assert.equal(snapshot.binding.analysis_profile_id, "AP-101");
+  assert.equal(snapshot.context.label, "Bounded context");
+  assert.equal(snapshot.evidence[0].evidence_state, "VERIFIED");
+  assert.deepEqual(calls.sort(), [...responses.keys()].sort());
+});
+
+test("context inspector rejects malformed capsule IDs without exposing internals", async () => {
+  await assert.rejects(() => loadContextInspector("cap one", { coreRequestImpl: async () => ({}) }));
+  const failure = publicContextInspectorError(new Error("secret connection string"));
+  assert.equal(failure.error.code, "CONTEXT_INSPECTOR_FAILED");
+  assert.equal(JSON.stringify(failure).includes("secret"), false);
 });
 
 test("operator project creation generates the ID server-side and sends idempotency", async () => {

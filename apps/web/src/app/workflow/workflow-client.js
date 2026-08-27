@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 const EMPTY_SELECTION = {
   projectId: "",
@@ -223,6 +224,7 @@ export default function OperatorWorkflow({ initialData }) {
           </label>
           {technicalId("Capsule ID", capsule?.context_capsule_id)}
           {capsule ? technicalId("Input hash", capsule.input_hash) : null}
+          {capsule ? <Link className="text-link" href={`/context-inspector/${encodeURIComponent(capsule.context_capsule_id)}`}>Inspect immutable capsule</Link> : null}
           {profile ? <small className="technical-id">New snapshots bind the profile <strong>{profile.name ?? profile.analysis_profile_id}</strong> selected in step 5.</small> : null}
           {selection.contextId && data.capsules.length === 0 ? <p className="empty-state">No snapshots exist for this context.</p> : null}
           <button
