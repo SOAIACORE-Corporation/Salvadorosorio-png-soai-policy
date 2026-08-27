@@ -138,7 +138,7 @@ export default function OperatorWorkflow({ initialData }) {
     <div className="operator-workflow" aria-busy={disabled}>
       {notice ? <div className={`notice ${notice.type}`} role={notice.type === "error" ? "alert" : "status"}>{notice.text}</div> : null}
 
-      <ol className="workflow-steps">
+      <ol id="workflow-steps" className="workflow-steps">
         <li className="workflow-card">
           <div className="step-heading"><span>1</span><div><h2>Project</h2><p>Choose an existing project or create a synthetic one.</p></div></div>
           <label>

@@ -1,30 +1,15 @@
-import { createSyntheticRun } from "./actions";
+import Link from "next/link";
 
 export default function NewRunPage() {
   return (
-    <section>
-      <p className="eyebrow">Synthetic input only</p>
-      <h1>Create run</h1>
-      <form action={createSyntheticRun}>
-        <label>
-          Context Capsule ID
-          <input name="context_capsule_id" required pattern="cap_[A-Za-z0-9_-]+" />
-        </label>
-        <label>
-          Analysis Profile ID
-          <input name="analysis_profile_id" required pattern="AP-[0-9]{3}" />
-        </label>
-        <label>
-          Analysis Profile version
-          <input name="analysis_profile_version" required />
-        </label>
-        <label>
-          Purpose
-          <input name="purpose" defaultValue="P0_SYNTHETIC_WEB" required />
-        </label>
-        <button type="submit">Queue MOCK run</button>
-      </form>
+    <section className="empty-state-page">
+      <p className="eyebrow">Operator workflow</p>
+      <h1>Runs start in the guided workflow.</h1>
+      <p>
+        Resource identifiers are selected and validated by the portal. You do not need to type
+        capsule or profile IDs manually.
+      </p>
+      <Link className="button" href="/workflow">Open operator workflow</Link>
     </section>
   );
 }
-

@@ -7,15 +7,21 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; min-height: 100vh; }
-header {
+.site-header { border-bottom: 1px solid #24334a; }
+.header-inner {
   align-items: center;
-  border-bottom: 1px solid #24334a;
   display: flex;
+  gap: 1.5rem;
   justify-content: space-between;
+  margin: 0 auto;
+  max-width: 1280px;
   padding: 1rem 2rem;
 }
 .brand { color: #e6edf7; font-weight: 800; text-decoration: none; }
-header span, .eyebrow { color: #75d7ff; font-size: .78rem; letter-spacing: .12em; }
+nav { display: flex; gap: 1.25rem; margin-right: auto; }
+nav a, .text-link { color: #b7c4d8; text-decoration: none; }
+nav a:hover, .text-link:hover { color: #75d7ff; }
+.environment-badge, .eyebrow { color: #75d7ff; font-size: .78rem; letter-spacing: .12em; }
 main { margin: 0 auto; max-width: 1180px; padding: 4rem 1.5rem; }
 h1 { font-size: clamp(2rem, 7vw, 4.5rem); line-height: 1; }
 h2 { margin-top: 2rem; }
@@ -30,7 +36,7 @@ input, select {
   padding: .8rem;
   width: 100%;
 }
-input:focus, select:focus, button:focus-visible, .button:focus-visible, .brand:focus-visible {
+input:focus, select:focus, button:focus-visible, .button:focus-visible, .brand:focus-visible, nav a:focus-visible, .text-link:focus-visible {
   outline: 3px solid rgba(117, 215, 255, .35);
   outline-offset: 2px;
 }
@@ -128,8 +134,48 @@ pre { background: #101d30; border-radius: .5rem; overflow: auto; padding: 1rem; 
 .run-summary { background: #101d30; border-radius: .65rem; grid-template-columns: 8rem 1fr; margin: 0; padding: 1rem; }
 .primary-action { background: #79e5aa; font-size: 1rem; padding: 1rem 1.3rem; }
 
+.portal-home { display: grid; gap: 2.5rem; }
+.portal-hero {
+  align-items: stretch;
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+}
+.portal-hero h1 { margin: .75rem 0 1rem; max-width: 11ch; }
+.hero-copy { font-size: 1.1rem; max-width: 62ch; }
+.hero-actions, .page-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1.5rem; }
+.portal-status-card, .portal-card {
+  background: linear-gradient(145deg, #0d1b2d, #0b1625);
+  border: 1px solid #29425e;
+  border-radius: .9rem;
+  padding: 1.25rem;
+}
+.portal-status-card strong { color: #79e5aa; display: block; font-size: 1.35rem; margin: .75rem 0 1.25rem; }
+.portal-status-card dl { font-size: .92rem; grid-template-columns: 7rem 1fr; }
+.portal-grid { display: grid; gap: 1rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.portal-card { min-height: 12rem; }
+.portal-card h2 { margin: .8rem 0 .5rem; }
+.portal-card p { margin: 0; }
+.card-number { color: #75d7ff; font-size: .8rem; font-weight: 800; letter-spacing: .12em; }
+.guardrail-banner { background: #14263a; border: 1px solid #2d607c; border-radius: .7rem; color: #b7c4d8; padding: 1rem 1.1rem; }
+.guardrail-banner strong { color: #75d7ff; }
+.empty-state-page, .receipt-page, .run-page { max-width: 840px; }
+.page-intro { margin-top: -.5rem; }
+.run-heading { align-items: center; display: flex; gap: 1.25rem; justify-content: space-between; }
+.run-heading h1 { margin-bottom: .75rem; overflow-wrap: anywhere; }
+.status-badge { border: 1px solid; border-radius: 999px; font-size: .78rem; font-weight: 800; letter-spacing: .06em; padding: .5rem .75rem; white-space: nowrap; }
+.status-completed { background: #143025; border-color: #397a5c; color: #bff3d3; }
+.status-review-required { background: #332c18; border-color: #897039; color: #ffe8a8; }
+.status-denied, .status-failed-precheck, .status-failed-execution, .status-failed-validation { background: #391c24; border-color: #8e4354; color: #ffd1da; }
+.status-queued, .status-running, .status-in-progress, .status-pending, .status-unknown { background: #10283a; border-color: #2f6f86; color: #75d7ff; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
+
 @media (max-width: 760px) {
-  header { align-items: flex-start; flex-direction: column; gap: .5rem; padding: 1rem; }
+  .header-inner { align-items: flex-start; flex-direction: column; gap: .75rem; padding: 1rem; }
+  nav { flex-wrap: wrap; margin-right: 0; }
   main { padding: 2.5rem 1rem; }
   .workflow-hero, .workflow-steps { grid-template-columns: 1fr; }
   .workflow-hero { align-items: start; }
@@ -137,5 +183,7 @@ pre { background: #101d30; border-radius: .5rem; overflow: auto; padding: 1rem; 
   .final-step { grid-column: auto; }
   .run-summary, dl { grid-template-columns: 1fr; }
   .run-summary dd, dd { margin-bottom: .5rem; }
+  .portal-hero, .portal-grid { grid-template-columns: 1fr; }
+  .run-heading { align-items: flex-start; flex-direction: column; }
 }
 
