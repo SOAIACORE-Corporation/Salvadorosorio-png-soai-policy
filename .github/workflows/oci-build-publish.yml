@@ -78,6 +78,7 @@ jobs:
 
       - name: Test Core and Worker runtime
         env:
+          PYTHONPATH: ${{ github.workspace }}
           SOAIACORE_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/soaiacore
           SOAIACORE_PROVIDER_MODE: MOCK
         run: |
@@ -217,7 +218,6 @@ jobs:
           trivyignores: .trivyignore.yaml
 
       - name: Upload Trivy gate and risk inventory
-        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: oci-security-evidence-${{ github.sha }}
@@ -226,7 +226,6 @@ jobs:
           retention-days: 30
 
       - name: Enforce fixable HIGH/CRITICAL security gate
-        if: always()
         env:
           CORE_SCAN: ${{ steps.scan_core.outcome }}
           WEB_SCAN: ${{ steps.scan_web.outcome }}
