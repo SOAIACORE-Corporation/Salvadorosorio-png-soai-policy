@@ -1,0 +1,99 @@
+name: Production Environment Protection Precheck
+
+on:
+  push:
+    branches:
+      - security/p0-identity-2026-08-27
+    paths:
+      - .github/workflows/environment-protection-precheck.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-production-environment:
+    name: Inspect production environment without referencing it
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Read public environment configuration
+        shell: bash
+        env:
+          ENVIRONMENTS_URL: https://api.github.com/repos/SOAIACORE-Corporation/Salvadorosorio-png-soai-policy/environments
+        run: |
+          set -euo pipefail
+
+          curl --fail --silent --show-error \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "${ENVIRONMENTS_URL}" > environments.json
+
+          production="$(jq -c '.environments[]? | select(.name == "production")' environments.json)"
+
+          exists=false
+          reviewers_count=0
+          prevent_self_review=false
+          protected_branches=false
+          custom_branch_policies=false
+
+          if [[ -n "${production}" ]]; then
+            exists=true
+            reviewers_count="$(jq '[.protection_rules[]? | select(.type == "required_reviewers") | .reviewers[]?] | length' <<<"${production}")"
+            prevent_self_review="$(jq -r '[.protection_rules[]? | select(.type == "required_reviewers") | .prevent_self_review] | first // false' <<<"${production}")"
+            protected_branches="$(jq -r '.deployment_branch_policy.protected_branches // false' <<<"${production}")"
+            custom_branch_policies="$(jq -r '.deployment_branch_policy.custom_branch_policies // false' <<<"${production}")"
+          fi
+
+          branch_policy_present=false
+          if [[ "${protected_branches}" == true || "${custom_branch_policies}" == true ]]; then
+            branch_policy_present=true
+          fi
+
+          jq -n \
+            --argjson exists "${exists}" \
+            --argjson reviewers_count "${reviewers_count}" \
+            --argjson prevent_self_review "${prevent_self_review}" \
+            --argjson protected_branches "${protected_branches}" \
+            --argjson custom_branch_policies "${custom_branch_policies}" \
+            --argjson branch_policy_present "${branch_policy_present}" \
+            '{
+              schema_version:"P0-GITHUB-ENV-PRECHECK-1",
+              environment:"production",
+              exists:$exists,
+              reviewers_count:$reviewers_count,
+              prevent_self_review:$prevent_self_review,
+              protected_branches:$protected_branches,
+              custom_branch_policies:$custom_branch_policies,
+              branch_policy_present:$branch_policy_present,
+              azure_calls:0,
+              environment_referenced_by_job:false
+            }' > production-environment-precheck.json
+
+          {
+            echo '## Production environment precheck'
+            echo
+            echo "- Exists: \`${exists}\`"
+            echo "- Required reviewers: \`${reviewers_count}\`"
+            echo "- Prevent self review: \`${prevent_self_review}\`"
+            echo "- Protected branches: \`${protected_branches}\`"
+            echo "- Custom branch policies: \`${custom_branch_policies}\`"
+            echo "- Branch policy present: \`${branch_policy_present}\`"
+            echo '- Environment referenced by this job: `NO`'
+            echo '- Azure calls: `0`'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          test "${exists}" = true
+          test "${reviewers_count}" -ge 1
+          test "${branch_policy_present}" = true
+
+      - name: Upload environment protection receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: production-environment-precheck-${{ github.sha }}
+          path: production-environment-precheck.json
+          if-no-files-found: error
+          retention-days: 30
