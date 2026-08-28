@@ -1,0 +1,76 @@
+name: EXEC-01 Lockfile Validate
+
+on:
+  push:
+    branches:
+      - security/p0-hardening-2026-08-27
+    paths:
+      - .github/workflows/exec01-lockfile-validate.yml
+      - apps/web/package.json
+      - apps/web/package-lock.json
+      - apps/web/next.config.mjs
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 24.18.0
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Regenerate lockfile for authorized Next.js target
+        working-directory: apps/web
+        run: npm install next@16.3.3 --save-exact --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Verify resolved versions
+        working-directory: apps/web
+        run: |
+          npm ls next react react-dom
+          node -e "const p=require('./package.json'); if(p.dependencies.next!=='16.3.3'||p.dependencies.react!=='19.2.8'||p.dependencies['react-dom']!=='19.2.8') process.exit(1)"
+          node -e "const l=require('./package-lock.json'); if(l.packages[''].dependencies.next!=='16.3.3') process.exit(1)"
+
+      - name: Clean reproducible install
+        working-directory: apps/web
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Run Web tests
+        working-directory: apps/web
+        run: npm test
+
+      - name: Build Web
+        working-directory: apps/web
+        run: npm run build
+
+      - name: Record EXEC-01 evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "EXEC01_VALIDATION=PASS"
+            echo "NODE_VERSION=$(node --version)"
+            echo "NPM_VERSION=$(npm --version)"
+            echo "NEXT_VERSION=$(node -p \"require('./apps/web/node_modules/next/package.json').version\")"
+            echo "PACKAGE_JSON_SHA256=$(sha256sum apps/web/package.json | awk '{print $1}')"
+            echo "PACKAGE_LOCK_SHA256=$(sha256sum apps/web/package-lock.json | awk '{print $1}')"
+            echo "GITHUB_SHA=${GITHUB_SHA}"
+          } > exec01-validation.txt
+
+      - name: Upload regenerated lockfile and evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: exec01-lockfile-${{ github.sha }}
+          path: |
+            apps/web/package-lock.json
+            exec01-validation.txt
+          if-no-files-found: error
+          retention-days: 7
