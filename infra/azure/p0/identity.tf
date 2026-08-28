@@ -12,11 +12,11 @@ resource "azurerm_user_assigned_identity" "deployer" {
   tags                = local.required_tags
 }
 
-resource "azurerm_federated_identity_credential" "github_branch" {
-  name                      = "github-${replace(var.github_branch, "/[^0-9A-Za-z-]/", "-")}"
+resource "azurerm_federated_identity_credential" "github_environment" {
+  name                      = "github-${var.github_environment}"
   audience                  = ["api://AzureADTokenExchange"]
   issuer                    = "https://token.actions.githubusercontent.com"
-  subject                   = "repo:${var.github_repository}:ref:refs/heads/${var.github_branch}"
+  subject                   = "repo:${var.github_repository}:environment:${var.github_environment}"
   user_assigned_identity_id = azurerm_user_assigned_identity.deployer.id
 }
 
