@@ -4,22 +4,32 @@ vulnerabilities:
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6"
     expired_at: 2026-08-31
     statement: >-
-      P0-only, time-bounded acceptance. The Python and Node runtimes do not invoke
-      Perl or compile attacker-controlled Perl regular expressions; the affected
-      code is not in the execution path. Reassess before the pilot TTL expires.
+      Owner: GOV-CUST-01 executive custodian. P0-only, time-bounded acceptance.
+      Technical basis: the Python and Node runtimes do not invoke Perl or compile
+      attacker-controlled Perl regular expressions; the affected code is not in
+      the execution path. Compensating control: linux/amd64 immutable images are
+      rebuilt and rescanned before publication. Reassess before expiration; an
+      expired exception is not authorized for deployment.
   - id: CVE-2026-42496
     purls:
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6"
     expired_at: 2026-08-31
     statement: >-
-      P0-only, time-bounded acceptance. The runtime images do not invoke Perl
-      Archive::Tar or extract untrusted archives; build-time package tooling is
-      absent from the Web runtime. Reassess before the pilot TTL expires.
+      Owner: GOV-CUST-01 executive custodian. P0-only, time-bounded acceptance.
+      Technical basis: the runtime images do not invoke Perl Archive::Tar or
+      extract untrusted archives; build-time package tooling is absent from the
+      Web runtime. Compensating control: immutable images are scanned before any
+      publication and the complete HIGH/CRITICAL inventory is retained as CI
+      evidence. Reassess before expiration; an expired exception is not authorized
+      for deployment.
   - id: CVE-2026-8376
     purls:
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6"
     expired_at: 2026-08-31
     statement: >-
-      P0-only, time-bounded acceptance. The issue is specific to 32-bit Perl
-      builds, while all three images are built and deployed only as linux/amd64
-      64-bit images. Reassess before the pilot TTL expires.
+      Owner: GOV-CUST-01 executive custodian. P0-only, time-bounded acceptance.
+      Technical basis: the issue is specific to 32-bit Perl builds, while all
+      three images are built and deployed only as linux/amd64 64-bit images.
+      Compensating control: platform is fixed to linux/amd64 and verified in CI.
+      Reassess before expiration; an expired exception is not authorized for
+      deployment.
