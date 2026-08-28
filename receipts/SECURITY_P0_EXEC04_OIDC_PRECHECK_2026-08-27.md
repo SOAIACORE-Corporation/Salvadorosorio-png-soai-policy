@@ -43,7 +43,28 @@ Because the repository empirically emits the GitHub default legacy subject templ
 
 The exact case of `SOAIACORE-Corporation` is preserved from the observed token. A lowercase substitute is not authorized.
 
-This derived value is NOT yet accepted as the final live trust receipt. A production-environment OIDC token must still be observed after GitHub Environment `production` is independently confirmed to exist with required protection rules.
+This derived value is NOT yet accepted as the final live trust receipt. A production-environment OIDC token must still be observed after GitHub Environment `production` exists with required protection rules.
+
+## GitHub Environment protection observation
+
+Authoritative workflow run: `33134003711`
+Authoritative artifact: `production-environment-precheck-948e8df310a6a122f852967d988a571a670b8b17`
+Artifact digest: `sha256:f0812b6314ba3250026ac43153f6c9b167a6cd6c74dfbb7740ac6f59cfc7057d`
+
+The precheck queried the public GitHub Environments endpoint without referencing any environment in the job itself. This avoids implicit environment creation.
+
+Observed result:
+
+- environment `production` exists: `false`
+- required reviewers: `0`
+- prevent self review: `false`
+- protected branches: `false`
+- custom branch policies: `false`
+- branch policy present: `false`
+- environment referenced by precheck job: `false`
+- Azure calls: `0`
+
+Therefore `production` must NOT be referenced by an OIDC job yet. Referencing a missing environment from workflow YAML can create an unprotected environment, which would violate the intended trust boundary.
 
 ## Prepared source changes
 
@@ -76,15 +97,22 @@ This derived value is NOT yet accepted as the final live trust receipt. A produc
 - `OIDC_RAW_TOKEN_LOGGED=NO`
 - `OIDC_TARGET_SUBJECT_PREPARED=PASS`
 - `OCI_DIGESTS_SYNCED_TO_IAC=PASS`
-- `GITHUB_ENVIRONMENT_PRODUCTION_PROTECTED=PENDING_EXTERNAL_VERIFICATION`
-- `OIDC_ENVIRONMENT_SUB_OBSERVED=PENDING`
+- `GITHUB_ENVIRONMENT_PRODUCTION_EXISTS=FAIL`
+- `GITHUB_ENVIRONMENT_REQUIRED_REVIEWERS=FAIL`
+- `GITHUB_ENVIRONMENT_BRANCH_POLICY=FAIL`
+- `GITHUB_ENVIRONMENT_PRODUCTION_PROTECTED=FAIL`
+- `OIDC_ENVIRONMENT_SUB_OBSERVED=BLOCKED`
 - `OIDC_ENVIRONMENT_TRUST_APPLIED=NO`
 - `EXEC04_FINAL=BLOCKED_SAFE`
 - `PRODUCTION_GO=NO`
 
-## Next controlled transition
+## Required remediation before EXEC-04 can continue
 
-1. Independently verify that GitHub Environment `production` already exists and has required reviewers plus deployment branch restrictions.
-2. Only after that verification, execute an environment-bound OIDC claim observation with no Azure login and no Terraform.
-3. Compare the observed `sub` byte-for-byte with the prepared FIC subject.
-4. If and only if they match, authorize Terraform planning for the environment FIC in the subsequent approved gate.
+Create GitHub Environment `production` through an administrative control plane, then configure at minimum:
+
+1. one or more required reviewers;
+2. deployment branch/tag policy restricted to the authorized production source (normally protected `main`);
+3. review whether `prevent self-review` is operationally feasible and enable it when independent approval is available;
+4. no environment secrets are required merely to observe the OIDC subject.
+
+Only after those controls are independently verified may an environment-bound OIDC precheck be executed. That precheck must still perform no Azure login and no Terraform.
