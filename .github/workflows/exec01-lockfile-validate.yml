@@ -32,16 +32,19 @@ jobs:
         working-directory: apps/web
         run: npm install next@16.3.3 --save-exact --package-lock-only --ignore-scripts --no-audit --no-fund
 
-      - name: Verify resolved versions
+      - name: Verify manifest and lockfile target
         working-directory: apps/web
         run: |
-          npm ls next react react-dom
           node -e "const p=require('./package.json'); if(p.dependencies.next!=='16.3.3'||p.dependencies.react!=='19.2.8'||p.dependencies['react-dom']!=='19.2.8') process.exit(1)"
-          node -e "const l=require('./package-lock.json'); if(l.packages[''].dependencies.next!=='16.3.3') process.exit(1)"
+          node -e "const l=require('./package-lock.json'); if(l.packages[''].dependencies.next!=='16.3.3'||l.packages['node_modules/next'].version!=='16.3.3') process.exit(1)"
 
       - name: Clean reproducible install
         working-directory: apps/web
         run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Verify installed versions
+        working-directory: apps/web
+        run: npm ls next react react-dom
 
       - name: Run Web tests
         working-directory: apps/web
@@ -60,6 +63,8 @@ jobs:
             echo "NODE_VERSION=$(node --version)"
             echo "NPM_VERSION=$(npm --version)"
             echo "NEXT_VERSION=$(node -p \"require('./apps/web/node_modules/next/package.json').version\")"
+            echo "REACT_VERSION=$(node -p \"require('./apps/web/node_modules/react/package.json').version\")"
+            echo "REACT_DOM_VERSION=$(node -p \"require('./apps/web/node_modules/react-dom/package.json').version\")"
             echo "PACKAGE_JSON_SHA256=$(sha256sum apps/web/package.json | awk '{print $1}')"
             echo "PACKAGE_LOCK_SHA256=$(sha256sum apps/web/package-lock.json | awk '{print $1}')"
             echo "GITHUB_SHA=${GITHUB_SHA}"
