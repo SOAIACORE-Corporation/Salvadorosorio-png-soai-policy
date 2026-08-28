@@ -38,7 +38,7 @@ permissions:
 
 concurrency:
   group: oci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   REGISTRY: ghcr.io
@@ -218,7 +218,7 @@ jobs:
           trivyignores: .trivyignore.yaml
 
       - name: Upload Trivy gate and risk inventory
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: oci-security-evidence-${{ github.sha }}
           path: trivy-*.json
@@ -250,7 +250,7 @@ jobs:
 
       - name: Upload scanned OCI image bundle
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: oci-scanned-images-${{ github.sha }}
           path: oci-images-${{ github.sha }}.tar
@@ -342,7 +342,7 @@ jobs:
             > oci-publish-receipt.json
 
       - name: Upload OCI publish receipt
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: oci-publish-receipt-${{ github.sha }}
           path: oci-publish-receipt.json
