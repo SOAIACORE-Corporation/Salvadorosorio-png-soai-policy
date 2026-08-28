@@ -55,20 +55,27 @@ jobs:
         run: npm run build
 
       - name: Record EXEC-01 evidence
-        shell: bash
         run: |
-          set -euo pipefail
-          {
-            echo "EXEC01_VALIDATION=PASS"
-            echo "NODE_VERSION=$(node --version)"
-            echo "NPM_VERSION=$(npm --version)"
-            echo "NEXT_VERSION=$(node -p \"require('./apps/web/node_modules/next/package.json').version\")"
-            echo "REACT_VERSION=$(node -p \"require('./apps/web/node_modules/react/package.json').version\")"
-            echo "REACT_DOM_VERSION=$(node -p \"require('./apps/web/node_modules/react-dom/package.json').version\")"
-            echo "PACKAGE_JSON_SHA256=$(sha256sum apps/web/package.json | awk '{print $1}')"
-            echo "PACKAGE_LOCK_SHA256=$(sha256sum apps/web/package-lock.json | awk '{print $1}')"
-            echo "GITHUB_SHA=${GITHUB_SHA}"
-          } > exec01-validation.txt
+          node <<'NODE'
+          const fs = require('fs');
+          const crypto = require('crypto');
+          const hash = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+          const next = require('./apps/web/node_modules/next/package.json').version;
+          const react = require('./apps/web/node_modules/react/package.json').version;
+          const reactDom = require('./apps/web/node_modules/react-dom/package.json').version;
+          const lines = [
+            'EXEC01_VALIDATION=PASS',
+            `NODE_VERSION=${process.version}`,
+            `NPM_VERSION=${process.env.npm_config_user_agent ? process.env.npm_config_user_agent.split(' ')[0].replace('npm/','') : 'unknown'}`,
+            `NEXT_VERSION=${next}`,
+            `REACT_VERSION=${react}`,
+            `REACT_DOM_VERSION=${reactDom}`,
+            `PACKAGE_JSON_SHA256=${hash('apps/web/package.json')}`,
+            `PACKAGE_LOCK_SHA256=${hash('apps/web/package-lock.json')}`,
+            `GITHUB_SHA=${process.env.GITHUB_SHA}`,
+          ];
+          fs.writeFileSync('exec01-validation.txt', lines.join('\n') + '\n');
+          NODE
 
       - name: Upload regenerated lockfile and evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
