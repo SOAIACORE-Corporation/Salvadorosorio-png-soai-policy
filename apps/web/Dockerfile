@@ -25,7 +25,12 @@ ENV HOSTNAME=0.0.0.0 \
     NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+RUN apt-get update \
+    && apt-get install --only-upgrade -y --no-install-recommends \
+      bsdutils libblkid1 liblastlog2-2 libmount1 libsmartcols1 libuuid1 \
+      login mount util-linux libssl3t64 openssl-provider-legacy \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 COPY --from=builder --chown=65532:65532 /app/.next/standalone ./
 COPY --from=builder --chown=65532:65532 /app/.next/static ./.next/static

@@ -1,10 +1,25 @@
-name: OCI Build and Publish
+name: OCI Build, Scan, and Publish
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/oci-build-publish.yml
+      - .trivyignore.yaml
+      - apps/**
+      - packages/**
+      - schemas/**
+      - contracts/**
+      - db/migrations/**
+      - tests/**
+      - pyproject.toml
+      - uv.lock
+      - .python-version
   push:
     branches:
-      - rebuild/p0-06a-runtime
+      - main
     paths:
       - .github/workflows/oci-build-publish.yml
       - .trivyignore.yaml
@@ -20,11 +35,10 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 concurrency:
-  group: oci-${{ github.ref }}
-  cancel-in-progress: false
+  group: oci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   REGISTRY: ghcr.io
@@ -33,10 +47,12 @@ env:
   WORKER_IMAGE: ghcr.io/soaiacore-corporation/soaiacore-worker
 
 jobs:
-  build-test-publish:
-    name: Test, build, publish, and verify
+  build-test-scan:
+    name: Build, test, and security gate
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    permissions:
+      contents: read
     services:
       postgres:
         image: pgvector/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f
@@ -62,6 +78,7 @@ jobs:
 
       - name: Test Core and Worker runtime
         env:
+          PYTHONPATH: ${{ github.workspace }}
           SOAIACORE_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/soaiacore
           SOAIACORE_PROVIDER_MODE: MOCK
         run: |
@@ -76,11 +93,12 @@ jobs:
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
 
-      - name: Test Web BFF
+      - name: Test and build Web BFF
         working-directory: apps/web
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           npm test
+          npm run build
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
@@ -127,56 +145,87 @@ jobs:
           cache-from: type=gha,scope=worker-amd64
           cache-to: type=gha,mode=max,scope=worker-amd64
 
-      - name: Scan Core for critical vulnerabilities and secrets
+      - name: Inventory Core HIGH and CRITICAL vulnerabilities
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        with:
+          image-ref: ${{ env.CORE_IMAGE }}:${{ github.sha }}
+          format: json
+          output: trivy-core-risk.json
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          exit-code: 0
+
+      - name: Inventory Web HIGH and CRITICAL vulnerabilities
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        with:
+          image-ref: ${{ env.WEB_IMAGE }}:${{ github.sha }}
+          format: json
+          output: trivy-web-risk.json
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          exit-code: 0
+
+      - name: Inventory Worker HIGH and CRITICAL vulnerabilities
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        with:
+          image-ref: ${{ env.WORKER_IMAGE }}:${{ github.sha }}
+          format: json
+          output: trivy-worker-risk.json
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          exit-code: 0
+
+      - name: Gate Core on fixable HIGH/CRITICAL vulnerabilities and secrets
         id: scan_core
         continue-on-error: true
         uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
         with:
           image-ref: ${{ env.CORE_IMAGE }}:${{ github.sha }}
           format: json
-          output: trivy-core.json
+          output: trivy-core-gate.json
           scanners: vuln,secret
-          severity: CRITICAL
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
           exit-code: 1
           trivyignores: .trivyignore.yaml
 
-      - name: Scan Web for critical vulnerabilities and secrets
+      - name: Gate Web on fixable HIGH/CRITICAL vulnerabilities and secrets
         id: scan_web
         continue-on-error: true
         uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
         with:
           image-ref: ${{ env.WEB_IMAGE }}:${{ github.sha }}
           format: json
-          output: trivy-web.json
+          output: trivy-web-gate.json
           scanners: vuln,secret
-          severity: CRITICAL
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
           exit-code: 1
           trivyignores: .trivyignore.yaml
 
-      - name: Scan Worker for critical vulnerabilities and secrets
+      - name: Gate Worker on fixable HIGH/CRITICAL vulnerabilities and secrets
         id: scan_worker
         continue-on-error: true
         uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
         with:
           image-ref: ${{ env.WORKER_IMAGE }}:${{ github.sha }}
           format: json
-          output: trivy-worker.json
+          output: trivy-worker-gate.json
           scanners: vuln,secret
-          severity: CRITICAL
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
           exit-code: 1
           trivyignores: .trivyignore.yaml
 
-      - name: Upload private-image security reports
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - name: Upload Trivy gate and risk inventory
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: oci-security-scan-${{ github.sha }}
+          name: oci-security-evidence-${{ github.sha }}
           path: trivy-*.json
           if-no-files-found: error
           retention-days: 30
 
-      - name: Enforce the private-image security gate
-        if: always()
+      - name: Enforce fixable HIGH/CRITICAL security gate
         env:
           CORE_SCAN: ${{ steps.scan_core.outcome }}
           WEB_SCAN: ${{ steps.scan_web.outcome }}
@@ -188,7 +237,70 @@ jobs:
           test "${WEB_SCAN}" = success
           test "${WORKER_SCAN}" = success
 
-      - name: Log in to GHCR after every test and build passed
+      - name: Save exactly the scanned images for publication
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker save \
+            -o oci-images-${GITHUB_SHA}.tar \
+            "${CORE_IMAGE}:${GITHUB_SHA}" \
+            "${WEB_IMAGE}:${GITHUB_SHA}" \
+            "${WORKER_IMAGE}:${GITHUB_SHA}"
+
+      - name: Upload scanned OCI image bundle
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: oci-scanned-images-${{ github.sha }}
+          path: oci-images-${{ github.sha }}.tar
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Record validation summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## OCI validation and security gate'
+            echo
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo '- Platform: `linux/amd64`'
+            echo '- PR credentials: `contents: read` only'
+            echo '- Trivy gate: `HIGH,CRITICAL`, fixable only'
+            echo '- Trivy risk inventory: `HIGH,CRITICAL`, including unfixed'
+            echo '- Azure OIDC permission: `NOT PRESENT`'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  publish:
+    name: Publish previously scanned immutable images
+    needs: build-test-scan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Download the scanned OCI image bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: oci-scanned-images-${{ github.sha }}
+
+      - name: Load exactly the scanned images
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker load --input "oci-images-${GITHUB_SHA}.tar"
+          docker image inspect "${CORE_IMAGE}:${GITHUB_SHA}" >/dev/null
+          docker image inspect "${WEB_IMAGE}:${GITHUB_SHA}" >/dev/null
+          docker image inspect "${WORKER_IMAGE}:${GITHUB_SHA}" >/dev/null
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Log in to GHCR after the security gate passed
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           registry: ${{ env.REGISTRY }}
@@ -196,7 +308,6 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish commit tags and capture immutable digests
-        id: publish
         shell: bash
         run: |
           set -euo pipefail
@@ -227,11 +338,11 @@ jobs:
             --arg core "${CORE_IMAGE}@${core_digest}" \
             --arg web "${WEB_IMAGE}@${web_digest}" \
             --arg worker "${WORKER_IMAGE}@${worker_digest}" \
-            '{schema_version:"P0-OCI-1",commit:$commit,platform:$platform,live_provider_calls:0,images:{core:$core,web:$web,worker:$worker}}' \
+            '{schema_version:"P0-OCI-2",commit:$commit,platform:$platform,security_gate:"HIGH_CRITICAL_FIXABLE_PASS",live_provider_calls:0,images:{core:$core,web:$web,worker:$worker}}' \
             > oci-publish-receipt.json
 
       - name: Upload OCI publish receipt
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: oci-publish-receipt-${{ github.sha }}
           path: oci-publish-receipt.json
@@ -257,7 +368,7 @@ jobs:
         shell: bash
         run: |
           {
-            echo '## P0-06B immutable OCI references'
+            echo '## Immutable OCI references after security gate'
             echo
             echo "- Core: \`${CORE_IMAGE}@${CORE_DIGEST}\`"
             echo "- Web: \`${WEB_IMAGE}@${WEB_DIGEST}\`"
@@ -266,4 +377,5 @@ jobs:
             echo '- Platform: `linux/amd64`'
             echo '- Authenticated private-read: `PASS`'
             echo '- LIVE_PROVIDER_CALLS: `0`'
+            echo '- Azure OIDC permission: `NOT PRESENT`'
           } >> "${GITHUB_STEP_SUMMARY}"
