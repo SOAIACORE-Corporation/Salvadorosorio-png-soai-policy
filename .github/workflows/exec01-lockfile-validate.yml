@@ -11,7 +11,7 @@ on:
       - apps/web/next.config.mjs
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
@@ -54,19 +54,28 @@ jobs:
         working-directory: apps/web
         run: npm run build
 
+      - name: Enforce lockfile-only generated diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only)"
+          test "${changed}" = "apps/web/package-lock.json"
+
       - name: Record EXEC-01 evidence
         run: |
           node <<'NODE'
           const fs = require('fs');
           const crypto = require('crypto');
+          const cp = require('child_process');
           const hash = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
           const next = require('./apps/web/node_modules/next/package.json').version;
           const react = require('./apps/web/node_modules/react/package.json').version;
           const reactDom = require('./apps/web/node_modules/react-dom/package.json').version;
+          const npm = cp.execFileSync('npm', ['--version'], {encoding:'utf8'}).trim();
           const lines = [
             'EXEC01_VALIDATION=PASS',
             `NODE_VERSION=${process.version}`,
-            `NPM_VERSION=${process.env.npm_config_user_agent ? process.env.npm_config_user_agent.split(' ')[0].replace('npm/','') : 'unknown'}`,
+            `NPM_VERSION=${npm}`,
             `NEXT_VERSION=${next}`,
             `REACT_VERSION=${react}`,
             `REACT_DOM_VERSION=${reactDom}`,
@@ -86,3 +95,14 @@ jobs:
             exec01-validation.txt
           if-no-files-found: error
           retention-days: 7
+
+      - name: Commit validated lockfile only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/package-lock.json
+          git diff --cached --quiet && exit 0
+          git commit -m "security(web): sync lockfile for Next.js 16.3.3"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
