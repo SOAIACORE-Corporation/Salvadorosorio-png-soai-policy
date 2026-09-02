@@ -11,13 +11,17 @@ variable "location" {
 }
 
 variable "resource_group_name" {
-  description = "Dedicated resource group for Terraform remote state."
+  description = "Exact dedicated resource group for Terraform remote state. Required explicitly to prevent accidental creation of a duplicate state store."
   type        = string
-  default     = "rg-soaiacore-tfstate"
+
+  validation {
+    condition     = length(trimspace(var.resource_group_name)) > 0
+    error_message = "resource_group_name must be supplied explicitly from verified Azure discovery."
+  }
 }
 
 variable "storage_account_name" {
-  description = "Globally unique Storage Account name for Terraform state. Lowercase letters and numbers only, 3-24 characters."
+  description = "Exact globally unique Storage Account name for Terraform state. Supply the verified existing name when adopting an existing backend."
   type        = string
 
   validation {
@@ -27,9 +31,13 @@ variable "storage_account_name" {
 }
 
 variable "container_name" {
-  description = "Private Blob container used by the azurerm backend."
+  description = "Exact private Blob container used by the azurerm backend. Required explicitly after management/data-plane verification; do not invent or rename for cosmetic reasons."
   type        = string
-  default     = "tfstate"
+
+  validation {
+    condition     = length(trimspace(var.container_name)) > 0
+    error_message = "container_name must be supplied explicitly from verified backend discovery."
+  }
 }
 
 variable "retention_days" {
