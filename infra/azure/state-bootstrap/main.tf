@@ -25,12 +25,12 @@ resource "azurerm_storage_account" "state" {
   account_kind             = "StorageV2"
   access_tier              = "Hot"
 
-  min_tls_version                   = "TLS1_2"
-  allow_nested_items_to_be_public   = false
-  shared_access_key_enabled         = false
-  default_to_oauth_authentication   = true
-  public_network_access_enabled     = true
-  cross_tenant_replication_enabled  = false
+  min_tls_version                  = "TLS1_2"
+  allow_nested_items_to_be_public  = false
+  shared_access_key_enabled        = false
+  default_to_oauth_authentication  = true
+  public_network_access_enabled    = true
+  cross_tenant_replication_enabled = false
 
   blob_properties {
     versioning_enabled = true
