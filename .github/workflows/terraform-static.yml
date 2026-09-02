@@ -28,7 +28,7 @@ jobs:
           terraform_wrapper: false
 
       - name: Check Terraform formatting
-        run: terraform fmt -check -recursive infra/azure
+        run: terraform fmt -check -diff -recursive infra/azure
 
       - name: Initialize remote-state bootstrap without backend
         run: terraform -chdir=infra/azure/state-bootstrap init -backend=false -input=false
