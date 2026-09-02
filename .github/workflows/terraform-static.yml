@@ -1,0 +1,42 @@
+name: Terraform Static Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/terraform-static.yml
+      - infra/azure/**
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Terraform fmt and bootstrap validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out the proposed commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Set up Terraform 1.15.0
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: 1.15.0
+          terraform_wrapper: false
+
+      - name: Check Terraform formatting across Azure modules
+        run: terraform fmt -check -diff -recursive infra/azure
+
+      - name: Initialize remote-state bootstrap without backend
+        run: terraform -chdir=infra/azure/state-bootstrap init -backend=false -input=false
+
+      - name: Validate remote-state bootstrap
+        run: terraform -chdir=infra/azure/state-bootstrap validate -no-color
+
+      # P0 declares a partial azurerm backend whose identifiers are intentionally
+      # untracked. Terraform 1.15 validates those required backend arguments, so
+      # P0 runtime validation belongs to the authenticated backend/plan gate, not
+      # this secretless bootstrap check.
