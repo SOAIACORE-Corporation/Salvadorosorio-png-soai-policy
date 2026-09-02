@@ -43,6 +43,12 @@ variable "retention_days" {
   }
 }
 
+variable "allowed_ip_ranges" {
+  description = "Explicitly approved public IPv4/CIDR ranges permitted during bootstrap when no private operator path is available. Empty means deny-by-default except Azure service bypass."
+  type        = set(string)
+  default     = []
+}
+
 variable "state_principal_object_ids" {
   description = "Microsoft Entra object IDs allowed to read/write Terraform state through RBAC."
   type        = set(string)
