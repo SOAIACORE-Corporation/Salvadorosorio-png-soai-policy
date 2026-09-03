@@ -41,8 +41,7 @@ resource "azurerm_private_dns_zone" "key_vault" {
 
 resource "azurerm_private_dns_zone_virtual_network_link" "blob" {
   name                  = "link-soaiacore-p0-blob"
-  resource_group_name   = azurerm_resource_group.pilot.name
-  private_dns_zone_name = azurerm_private_dns_zone.blob.name
+  private_dns_zone_id   = azurerm_private_dns_zone.blob.id
   virtual_network_id    = azurerm_virtual_network.pilot.id
   registration_enabled  = false
   tags                  = local.required_tags
@@ -50,8 +49,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "blob" {
 
 resource "azurerm_private_dns_zone_virtual_network_link" "key_vault" {
   name                  = "link-soaiacore-p0-key-vault"
-  resource_group_name   = azurerm_resource_group.pilot.name
-  private_dns_zone_name = azurerm_private_dns_zone.key_vault.name
+  private_dns_zone_id   = azurerm_private_dns_zone.key_vault.id
   virtual_network_id    = azurerm_virtual_network.pilot.id
   registration_enabled  = false
   tags                  = local.required_tags
