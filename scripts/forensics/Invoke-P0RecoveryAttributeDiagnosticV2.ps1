@@ -188,9 +188,12 @@ function Get-ChangedAttributePathsLinear {
         }
         $beforeList = @($Before)
         $afterList = @($After)
-        $beforeSensitiveList = if (Test-ListNode $BeforeSensitive) { @($BeforeSensitive) } else { @() }
-        $afterSensitiveList = if (Test-ListNode $AfterSensitive) { @($AfterSensitive) } else { @() }
-        $afterUnknownList = if (Test-ListNode $AfterUnknown) { @($AfterUnknown) } else { @() }
+        $beforeSensitiveList = @()
+        $afterSensitiveList = @()
+        $afterUnknownList = @()
+        if (Test-ListNode $BeforeSensitive) { $beforeSensitiveList = @($BeforeSensitive) }
+        if (Test-ListNode $AfterSensitive) { $afterSensitiveList = @($AfterSensitive) }
+        if (Test-ListNode $AfterUnknown) { $afterUnknownList = @($AfterUnknown) }
         $max = [Math]::Max($beforeList.Count, $afterList.Count)
         $result = @()
         for ($i = 0; $i -lt $max; $i++) {
@@ -336,7 +339,7 @@ if ($SelfTest) {
     $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
     $largePaths = @(Get-ChangedAttributePathsLinear -Before ([pscustomobject]$largeBeforeMap) -After ([pscustomobject]$largeAfterMap) -BeforeSensitive $null -AfterSensitive $null -AfterUnknown $null -Path 'root' -Budget $largeBudget)
     $stopwatch.Stop()
-    if ($largePaths.Count -ne 1 -or $largePaths[0] -ne 'root.p1999' -or $stopwatch.Elapsed.TotalSeconds -gt 5) {
+    if (@($largePaths).Count -ne 1 -or $largePaths[0] -ne 'root.p1999' -or $stopwatch.Elapsed.TotalSeconds -gt 5) {
         throw 'SELFTEST_LINEAR_DIFF_FAILED'
     }
 
