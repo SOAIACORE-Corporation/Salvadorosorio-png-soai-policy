@@ -54,10 +54,18 @@ jobs:
       - name: Self-test recovery diagnostic PowerShell
         shell: pwsh
         run: |
-          & './scripts/forensics/Invoke-P0RecoveryDiagnosticPlan.ps1' -SelfTest
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & './scripts/forensics/Invoke-P0RecoveryAttributeDiagnostic.ps1' -SelfTest
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $paths = @(
+            'scripts/forensics/Invoke-P0RecoveryDiagnosticPlan.ps1',
+            'scripts/forensics/Invoke-P0RecoveryAttributeDiagnostic.ps1'
+          )
+          foreach ($path in $paths) {
+            & pwsh -NoProfile -File $path -SelfTest
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error ("SELFTEST_FAILED path={0} exit={1}" -f $path,$LASTEXITCODE)
+              exit $LASTEXITCODE
+            }
+            Write-Host ("POWERSHELL_SELFTEST=PASS path={0}" -f $path)
+          }
 
       - name: Check recovered P0 formatting
         run: terraform fmt -check -diff infra/azure/p0
