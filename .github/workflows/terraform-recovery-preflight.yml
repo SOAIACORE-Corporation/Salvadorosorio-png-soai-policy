@@ -1,0 +1,65 @@
+name: Terraform Recovery Preflight
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/terraform-recovery-preflight.yml
+      - infra/azure/p0/**
+
+permissions:
+  contents: read
+
+jobs:
+  validate-recovered-p0:
+    name: Validate recovered P0 without backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out proposed commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Set up Terraform 1.15.0
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: 1.15.0
+          terraform_wrapper: false
+
+      - name: Check recovered P0 formatting
+        run: terraform fmt -check -diff infra/azure/p0
+
+      - name: Build isolated backend-free validation copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -R infra/azure/p0 "$RUNNER_TEMP/p0-recovery"
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("${{ runner.temp }}/p0-recovery/versions.tf")
+          text = path.read_text(encoding="utf-8")
+          needle = '  backend "azurerm" {}\n\n'
+          if text.count(needle) != 1:
+              raise SystemExit("Expected exactly one empty azurerm backend declaration")
+          path.write_text(text.replace(needle, "", 1), encoding="utf-8")
+          PY
+
+      - name: Initialize isolated validation copy
+        run: terraform -chdir="$RUNNER_TEMP/p0-recovery" init -backend=false -input=false -no-color
+
+      - name: Validate recovered provider configuration
+        run: terraform -chdir="$RUNNER_TEMP/p0-recovery" validate -no-color
+
+      - name: Enforce no execution primitives in preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflow=.github/workflows/terraform-recovery-preflight.yml
+          for forbidden in 'terraform plan' 'terraform apply' 'terraform destroy' 'terraform state' 'az '; do
+            if grep -Fq "$forbidden" "$workflow"; then
+              echo "Forbidden runtime primitive present: $forbidden" >&2
+              exit 1
+            fi
+          done
+          echo 'RECOVERY_PREFLIGHT_READ_ONLY=PASS'
