@@ -8,6 +8,7 @@ on:
       - .github/workflows/terraform-recovery-preflight.yml
       - infra/azure/p0/**
       - scripts/forensics/Invoke-P0RecoveryDiagnosticPlan.ps1
+      - scripts/forensics/Invoke-P0RecoveryAttributeDiagnostic.ps1
 
 permissions:
   contents: read
@@ -31,24 +32,31 @@ jobs:
       - name: Parse recovery diagnostic PowerShell
         shell: pwsh
         run: |
-          $path = 'scripts/forensics/Invoke-P0RecoveryDiagnosticPlan.ps1'
-          $tokens = $null
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path $path),
-            [ref]$tokens,
-            [ref]$errors
-          ) | Out-Null
-          if ($errors.Count -gt 0) {
-            $errors | ForEach-Object { Write-Error ("{0}:{1} {2}" -f $_.Extent.StartLineNumber,$_.Extent.StartColumnNumber,$_.Message) }
-            exit 1
+          $paths = @(
+            'scripts/forensics/Invoke-P0RecoveryDiagnosticPlan.ps1',
+            'scripts/forensics/Invoke-P0RecoveryAttributeDiagnostic.ps1'
+          )
+          foreach ($path in $paths) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $path),
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error ("{0}:{1}:{2} {3}" -f $path,$_.Extent.StartLineNumber,$_.Extent.StartColumnNumber,$_.Message) }
+              exit 1
+            }
+            Write-Host ("POWERSHELL_NATIVE_PARSE=PASS path={0}" -f $path)
           }
-          Write-Host 'POWERSHELL_NATIVE_PARSE=PASS'
 
       - name: Self-test recovery diagnostic PowerShell
         shell: pwsh
         run: |
           & './scripts/forensics/Invoke-P0RecoveryDiagnosticPlan.ps1' -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & './scripts/forensics/Invoke-P0RecoveryAttributeDiagnostic.ps1' -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Check recovered P0 formatting
