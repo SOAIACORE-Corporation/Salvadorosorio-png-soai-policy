@@ -62,7 +62,7 @@ jobs:
           $path = 'infra/azure/p0/Invoke-P0GovernedTeardown.ps1'
           $text = Get-Content -LiteralPath $path -Raw
           $required = @(
-            "[string]$Mode = 'PlanOnly'",
+            '[string]$Mode = ''PlanOnly''',
             '108eb4dd-25b3-4a7f-8d5e-4ec4389c3f0d',
             'rg-soaiacore-p0-34utxi',
             'rg-soaiacore-tfstate-34utxi',
