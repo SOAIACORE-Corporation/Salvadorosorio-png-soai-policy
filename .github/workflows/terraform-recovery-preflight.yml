@@ -9,6 +9,7 @@ on:
       - infra/azure/p0/**
       - scripts/forensics/Invoke-P0RecoveryDiagnosticPlan.ps1
       - scripts/forensics/Invoke-P0RecoveryAttributeDiagnostic.ps1
+      - scripts/forensics/Invoke-P0RecoveryAttributeDiagnosticV2.ps1
 
 permissions:
   contents: read
@@ -34,7 +35,8 @@ jobs:
         run: |
           $paths = @(
             'scripts/forensics/Invoke-P0RecoveryDiagnosticPlan.ps1',
-            'scripts/forensics/Invoke-P0RecoveryAttributeDiagnostic.ps1'
+            'scripts/forensics/Invoke-P0RecoveryAttributeDiagnostic.ps1',
+            'scripts/forensics/Invoke-P0RecoveryAttributeDiagnosticV2.ps1'
           )
           foreach ($path in $paths) {
             $tokens = $null
@@ -56,7 +58,8 @@ jobs:
         run: |
           $paths = @(
             'scripts/forensics/Invoke-P0RecoveryDiagnosticPlan.ps1',
-            'scripts/forensics/Invoke-P0RecoveryAttributeDiagnostic.ps1'
+            'scripts/forensics/Invoke-P0RecoveryAttributeDiagnostic.ps1',
+            'scripts/forensics/Invoke-P0RecoveryAttributeDiagnosticV2.ps1'
           )
           foreach ($path in $paths) {
             & pwsh -NoProfile -File $path -SelfTest
