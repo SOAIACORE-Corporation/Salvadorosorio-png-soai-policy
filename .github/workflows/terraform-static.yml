@@ -40,3 +40,48 @@ jobs:
       # untracked. Terraform 1.15 validates those required backend arguments, so
       # P0 runtime validation belongs to the authenticated backend/plan gate, not
       # this secretless bootstrap check.
+
+      - name: Parse governed P0 teardown PowerShell
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'infra/azure/p0/Invoke-P0GovernedTeardown.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+
+      - name: Verify governed teardown fail-safe invariants
+        shell: pwsh
+        run: |
+          $path = 'infra/azure/p0/Invoke-P0GovernedTeardown.ps1'
+          $text = Get-Content -LiteralPath $path -Raw
+          $required = @(
+            "[string]$Mode = 'PlanOnly'",
+            '108eb4dd-25b3-4a7f-8d5e-4ec4389c3f0d',
+            'rg-soaiacore-p0-34utxi',
+            'rg-soaiacore-tfstate-34utxi',
+            'remote_backend_initialized',
+            'plan_no_destroy_verified',
+            'config_state_reconciled',
+            'terraform plan -destroy',
+            'STOP_PLAN_HASH_MISMATCH',
+            'APPLY_REVIEWED_P0_DESTROY_PLAN',
+            'terraform apply -input=false $PlanFile',
+            'state_backend_preserved'
+          )
+          foreach ($needle in $required) {
+            if (-not $text.Contains($needle)) {
+              Write-Error "Missing required teardown safeguard: $needle"
+              exit 1
+            }
+          }
+          if ($text.Contains('terraform destroy')) {
+            Write-Error 'Direct terraform destroy is forbidden; exact saved-plan apply is required.'
+            exit 1
+          }
