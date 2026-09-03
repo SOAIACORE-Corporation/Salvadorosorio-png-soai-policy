@@ -5,11 +5,6 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$Root = Join-Path $env:TEMP 'soaiacore-state-verify\infra\azure\p0'
-$Stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
-$Out = Join-Path $HOME "SOAIACORE_38_TF_STATE_SHOW_SANITIZED_$Stamp.txt"
-$Sha = "$Out.sha256"
-
 $Addresses = @(
   'azurerm_consumption_budget_resource_group.pilot',
   'azurerm_key_vault.pilot',
@@ -100,6 +95,15 @@ if ($SelfTest) {
     Write-Host 'MUTATION=false'
     exit 0
 }
+
+$TempRoot = [System.IO.Path]::GetTempPath()
+if ([string]::IsNullOrWhiteSpace($TempRoot)) {
+    throw 'Unable to resolve the process temporary directory.'
+}
+$Root = Join-Path $TempRoot 'soaiacore-state-verify\infra\azure\p0'
+$Stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
+$Out = Join-Path $HOME "SOAIACORE_38_TF_STATE_SHOW_SANITIZED_$Stamp.txt"
+$Sha = "$Out.sha256"
 
 if (-not (Test-Path $Root)) {
     throw "Expected Terraform working directory not found: $Root"
