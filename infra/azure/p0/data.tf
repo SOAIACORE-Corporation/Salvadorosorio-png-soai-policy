@@ -24,6 +24,12 @@ resource "azurerm_storage_account" "evidence" {
     }
   }
 
+  share_properties {
+    retention_policy {
+      days = 7
+    }
+  }
+
   network_rules {
     default_action             = "Deny"
     bypass                     = ["AzureServices"]
