@@ -135,13 +135,15 @@ function Get-ChangedAttributePaths {
                 continue
             }
 
-            $result += @(Get-ChangedAttributePaths \
-                -Before $beforeChild.Value \
-                -After $afterChild.Value \
-                -BeforeSensitive $beforeSensitiveChild.Value \
-                -AfterSensitive $afterSensitiveChild.Value \
-                -AfterUnknown $afterUnknownChild.Value \
-                -Path $childPath)
+            $childArgs = @{
+                Before          = $beforeChild.Value
+                After           = $afterChild.Value
+                BeforeSensitive = $beforeSensitiveChild.Value
+                AfterSensitive  = $afterSensitiveChild.Value
+                AfterUnknown    = $afterUnknownChild.Value
+                Path            = $childPath
+            }
+            $result += @(Get-ChangedAttributePaths @childArgs)
         }
         return @($result | Sort-Object -Unique)
     }
@@ -164,13 +166,19 @@ function Get-ChangedAttributePaths {
                 else { $result += $childPath }
                 continue
             }
-            $result += @(Get-ChangedAttributePaths \
-                -Before $beforeList[$i] \
-                -After $afterList[$i] \
-                -BeforeSensitive $(if ($i -lt $beforeSensitiveList.Count) { $beforeSensitiveList[$i] } else { $null }) \
-                -AfterSensitive $(if ($i -lt $afterSensitiveList.Count) { $afterSensitiveList[$i] } else { $null }) \
-                -AfterUnknown $(if ($i -lt $afterUnknownList.Count) { $afterUnknownList[$i] } else { $null }) \
-                -Path $childPath)
+
+            $beforeSensitiveValue = if ($i -lt $beforeSensitiveList.Count) { $beforeSensitiveList[$i] } else { $null }
+            $afterSensitiveValue = if ($i -lt $afterSensitiveList.Count) { $afterSensitiveList[$i] } else { $null }
+            $afterUnknownValue = if ($i -lt $afterUnknownList.Count) { $afterUnknownList[$i] } else { $null }
+            $listChildArgs = @{
+                Before          = $beforeList[$i]
+                After           = $afterList[$i]
+                BeforeSensitive = $beforeSensitiveValue
+                AfterSensitive  = $afterSensitiveValue
+                AfterUnknown    = $afterUnknownValue
+                Path            = $childPath
+            }
+            $result += @(Get-ChangedAttributePaths @listChildArgs)
         }
         return @($result | Sort-Object -Unique)
     }
@@ -198,12 +206,12 @@ function Patch-DiagnosticScriptText {
 
 if ($SelfTest) {
     $before = [pscustomobject]@{
-        safe = 'old'
+        safe   = 'old'
         secret = [pscustomobject]@{ value = 'DO_NOT_LEAK_OLD' }
         stable = 'same'
     }
     $after = [pscustomobject]@{
-        safe = 'new'
+        safe   = 'new'
         secret = [pscustomobject]@{ value = 'DO_NOT_LEAK_NEW' }
         stable = 'same'
     }
@@ -315,38 +323,40 @@ try {
     foreach ($resourceChange in @($planJson.resource_changes)) {
         $actions = @($resourceChange.change.actions)
         if ($actions -contains 'no-op') { continue }
-        $paths = @(Get-ChangedAttributePaths \
-            -Before $resourceChange.change.before \
-            -After $resourceChange.change.after \
-            -BeforeSensitive $resourceChange.change.before_sensitive \
-            -AfterSensitive $resourceChange.change.after_sensitive \
-            -AfterUnknown $resourceChange.change.after_unknown \
-            -Path '')
+        $pathArgs = @{
+            Before          = $resourceChange.change.before
+            After           = $resourceChange.change.after
+            BeforeSensitive = $resourceChange.change.before_sensitive
+            AfterSensitive  = $resourceChange.change.after_sensitive
+            AfterUnknown    = $resourceChange.change.after_unknown
+            Path            = ''
+        }
+        $paths = @(Get-ChangedAttributePaths @pathArgs)
         $resourceRows += [ordered]@{
-            address = [string]$resourceChange.address
-            actions = $actions
+            address         = [string]$resourceChange.address
+            actions         = $actions
             attribute_paths = @($paths | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Sort-Object -Unique)
         }
     }
     $planJson = $null
 
     $attributeReceipt = [ordered]@{
-        schema = 'SOAIACORE_38_RECOVERY_ATTRIBUTE_PATHS_V1'
-        recorded_utc = (Get-Date).ToUniversalTime().ToString('o')
-        config_commit = $TargetConfigCommit
-        base_diagnostic_commit = $BaseDiagnosticCommit
-        terraform_refresh = $false
-        state_address_count = [int]$baseReceipt.state_address_count
-        plan_exit_code = [int]$baseReceipt.plan_exit_code
-        plan_sha256 = [string]$baseReceipt.plan_sha256
-        plan_gate = [string]$baseReceipt.plan_gate
-        action_counts = $baseReceipt.action_counts
-        changed_resources = $resourceRows
-        attribute_values_output = $false
-        secret_values_output = $false
-        raw_plan_json_persisted = $false
-        terraform_apply_executed = $false
-        mutation = $false
+        schema                                     = 'SOAIACORE_38_RECOVERY_ATTRIBUTE_PATHS_V1'
+        recorded_utc                               = (Get-Date).ToUniversalTime().ToString('o')
+        config_commit                              = $TargetConfigCommit
+        base_diagnostic_commit                     = $BaseDiagnosticCommit
+        terraform_refresh                          = $false
+        state_address_count                        = [int]$baseReceipt.state_address_count
+        plan_exit_code                             = [int]$baseReceipt.plan_exit_code
+        plan_sha256                                = [string]$baseReceipt.plan_sha256
+        plan_gate                                  = [string]$baseReceipt.plan_gate
+        action_counts                              = $baseReceipt.action_counts
+        changed_resources                          = $resourceRows
+        attribute_values_output                    = $false
+        secret_values_output                       = $false
+        raw_plan_json_persisted                    = $false
+        terraform_apply_executed                   = $false
+        mutation                                   = $false
         human_adjudication_required_before_any_apply = $true
     }
     $attributeReceipt | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $attributeReceiptPath -Encoding utf8
