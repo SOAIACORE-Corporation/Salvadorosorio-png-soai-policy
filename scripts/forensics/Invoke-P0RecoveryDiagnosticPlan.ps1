@@ -26,6 +26,42 @@ function Stop-Gate {
     throw ("{0}: {1}" -f $Code, $Message)
 }
 
+function Convert-ToRfc3339Utc {
+    param(
+        [object]$Value,
+        [string]$Label
+    )
+
+    if ($null -eq $Value) {
+        Stop-Gate 'STOP_RUNTIME_INPUT_MISSING' ("{0} is missing." -f $Label)
+    }
+
+    if ($Value -is [DateTimeOffset]) {
+        return ([DateTimeOffset]$Value).ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [System.Globalization.CultureInfo]::InvariantCulture)
+    }
+
+    if ($Value -is [DateTime]) {
+        $dateValue = [DateTime]$Value
+        if ($dateValue.Kind -eq [DateTimeKind]::Unspecified) {
+            $dateValue = [DateTime]::SpecifyKind($dateValue, [DateTimeKind]::Utc)
+        }
+        return $dateValue.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [System.Globalization.CultureInfo]::InvariantCulture)
+    }
+
+    $text = [string]$Value
+    if ([string]::IsNullOrWhiteSpace($text)) {
+        Stop-Gate 'STOP_RUNTIME_INPUT_MISSING' ("{0} is empty." -f $Label)
+    }
+
+    $parsed = [DateTimeOffset]::MinValue
+    $styles = [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal
+    if (-not [DateTimeOffset]::TryParse($text, [System.Globalization.CultureInfo]::InvariantCulture, $styles, [ref]$parsed)) {
+        Stop-Gate 'STOP_RUNTIME_INPUT_INVALID' ("{0} is not a valid timestamp." -f $Label)
+    }
+
+    return $parsed.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", [System.Globalization.CultureInfo]::InvariantCulture)
+}
+
 function Require-Command {
     param([string]$Name)
     if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
@@ -153,6 +189,12 @@ if ($SelfTest) {
     if ($branch -ne 'security/p0-identity-2026-08-27') {
         throw 'SELFTEST_BRANCH_PARSE_FAILED'
     }
+    $rfcFromString = Convert-ToRfc3339Utc '2026-09-01T04:00:00Z' 'RFC3339 string fixture'
+    $rfcFromDateTime = Convert-ToRfc3339Utc ([datetime]::SpecifyKind([datetime]'2026-09-01T04:00:00', [DateTimeKind]::Utc)) 'DateTime fixture'
+    $rfcFromOffset = Convert-ToRfc3339Utc ([DateTimeOffset]'2026-09-01T04:00:00Z') 'DateTimeOffset fixture'
+    if ($rfcFromString -ne '2026-09-01T04:00:00Z' -or $rfcFromDateTime -ne '2026-09-01T04:00:00Z' -or $rfcFromOffset -ne '2026-09-01T04:00:00Z') {
+        throw 'SELFTEST_RFC3339_NORMALIZATION_FAILED'
+    }
     Write-Host 'SELFTEST=PASS'
     Write-Host 'AZURE_CALLED=false'
     Write-Host 'TERRAFORM_CALLED=false'
@@ -220,10 +262,7 @@ use_azuread_auth     = true
     $githubBranch = Get-RegexValue $ficText 'subject\s*=\s*"repo:[^"]+:ref:refs/heads/([^"]+)"' 'current federated GitHub branch'
 
     $rg = Invoke-AzJson @('group', 'show', '--name', $PilotResourceGroup) 'Pilot resource group read'
-    $expiresAt = [string]$rg.tags.expires_at
-    if ([string]::IsNullOrWhiteSpace($expiresAt)) {
-        Stop-Gate 'STOP_RUNTIME_INPUT_MISSING' 'Pilot expires_at tag is missing.'
-    }
+    $expiresAt = Convert-ToRfc3339Utc $rg.tags.expires_at 'Pilot expires_at tag'
 
     $storage = Invoke-AzJson @('storage', 'account', 'show', '--resource-group', $PilotResourceGroup, '--name', $EvidenceStorageAccount) 'Evidence storage read'
     $allowedIps = @($storage.networkRuleSet.ipRules | Where-Object { $_.action -eq 'Allow' } | ForEach-Object { $_.ipAddressOrRange })
