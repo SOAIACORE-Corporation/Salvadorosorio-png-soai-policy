@@ -93,6 +93,9 @@ resource "azurerm_key_vault_secret" "ghcr" {
   name         = "ghcr-pull-token"
   value        = var.ghcr_token
   key_vault_id = azurerm_key_vault.pilot.id
+  tags = {
+    "file-encoding" = "utf-8"
+  }
 
   depends_on = [azurerm_role_assignment.operator_key_vault_secrets_officer]
 }
