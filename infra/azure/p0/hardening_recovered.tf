@@ -40,19 +40,19 @@ resource "azurerm_private_dns_zone" "key_vault" {
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "blob" {
-  name                  = "link-soaiacore-p0-blob"
-  private_dns_zone_id   = azurerm_private_dns_zone.blob.id
-  virtual_network_id    = azurerm_virtual_network.pilot.id
-  registration_enabled  = false
-  tags                  = local.required_tags
+  name                 = "link-soaiacore-p0-blob"
+  private_dns_zone_id  = azurerm_private_dns_zone.blob.id
+  virtual_network_id   = azurerm_virtual_network.pilot.id
+  registration_enabled = false
+  tags                 = local.required_tags
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "key_vault" {
-  name                  = "link-soaiacore-p0-key-vault"
-  private_dns_zone_id   = azurerm_private_dns_zone.key_vault.id
-  virtual_network_id    = azurerm_virtual_network.pilot.id
-  registration_enabled  = false
-  tags                  = local.required_tags
+  name                 = "link-soaiacore-p0-key-vault"
+  private_dns_zone_id  = azurerm_private_dns_zone.key_vault.id
+  virtual_network_id   = azurerm_virtual_network.pilot.id
+  registration_enabled = false
+  tags                 = local.required_tags
 }
 
 resource "azurerm_key_vault" "pilot" {
