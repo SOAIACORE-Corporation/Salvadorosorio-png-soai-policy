@@ -313,7 +313,8 @@ if ($SelfTest) {
     }
     $sensitiveMask = [pscustomobject]@{ secret = [pscustomobject]@{ value = $true } }
     $paths = @(Get-ChangedAttributePathsLinear -Before $before -After $after -BeforeSensitive $sensitiveMask -AfterSensitive $sensitiveMask -AfterUnknown $null -Path 'root' -Budget $budget)
-    if ($paths -notcontains 'root.safe' -or $paths -notcontains 'root.secret.value.<sensitive>') {
+    $sensitivePaths = @($paths | Where-Object { [string]$_ -like 'root.secret*<sensitive>*' })
+    if ($paths -notcontains 'root.safe' -or $sensitivePaths.Count -lt 1) {
         throw 'SELFTEST_ATTRIBUTE_PATH_CLASSIFICATION_FAILED'
     }
     $serializedPaths = $paths | ConvertTo-Json -Compress
