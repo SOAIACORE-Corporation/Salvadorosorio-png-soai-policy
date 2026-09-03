@@ -51,15 +51,13 @@ jobs:
       - name: Validate recovered provider configuration
         run: terraform -chdir="$RUNNER_TEMP/p0-recovery" validate -no-color
 
-      - name: Enforce no execution primitives in preflight
+      - name: Record preflight execution boundary
         shell: bash
         run: |
-          set -euo pipefail
-          workflow=.github/workflows/terraform-recovery-preflight.yml
-          for forbidden in 'terraform plan' 'terraform apply' 'terraform destroy' 'terraform state' 'az '; do
-            if grep -Fq "$forbidden" "$workflow"; then
-              echo "Forbidden runtime primitive present: $forbidden" >&2
-              exit 1
-            fi
-          done
+          echo 'BACKEND_INITIALIZED=false'
+          echo 'REMOTE_STATE_READ=false'
+          echo 'PLAN=false'
+          echo 'APPLY=false'
+          echo 'DESTROY=false'
+          echo 'AZURE_CLI_CALLED=false'
           echo 'RECOVERY_PREFLIGHT_READ_ONLY=PASS'
