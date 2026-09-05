@@ -57,6 +57,15 @@ variable "allowed_ip_ranges" {
   default     = []
 }
 
+variable "private_link_access" {
+  description = "Existing Storage firewall private-link access exceptions to preserve during adopt-first reconciliation. Supply only values verified from the authoritative Azure resource."
+  type = list(object({
+    endpoint_resource_id = string
+    endpoint_tenant_id   = string
+  }))
+  default = []
+}
+
 variable "state_principal_object_ids" {
   description = "Microsoft Entra object IDs allowed to read/write Terraform state through RBAC."
   type        = set(string)
