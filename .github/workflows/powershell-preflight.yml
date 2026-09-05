@@ -1,0 +1,82 @@
+name: PowerShell Preflight
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/powershell-preflight.yml
+      - scripts/forensics/**.ps1
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Parse and self-test forensic PowerShell
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out proposed commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Parse collector with native PowerShell parser
+        shell: pwsh
+        run: |
+          $path = 'scripts/forensics/SOAIACORE_38_TERRAFORM_STATE_SHOW_SANITIZED.ps1'
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $path),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error ("{0}:{1} {2}" -f $_.Extent.StartLineNumber,$_.Extent.StartColumnNumber,$_.Message) }
+            exit 1
+          }
+          Write-Host 'POWERSHELL_NATIVE_PARSE=PASS'
+
+      - name: Execute isolated collector self-test
+        shell: pwsh
+        run: |
+          & './scripts/forensics/SOAIACORE_38_TERRAFORM_STATE_SHOW_SANITIZED.ps1' -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Enforce read-only collector invariants
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath 'scripts/forensics/SOAIACORE_38_TERRAFORM_STATE_SHOW_SANITIZED.ps1' -Raw
+          $forbidden = @(
+            'terraform apply',
+            'terraform destroy',
+            'terraform state rm',
+            'terraform import',
+            'terraform plan',
+            'az resource delete',
+            'az role assignment create',
+            'az keyvault secret set'
+          )
+          foreach ($needle in $forbidden) {
+            if ($text.Contains($needle)) {
+              Write-Error "Forbidden mutation primitive present: $needle"
+              exit 1
+            }
+          }
+          $required = @(
+            'terraform state list',
+            'terraform state show -no-color',
+            'STATE_PULL=false',
+            'PLAN=false',
+            'APPLY=false',
+            'MUTATION=false',
+            '[switch]$SelfTest'
+          )
+          foreach ($needle in $required) {
+            if (-not $text.Contains($needle)) {
+              Write-Error "Missing required read-only invariant: $needle"
+              exit 1
+            }
+          }
+          Write-Host 'READ_ONLY_INVARIANTS=PASS'
