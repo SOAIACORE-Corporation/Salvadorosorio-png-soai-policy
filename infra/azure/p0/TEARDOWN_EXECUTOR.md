@@ -10,16 +10,20 @@
 - Execution requires a sanitized #38 authority receipt proving `remote_backend_initialized=true/PASS`, `plan_no_destroy_verified=true/PASS`, and `config_state_reconciled=true/PASS`.
 - `PlanOnly` creates a saved Terraform destroy plan, raw plan JSON, SHA-256 and a sanitized action/inventory receipt outside the Git working tree.
 - Raw plan artifacts are written only inside a current-user-only artifact directory. Windows uses an explicit protected ACL; non-Windows hosts require `chmod 700` on the directory and `chmod 600` on plan/JSON/receipt files.
-- The generated destroy plan is re-inspected before both PLAN_ONLY completion and any apply. The plan must expose the pinned `subscription_id`; every AzureRM delete must have a prior ARM ID inside the exact P0 resource-group prefix. Any delete in the state-backend resource group or outside the pinned P0 scope fails closed.
+- The generated destroy plan is re-inspected before PLAN_ONLY completion. The plan must expose the pinned `subscription_id`; every AzureRM delete must have a prior ARM ID inside the exact P0 resource-group prefix. Any delete in the state-backend resource group or outside the pinned P0 scope fails closed.
 - There is no direct `terraform destroy` path.
 - `ApplyReviewedPlan` requires the exact saved plan, its reviewed SHA-256, the literal adjudication token `APPLY_REVIEWED_P0_DESTROY_PLAN`, the named adjudication authority `Salvador Osorio Ayala`, and an external authorization evidence reference.
-- The apply path re-inspects the exact saved plan, revalidates scope, and rejects create/update actions before applying that exact file.
+- TOCTOU protection is mandatory on `ApplyReviewedPlan`: the caller-supplied plan is copied exactly once into a newly created owner-only artifact directory before any hash or scope validation; the original path is not reopened after staging.
+- SHA-256 verification, `terraform show -json` scope inspection, immediate pre-apply re-hash, and any eventual exact-plan apply operate only on that protected staged copy.
+- Any mismatch between the reviewed SHA, the staged SHA, or the immediate pre-apply SHA fails closed before `terraform apply`.
 - Final verification requires the pilot resource group to be absent; the state backend remains preserved.
 - GHCR credential revocation remains a separate required final-cutover receipt and is never automated by this script.
 
 ## Current authorization
 
-#47 authorizes implementation and static validation only. Do not run `ApplyReviewedPlan` until a specific teardown decision has been made under #46 and the exact generated plan has been reviewed and explicitly adjudicated by Salvador Osorio Ayala.
+#47 authorizes implementation and static validation only. The active #46 disposition is `CONTROLLED_EXTENSION`; no teardown or destructive apply is authorized by the current lifecycle envelope.
+
+Do not run `ApplyReviewedPlan` unless a future explicit teardown disposition is made, a specific generated destroy plan is reviewed, and that exact plan SHA is separately adjudicated by Salvador Osorio Ayala.
 
 `PlanOnly` is also gated by current backend/config-state authority. If the supplied #38 closure receipt does not prove all three required authority flags, the executor stops before generating a destroy plan.
 
@@ -42,7 +46,7 @@ The script prints only counts, paths, hashes, scope-verification status and gate
 
 ## Apply-reviewed-plan invocation pattern
 
-This is intentionally not authorized by #47 alone. When a specific saved destroy plan has later been reviewed and formally adjudicated, the apply mode also requires the exact named authority and evidence reference:
+This mode is intentionally not authorized by #47 or the current #46 `CONTROLLED_EXTENSION`. If a future teardown disposition is formally made and a specific saved destroy plan is reviewed and adjudicated, the apply mode requires the exact named authority and evidence reference:
 
 ```powershell
 .\Invoke-P0GovernedTeardown.ps1 `
@@ -56,3 +60,5 @@ This is intentionally not authorized by #47 alone. When a specific saved destroy
   -AdjudicationAuthority 'Salvador Osorio Ayala' `
   -AuthorizationEvidenceRef <formal-email-or-receipt-reference>
 ```
+
+The supplied `-PlanFile` is only a staging source. After it is copied into the new owner-only review directory, the source path is discarded and is never used for validation or apply.
