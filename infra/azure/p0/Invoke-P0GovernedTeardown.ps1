@@ -151,7 +151,7 @@ function Protect-OperatorFile {
     param([string]$Path)
 
     if ($RunningOnWindows) {
-        # Files are created only after the parent directory has an explicit,
+        # Files are created only after their parent has an explicit,
         # inheritance-protected current-user-only ACL.
         return
     }
@@ -198,26 +198,83 @@ function Test-PathContainedBy {
     return $candidateFull.StartsWith($prefix,$PathComparison)
 }
 
+function Assert-NoReparsePointInPath {
+    param([string]$Path)
+
+    $cursor = [System.IO.Path]::GetFullPath($Path)
+    while (-not [string]::IsNullOrWhiteSpace($cursor)) {
+        if (-not (Test-Path -LiteralPath $cursor -PathType Container)) {
+            Stop-Gate 'STOP_ARTIFACT_PATH_INVALID' ("Artifact path component is not an existing directory: {0}" -f $cursor)
+        }
+
+        $item = Get-Item -LiteralPath $cursor -Force -ErrorAction Stop
+        $isReparse = (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)
+        $linkTypeProperty = $item.PSObject.Properties['LinkType']
+        $hasLinkType = ($null -ne $linkTypeProperty -and
+            -not [string]::IsNullOrWhiteSpace([string]$linkTypeProperty.Value))
+
+        if ($isReparse -or $hasLinkType) {
+            Stop-Gate 'STOP_ARTIFACT_REPARSE_POINT' ("Symlink/junction/reparse path components are forbidden for artifact storage: {0}" -f $cursor)
+        }
+
+        $parent = [System.IO.Directory]::GetParent($cursor)
+        if ($null -eq $parent) { break }
+        if ($parent.FullName -eq $cursor) { break }
+        $cursor = $parent.FullName
+    }
+}
+
+function Get-OperatorHomeRoot {
+    $homePath = [string]$HOME
+    if ([string]::IsNullOrWhiteSpace($homePath) -and $RunningOnWindows) {
+        $homePath = [string]$env:USERPROFILE
+    }
+    if ([string]::IsNullOrWhiteSpace($homePath) -or
+        -not (Test-Path -LiteralPath $homePath -PathType Container)) {
+        Stop-Gate 'STOP_ARTIFACT_HOME_UNAVAILABLE' 'A valid current-user home directory is required for governed artifact storage.'
+    }
+
+    Assert-NoReparsePointInPath $homePath
+    return (Resolve-Path -LiteralPath $homePath).Path
+}
+
 function New-SecureArtifactDirectory {
     param([string]$RequestedRoot)
 
+    $operatorHome = Get-OperatorHomeRoot
     if ([string]::IsNullOrWhiteSpace($RequestedRoot)) {
-        if ([string]::IsNullOrWhiteSpace([string]$HOME)) {
-            Stop-Gate 'STOP_ARTIFACT_ROOT' 'HOME is unavailable; provide -ArtifactRoot explicitly.'
+        $soaRoot = Join-Path $operatorHome 'SOAIACORE'
+        if (-not (Test-Path -LiteralPath $soaRoot -PathType Container)) {
+            New-Item -ItemType Directory -Path $soaRoot -ErrorAction Stop | Out-Null
         }
-        $soaRoot = Join-Path $HOME 'SOAIACORE'
         $RequestedRoot = Join-Path $soaRoot 'p0-teardown-evidence'
     }
 
     if (-not (Test-Path -LiteralPath $RequestedRoot -PathType Container)) {
-        New-Item -ItemType Directory -Path $RequestedRoot -Force | Out-Null
+        try {
+            New-Item -ItemType Directory -Path $RequestedRoot -ErrorAction Stop | Out-Null
+        }
+        catch {
+            Stop-Gate 'STOP_ARTIFACT_ROOT_CREATE' ("Could not create artifact root exclusively: {0}" -f $_.Exception.Message)
+        }
     }
 
+    Assert-NoReparsePointInPath $RequestedRoot
     $resolvedRoot = (Resolve-Path -LiteralPath $RequestedRoot).Path
+
+    if (-not (Test-PathContainedBy $resolvedRoot $operatorHome)) {
+        Stop-Gate 'STOP_ARTIFACT_ROOT_UNTRUSTED' 'ArtifactRoot must be inside the current user home directory.'
+    }
+
     $gitWorkTreeRoot = Get-GitWorkTreeRoot $TerraformDirectory
     if (Test-PathContainedBy $resolvedRoot $gitWorkTreeRoot) {
         Stop-Gate 'STOP_OUTPUT_INSIDE_REPO' 'ArtifactRoot must remain outside the complete Git working tree.'
     }
+
+    # ArtifactRoot itself is the namespace parent of every staged plan. Restrict
+    # it before allocating children so another principal cannot rename/replace a
+    # validated child through a writable parent directory.
+    Protect-OperatorDirectory $resolvedRoot
 
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
     $nonce = [guid]::NewGuid().ToString('N')
@@ -441,6 +498,8 @@ try {
             plan_actions = @(Get-SanitizedActionRows $actionRows)
             plan_scope_verified = $true
             artifact_directory_owner_only = $true
+            artifact_parent_owner_only = $true
+            artifact_path_reparse_free = $true
             apply_executed = $false
             state_backend_preserved = $true
             ghcr_credential_revocation_required_at_final_teardown = $true
@@ -458,6 +517,8 @@ try {
         Write-Host ("SCOPED_AZURERM_DELETE_COUNT={0}" -f $azureDeleteCount)
         Write-Host 'PLAN_SCOPE_VERIFIED=true'
         Write-Host 'ARTIFACT_DIRECTORY_OWNER_ONLY=true'
+        Write-Host 'ARTIFACT_PARENT_OWNER_ONLY=true'
+        Write-Host 'ARTIFACT_PATH_REPARSE_FREE=true'
         Write-Host ("PLAN_SHA256={0}" -f $planHash)
         Write-Host ("PLAN_FILE={0}" -f $planPath)
         Write-Host ("PLAN_JSON_FILE={0}" -f $planJsonPath)
@@ -486,9 +547,10 @@ try {
         }
 
         # TOCTOU control: copy the caller-supplied plan exactly once into a newly
-        # allocated owner-only directory. From this point onward, hash verification,
-        # scope inspection, re-hash, and eventual apply use only the staged copy.
-        # The caller's original path is never reopened after staging.
+        # allocated owner-only directory whose parent is itself owner-only, under
+        # the current user's non-reparse home namespace. From this point onward,
+        # hash verification, scope inspection, re-hash and eventual apply use only
+        # the staged copy. The caller's original path is never reopened.
         $reviewDir = New-SecureArtifactDirectory $ArtifactRoot
         $stagedPlanFile = Join-Path $reviewDir 'reviewed-p0-destroy.staged.tfplan'
         Copy-Item -LiteralPath $sourcePlanFile -Destination $stagedPlanFile -ErrorAction Stop
@@ -508,8 +570,6 @@ try {
         $deleteCount = Assert-DestroyPlanShape $actionRows
         $azureDeleteCount = Assert-DestroyPlanScope $planJson $actionRows
 
-        # Re-hash immediately before apply to prove that the protected staged
-        # artifact did not change after validation.
         $preApplyHash = (Get-FileHash -LiteralPath $stagedPlanFile -Algorithm SHA256).Hash.ToLower()
         if ($preApplyHash -ne $actualHash -or $preApplyHash -ne $ExpectedPlanSha256.ToLower()) {
             Stop-Gate 'STOP_PRE_APPLY_PLAN_HASH_MISMATCH' 'Protected staged plan changed after validation; apply refused.'
@@ -524,6 +584,8 @@ try {
         Write-Host 'PLAN_SCOPE_VERIFIED=true'
         Write-Host 'REVIEWED_PLAN_STAGED_OWNER_ONLY=true'
         Write-Host 'REVIEWED_PLAN_STAGING_EXCLUSIVE=true'
+        Write-Host 'REVIEWED_PLAN_PARENT_OWNER_ONLY=true'
+        Write-Host 'REVIEWED_PLAN_PATH_REPARSE_FREE=true'
         Write-Host ("ADJUDICATION_AUTHORITY={0}" -f $AdjudicationAuthority)
         Write-Host ("AUTHORIZATION_EVIDENCE_REF={0}" -f $AuthorizationEvidenceRef)
         Write-Host 'STATE_BACKEND_SCOPE=OUTSIDE_PILOT_RG'
@@ -547,6 +609,8 @@ try {
             reviewed_plan_sha256 = $preApplyHash
             reviewed_plan_staged_owner_only = $true
             reviewed_plan_staging_exclusive = $true
+            reviewed_plan_parent_owner_only = $true
+            reviewed_plan_path_reparse_free = $true
             reviewed_plan_source_reopened_after_staging = $false
             delete_action_count = $deleteCount
             scoped_azurerm_delete_count = $azureDeleteCount
@@ -572,6 +636,8 @@ try {
         Write-Host 'STATE_BACKEND_PRESERVED=true'
         Write-Host 'GHCR_CREDENTIAL_REVOCATION_REQUIRED=true'
         Write-Host 'REVIEWED_PLAN_STAGING_EXCLUSIVE=true'
+        Write-Host 'REVIEWED_PLAN_PARENT_OWNER_ONLY=true'
+        Write-Host 'REVIEWED_PLAN_PATH_REPARSE_FREE=true'
         Write-Host 'REVIEWED_PLAN_SOURCE_REOPENED_AFTER_STAGING=false'
         Write-Host ("ADJUDICATION_AUTHORITY={0}" -f $AdjudicationAuthority)
         Write-Host ("SANITIZED_RECEIPT={0}" -f $finalPath)
