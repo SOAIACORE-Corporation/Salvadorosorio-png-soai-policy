@@ -421,7 +421,7 @@ try {
     }
 
     if ($Mode -eq 'ApplyReviewedPlan') {
-        $PlanFile = Resolve-ExistingFile $PlanFile 'PlanFile'
+        $sourcePlanFile = Resolve-ExistingFile $PlanFile 'PlanFile'
         if ([string]::IsNullOrWhiteSpace($ExpectedPlanSha256)) {
             Stop-Gate 'STOP_PLAN_HASH_REQUIRED' 'ExpectedPlanSha256 is required for ApplyReviewedPlan.'
         }
@@ -436,32 +436,51 @@ try {
             Stop-Gate 'STOP_ADJUDICATION_EVIDENCE' 'AuthorizationEvidenceRef is required for ApplyReviewedPlan.'
         }
 
-        $actualHash = (Get-FileHash -LiteralPath $PlanFile -Algorithm SHA256).Hash.ToLower()
+        # TOCTOU control: copy the caller-supplied plan exactly once into a newly
+        # created owner-only directory. From this point onward, hash verification,
+        # scope inspection, re-hash, and eventual apply use only the staged copy.
+        # The caller's original path is never reopened after staging.
+        $reviewDir = New-SecureArtifactDirectory $ArtifactRoot
+        $stagedPlanFile = Join-Path $reviewDir 'reviewed-p0-destroy.staged.tfplan'
+        Copy-Item -LiteralPath $sourcePlanFile -Destination $stagedPlanFile -Force
+        Protect-OperatorFile $stagedPlanFile
+        $sourcePlanFile = $null
+        $PlanFile = $null
+
+        $actualHash = (Get-FileHash -LiteralPath $stagedPlanFile -Algorithm SHA256).Hash.ToLower()
         if ($actualHash -ne $ExpectedPlanSha256.ToLower()) {
             Stop-Gate 'STOP_PLAN_HASH_MISMATCH' ("Plan SHA256 {0} != reviewed {1}." -f $actualHash,$ExpectedPlanSha256.ToLower())
         }
 
-        $planJsonText = (& terraform show -json $PlanFile | Out-String)
-        if ($LASTEXITCODE -ne 0) { Stop-Gate 'STOP_PLAN_JSON_FAILED' 'Cannot inspect reviewed plan.' }
+        $planJsonText = (& terraform show -json $stagedPlanFile | Out-String)
+        if ($LASTEXITCODE -ne 0) { Stop-Gate 'STOP_PLAN_JSON_FAILED' 'Cannot inspect staged reviewed plan.' }
         $planJson = $planJsonText | ConvertFrom-Json
         $actionRows = @(Get-PlanActions $planJson)
         $deleteCount = Assert-DestroyPlanShape $actionRows
         $azureDeleteCount = Assert-DestroyPlanScope $planJson $actionRows
 
+        # Re-hash immediately before apply to prove that the protected staged
+        # artifact did not change after validation.
+        $preApplyHash = (Get-FileHash -LiteralPath $stagedPlanFile -Algorithm SHA256).Hash.ToLower()
+        if ($preApplyHash -ne $actualHash -or $preApplyHash -ne $ExpectedPlanSha256.ToLower()) {
+            Stop-Gate 'STOP_PRE_APPLY_PLAN_HASH_MISMATCH' 'Protected staged plan changed after validation; apply refused.'
+        }
+
         Write-Host '=== DESTRUCTIVE GATE ARMED ==='
         Write-Host ("SUBSCRIPTION={0}" -f $ExpectedSubscriptionId)
         Write-Host ("RESOURCE_GROUP={0}" -f $ExpectedPilotResourceGroup)
-        Write-Host ("PLAN_SHA256={0}" -f $actualHash)
+        Write-Host ("PLAN_SHA256={0}" -f $preApplyHash)
         Write-Host ("DELETE_ACTION_COUNT={0}" -f $deleteCount)
         Write-Host ("SCOPED_AZURERM_DELETE_COUNT={0}" -f $azureDeleteCount)
         Write-Host 'PLAN_SCOPE_VERIFIED=true'
+        Write-Host 'REVIEWED_PLAN_STAGED_OWNER_ONLY=true'
         Write-Host ("ADJUDICATION_AUTHORITY={0}" -f $AdjudicationAuthority)
         Write-Host ("AUTHORIZATION_EVIDENCE_REF={0}" -f $AuthorizationEvidenceRef)
         Write-Host 'STATE_BACKEND_SCOPE=OUTSIDE_PILOT_RG'
         Write-Host 'APPLYING_EXACT_REVIEWED_PLAN=true'
 
-        & terraform apply -input=false $PlanFile
-        if ($LASTEXITCODE -ne 0) { Stop-Gate 'STOP_APPLY_FAILED' 'Exact reviewed destroy plan did not apply successfully.' }
+        & terraform apply -input=false $stagedPlanFile
+        if ($LASTEXITCODE -ne 0) { Stop-Gate 'STOP_APPLY_FAILED' 'Exact staged reviewed destroy plan did not apply successfully.' }
 
         $existsText = (& az group exists --name $ExpectedPilotResourceGroup --only-show-errors --output tsv).Trim()
         if ($LASTEXITCODE -ne 0) { Stop-Gate 'STOP_POSTCHECK_FAILED' 'Could not verify pilot RG after apply.' }
@@ -470,12 +489,14 @@ try {
         $finalDir = New-SecureArtifactDirectory $ArtifactRoot
         $finalPath = Join-Path $finalDir 'p0-teardown-final.sanitized.json'
         $finalReceipt = [ordered]@{
-            schema = 'SOAIACORE_P0_TEARDOWN_RECEIPT_V2'
+            schema = 'SOAIACORE_P0_TEARDOWN_RECEIPT_V3'
             mode = 'APPLY_REVIEWED_PLAN'
             completed_utc = (Get-Date).ToUniversalTime().ToString('o')
             subscription_id = $ExpectedSubscriptionId
             pilot_resource_group = $ExpectedPilotResourceGroup
-            reviewed_plan_sha256 = $actualHash
+            reviewed_plan_sha256 = $preApplyHash
+            reviewed_plan_staged_owner_only = $true
+            reviewed_plan_source_reopened_after_staging = $false
             delete_action_count = $deleteCount
             scoped_azurerm_delete_count = $azureDeleteCount
             plan_scope_verified = $true
@@ -499,6 +520,7 @@ try {
         Write-Host 'PILOT_RESOURCE_GROUP_ABSENT=true'
         Write-Host 'STATE_BACKEND_PRESERVED=true'
         Write-Host 'GHCR_CREDENTIAL_REVOCATION_REQUIRED=true'
+        Write-Host 'REVIEWED_PLAN_SOURCE_REOPENED_AFTER_STAGING=false'
         Write-Host ("ADJUDICATION_AUTHORITY={0}" -f $AdjudicationAuthority)
         Write-Host ("SANITIZED_RECEIPT={0}" -f $finalPath)
         Write-Host 'DONE=true'
