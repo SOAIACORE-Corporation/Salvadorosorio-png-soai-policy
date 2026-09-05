@@ -30,6 +30,11 @@ $RequiredAdjudicationToken = 'APPLY_REVIEWED_P0_DESTROY_PLAN'
 $RequiredAdjudicationAuthority = 'Salvador Osorio Ayala'
 $TerraformDirectory = $PSScriptRoot
 $RunningOnWindows = ($env:OS -eq 'Windows_NT')
+$PathComparison = if ($RunningOnWindows) {
+    [System.StringComparison]::OrdinalIgnoreCase
+} else {
+    [System.StringComparison]::Ordinal
+}
 
 function Stop-Gate {
     param([string]$Code,[string]$Message)
@@ -158,6 +163,41 @@ function Protect-OperatorFile {
     }
 }
 
+function Get-GitWorkTreeRoot {
+    param([string]$StartPath)
+
+    $cursor = (Resolve-Path -LiteralPath $StartPath).Path
+    while (-not [string]::IsNullOrWhiteSpace($cursor)) {
+        $marker = Join-Path $cursor '.git'
+        if ((Test-Path -LiteralPath $marker -PathType Container) -or
+            (Test-Path -LiteralPath $marker -PathType Leaf)) {
+            return $cursor
+        }
+
+        $parent = [System.IO.Directory]::GetParent($cursor)
+        if ($null -eq $parent) { break }
+        if ($parent.FullName -eq $cursor) { break }
+        $cursor = $parent.FullName
+    }
+
+    Stop-Gate 'STOP_GIT_ROOT_NOT_FOUND' 'Could not resolve the Git working-tree root from the Terraform directory.'
+}
+
+function Test-PathContainedBy {
+    param([string]$Candidate,[string]$Root)
+
+    $separators = [char[]]@(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.IO.Path]::AltDirectorySeparatorChar
+    )
+    $candidateFull = [System.IO.Path]::GetFullPath($Candidate).TrimEnd($separators)
+    $rootFull = [System.IO.Path]::GetFullPath($Root).TrimEnd($separators)
+
+    if ($candidateFull.Equals($rootFull,$PathComparison)) { return $true }
+    $prefix = $rootFull + [System.IO.Path]::DirectorySeparatorChar
+    return $candidateFull.StartsWith($prefix,$PathComparison)
+}
+
 function New-SecureArtifactDirectory {
     param([string]$RequestedRoot)
 
@@ -174,14 +214,23 @@ function New-SecureArtifactDirectory {
     }
 
     $resolvedRoot = (Resolve-Path -LiteralPath $RequestedRoot).Path
-    $resolvedRepo = (Resolve-Path -LiteralPath $TerraformDirectory).Path
-    if ($resolvedRoot.StartsWith($resolvedRepo,[System.StringComparison]::OrdinalIgnoreCase)) {
-        Stop-Gate 'STOP_OUTPUT_INSIDE_REPO' 'ArtifactRoot must remain outside the Git working tree.'
+    $gitWorkTreeRoot = Get-GitWorkTreeRoot $TerraformDirectory
+    if (Test-PathContainedBy $resolvedRoot $gitWorkTreeRoot) {
+        Stop-Gate 'STOP_OUTPUT_INSIDE_REPO' 'ArtifactRoot must remain outside the complete Git working tree.'
     }
 
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
-    $outputDir = Join-Path $resolvedRoot ("soaiacore-p0-teardown-{0}" -f $stamp)
-    New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+    $nonce = [guid]::NewGuid().ToString('N')
+    $outputDir = Join-Path $resolvedRoot ("soaiacore-p0-teardown-{0}-{1}" -f $stamp,$nonce)
+    if (Test-Path -LiteralPath $outputDir) {
+        Stop-Gate 'STOP_ARTIFACT_COLLISION' 'Generated artifact directory already exists; refusing to reuse it.'
+    }
+    try {
+        New-Item -ItemType Directory -Path $outputDir -ErrorAction Stop | Out-Null
+    }
+    catch {
+        Stop-Gate 'STOP_ARTIFACT_COLLISION' ("Could not allocate an exclusive artifact directory: {0}" -f $_.Exception.Message)
+    }
     Protect-OperatorDirectory $outputDir
     return (Resolve-Path -LiteralPath $outputDir).Path
 }
@@ -437,12 +486,12 @@ try {
         }
 
         # TOCTOU control: copy the caller-supplied plan exactly once into a newly
-        # created owner-only directory. From this point onward, hash verification,
+        # allocated owner-only directory. From this point onward, hash verification,
         # scope inspection, re-hash, and eventual apply use only the staged copy.
         # The caller's original path is never reopened after staging.
         $reviewDir = New-SecureArtifactDirectory $ArtifactRoot
         $stagedPlanFile = Join-Path $reviewDir 'reviewed-p0-destroy.staged.tfplan'
-        Copy-Item -LiteralPath $sourcePlanFile -Destination $stagedPlanFile -Force
+        Copy-Item -LiteralPath $sourcePlanFile -Destination $stagedPlanFile -ErrorAction Stop
         Protect-OperatorFile $stagedPlanFile
         $sourcePlanFile = $null
         $PlanFile = $null
@@ -474,6 +523,7 @@ try {
         Write-Host ("SCOPED_AZURERM_DELETE_COUNT={0}" -f $azureDeleteCount)
         Write-Host 'PLAN_SCOPE_VERIFIED=true'
         Write-Host 'REVIEWED_PLAN_STAGED_OWNER_ONLY=true'
+        Write-Host 'REVIEWED_PLAN_STAGING_EXCLUSIVE=true'
         Write-Host ("ADJUDICATION_AUTHORITY={0}" -f $AdjudicationAuthority)
         Write-Host ("AUTHORIZATION_EVIDENCE_REF={0}" -f $AuthorizationEvidenceRef)
         Write-Host 'STATE_BACKEND_SCOPE=OUTSIDE_PILOT_RG'
@@ -496,6 +546,7 @@ try {
             pilot_resource_group = $ExpectedPilotResourceGroup
             reviewed_plan_sha256 = $preApplyHash
             reviewed_plan_staged_owner_only = $true
+            reviewed_plan_staging_exclusive = $true
             reviewed_plan_source_reopened_after_staging = $false
             delete_action_count = $deleteCount
             scoped_azurerm_delete_count = $azureDeleteCount
@@ -520,6 +571,7 @@ try {
         Write-Host 'PILOT_RESOURCE_GROUP_ABSENT=true'
         Write-Host 'STATE_BACKEND_PRESERVED=true'
         Write-Host 'GHCR_CREDENTIAL_REVOCATION_REQUIRED=true'
+        Write-Host 'REVIEWED_PLAN_STAGING_EXCLUSIVE=true'
         Write-Host 'REVIEWED_PLAN_SOURCE_REOPENED_AFTER_STAGING=false'
         Write-Host ("ADJUDICATION_AUTHORITY={0}" -f $AdjudicationAuthority)
         Write-Host ("SANITIZED_RECEIPT={0}" -f $finalPath)
