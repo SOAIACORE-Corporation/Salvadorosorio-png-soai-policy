@@ -40,6 +40,15 @@ resource "azurerm_storage_account" "state" {
     default_action = "Deny"
     bypass         = ["AzureServices"]
     ip_rules       = var.allowed_ip_ranges
+
+    dynamic "private_link_access" {
+      for_each = var.private_link_access
+
+      content {
+        endpoint_resource_id = private_link_access.value.endpoint_resource_id
+        endpoint_tenant_id   = private_link_access.value.endpoint_tenant_id
+      }
+    }
   }
 
   blob_properties {
