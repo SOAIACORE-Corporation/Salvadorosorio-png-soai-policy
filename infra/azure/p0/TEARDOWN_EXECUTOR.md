@@ -9,11 +9,13 @@
 - The state backend resource group `rg-soaiacore-tfstate-34utxi` is verified separately and is never the teardown target.
 - Execution requires a sanitized #38 authority receipt proving `remote_backend_initialized=true/PASS`, `plan_no_destroy_verified=true/PASS`, and `config_state_reconciled=true/PASS`.
 - `PlanOnly` creates a saved Terraform destroy plan, raw plan JSON, SHA-256 and a sanitized action/inventory receipt outside the Git working tree.
+- The script resolves the complete Git worktree root, not only `infra/azure/p0`; any requested artifact root inside that worktree is rejected before raw Terraform artifacts can be written.
+- Every artifact operation receives a collision-resistant GUID-suffixed child directory. Child creation is exclusive and fails closed rather than silently reusing an existing directory.
 - Raw plan artifacts are written only inside a current-user-only artifact directory. Windows uses an explicit protected ACL; non-Windows hosts require `chmod 700` on the directory and `chmod 600` on plan/JSON/receipt files.
 - The generated destroy plan is re-inspected before PLAN_ONLY completion. The plan must expose the pinned `subscription_id`; every AzureRM delete must have a prior ARM ID inside the exact P0 resource-group prefix. Any delete in the state-backend resource group or outside the pinned P0 scope fails closed.
 - There is no direct `terraform destroy` path.
 - `ApplyReviewedPlan` requires the exact saved plan, its reviewed SHA-256, the literal adjudication token `APPLY_REVIEWED_P0_DESTROY_PLAN`, the named adjudication authority `Salvador Osorio Ayala`, and an external authorization evidence reference.
-- TOCTOU protection is mandatory on `ApplyReviewedPlan`: the caller-supplied plan is copied exactly once into a newly created owner-only artifact directory before any hash or scope validation; the original path is not reopened after staging.
+- TOCTOU protection is mandatory on `ApplyReviewedPlan`: the caller-supplied plan is copied exactly once into a newly created exclusive owner-only artifact directory before any hash or scope validation; the original path is not reopened after staging.
 - SHA-256 verification, `terraform show -json` scope inspection, immediate pre-apply re-hash, and any eventual exact-plan apply operate only on that protected staged copy.
 - Any mismatch between the reviewed SHA, the staged SHA, or the immediate pre-apply SHA fails closed before `terraform apply`.
 - Final verification requires the pilot resource group to be absent; the state backend remains preserved.
@@ -40,7 +42,7 @@ Use operator-restricted, untracked files. Do not paste tokens or secret values i
   -ArtifactRoot <operator-only-evidence-directory>
 ```
 
-If `-ArtifactRoot` is omitted, the script uses a dedicated `SOAIACORE/p0-teardown-evidence` directory under the current user's home directory and creates a timestamped current-user-only child directory.
+If `-ArtifactRoot` is omitted, the script uses a dedicated `SOAIACORE/p0-teardown-evidence` directory under the current user's home directory and creates a unique current-user-only child directory.
 
 The script prints only counts, paths, hashes, scope-verification status and gate status. It does not print Terraform state contents or secret values.
 
@@ -61,4 +63,4 @@ This mode is intentionally not authorized by #47 or the current #46 `CONTROLLED_
   -AuthorizationEvidenceRef <formal-email-or-receipt-reference>
 ```
 
-The supplied `-PlanFile` is only a staging source. After it is copied into the new owner-only review directory, the source path is discarded and is never used for validation or apply.
+The supplied `-PlanFile` is only a staging source. After it is copied into the new exclusive owner-only review directory, the source path is discarded and is never used for validation or apply.
