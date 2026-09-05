@@ -36,11 +36,6 @@ jobs:
       - name: Validate remote-state bootstrap
         run: terraform -chdir=infra/azure/state-bootstrap validate -no-color
 
-      # P0 declares a partial azurerm backend whose identifiers are intentionally
-      # untracked. Terraform 1.15 validates those required backend arguments, so
-      # P0 runtime validation belongs to the authenticated backend/plan gate, not
-      # this secretless bootstrap check.
-
       - name: Parse governed P0 teardown PowerShell
         shell: pwsh
         run: |
@@ -76,6 +71,8 @@ jobs:
             'STOP_STATE_BACKEND_DELETE',
             'STOP_GIT_ROOT_NOT_FOUND',
             'STOP_ARTIFACT_COLLISION',
+            'STOP_ARTIFACT_REPARSE_POINT',
+            'STOP_ARTIFACT_ROOT_UNTRUSTED',
             'Assert-DestroyPlanScope',
             'provider_name',
             'prior_resource_group_name',
@@ -83,6 +80,10 @@ jobs:
             'Protect-OperatorFile',
             'Get-GitWorkTreeRoot',
             'Test-PathContainedBy',
+            'Assert-NoReparsePointInPath',
+            'Get-OperatorHomeRoot',
+            'ArtifactRoot must be inside the current user home directory.',
+            'Protect-OperatorDirectory $resolvedRoot',
             '[guid]::NewGuid().ToString(''N'')',
             'New-Item -ItemType Directory -Path $outputDir -ErrorAction Stop',
             'New-SecureArtifactDirectory',
@@ -94,10 +95,14 @@ jobs:
             'terraform apply -input=false $stagedPlanFile',
             'REVIEWED_PLAN_STAGED_OWNER_ONLY=true',
             'REVIEWED_PLAN_STAGING_EXCLUSIVE=true',
+            'REVIEWED_PLAN_PARENT_OWNER_ONLY=true',
+            'REVIEWED_PLAN_PATH_REPARSE_FREE=true',
             'REVIEWED_PLAN_SOURCE_REOPENED_AFTER_STAGING=false',
             'chmod 700',
             'chmod 600',
             'ARTIFACT_DIRECTORY_OWNER_ONLY=true',
+            'ARTIFACT_PARENT_OWNER_ONLY=true',
+            'ARTIFACT_PATH_REPARSE_FREE=true',
             'PLAN_SCOPE_VERIFIED=true',
             'APPLY_REVIEWED_P0_DESTROY_PLAN',
             'Salvador Osorio Ayala',
