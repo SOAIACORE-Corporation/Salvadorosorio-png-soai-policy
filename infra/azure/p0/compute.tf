@@ -73,7 +73,7 @@ resource "azurerm_container_app" "core" {
   template {
     min_replicas    = 1
     max_replicas    = 1
-    revision_suffix = "ghcr-59c51a43"
+    # Azure generates a unique revision suffix for each template update.
 
     container {
       name   = "core"
@@ -235,7 +235,7 @@ resource "azurerm_container_app" "web" {
   template {
     min_replicas    = 1
     max_replicas    = 1
-    revision_suffix = "ghcr-59c51a43"
+    # Azure generates a unique revision suffix for each template update.
 
     container {
       name   = "web"
