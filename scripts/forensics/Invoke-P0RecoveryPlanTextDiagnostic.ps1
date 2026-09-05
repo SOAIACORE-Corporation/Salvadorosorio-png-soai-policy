@@ -6,7 +6,7 @@ param(
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
-$TargetConfigCommit = '6743dbeb97709476ad9f482eb86bc7ac9af15100'
+$TargetConfigCommit = '09658a68299020fc99f69d3b353af5d694d7d032'
 $BaseDiagnosticCommit = 'a62bdb0a28c78610eeecaa0b4005bdbd2b83c7e9'
 $BaseDiagnosticUrl = "https://raw.githubusercontent.com/SOAIACORE-Corporation/Salvadorosorio-png-soai-policy/$BaseDiagnosticCommit/scripts/forensics/Invoke-P0RecoveryDiagnosticPlan.ps1"
 $OriginalConfigCommit = '4b47fe25bb89c5733783920b1f8497c7dfadbb92'
@@ -37,7 +37,7 @@ function Patch-DiagnosticScriptText {
     $patched = $ScriptText.Replace($oldPin, $newPin)
 
     $oldPlan = '& terraform ("-chdir={0}" -f $terraformDirectory) plan -input=false -detailed-exitcode -no-color ("-out={0}" -f $planPath) *> $planLog'
-    $newPlan = '& terraform ("-chdir={0}" -f $terraformDirectory) plan -refresh=false -lock-timeout=15s -input=false -detailed-exitcode -no-color ("-out={0}" -f $planPath) *> $planLog'
+    $newPlan = '& terraform ("-chdir={0}" -f $terraformDirectory) plan -lock-timeout=15s -input=false -detailed-exitcode -no-color ("-out={0}" -f $planPath) *> $planLog'
     if ([regex]::Matches($patched, [regex]::Escape($oldPlan)).Count -ne 1) {
         Stop-Gate 'STOP_BASE_SCRIPT_PLAN_MISMATCH' 'Expected exactly one Terraform plan invocation in the base diagnostic script.'
     }
@@ -194,7 +194,7 @@ $ExpectedConfigCommit = '4b47fe25bb89c5733783920b1f8497c7dfadbb92'
 & terraform ("-chdir={0}" -f $terraformDirectory) plan -input=false -detailed-exitcode -no-color ("-out={0}" -f $planPath) *> $planLog
 '@
     $patched = Patch-DiagnosticScriptText $fixtureScript
-    if ($patched -notmatch [regex]::Escape($TargetConfigCommit) -or $patched -notmatch 'plan -refresh=false -lock-timeout=15s') {
+    if ($patched -notmatch [regex]::Escape($TargetConfigCommit) -or $patched -notmatch 'plan -lock-timeout=15s -input=false') {
         throw 'SELFTEST_PLAN_PATCH_FAILED'
     }
 
@@ -224,7 +224,6 @@ New-Item -ItemType Directory -Path $workRoot -Force | Out-Null
 $baseScriptPath = Join-Path $workRoot 'Invoke-P0RecoveryDiagnosticPlan.pinned.ps1'
 $baseFailurePath = Join-Path $workRoot 'base-diagnostic.failure.log'
 $receiptPath = Join-Path $HOME ("SOAIACORE_38_PLAN_TEXT_KEYS_{0}.sanitized.json" -f $stamp)
-$successful = $false
 $basePlanWorkRoot = $null
 
 try {
@@ -289,7 +288,7 @@ try {
         recorded_utc                                 = (Get-Date).ToUniversalTime().ToString('o')
         config_commit                                = $TargetConfigCommit
         base_diagnostic_commit                       = $BaseDiagnosticCommit
-        terraform_refresh                            = $false
+        terraform_refresh                            = $true
         terraform_lock_timeout_seconds               = 15
         state_address_count                          = [int]$baseReceipt.state_address_count
         plan_exit_code                               = [int]$baseReceipt.plan_exit_code
@@ -321,7 +320,7 @@ try {
     Write-Host ("PLAN_SHA256={0}" -f $baseReceipt.plan_sha256)
     Write-Host ("SANITIZED_RECEIPT={0}" -f $receiptPath)
     Write-Host ("RECEIPT_SHA256={0}" -f $receiptHash)
-    Write-Host 'TERRAFORM_REFRESH=false'
+    Write-Host 'TERRAFORM_REFRESH=true'
     Write-Host 'LOCK_TIMEOUT_SECONDS=15'
     Write-Host 'ATTRIBUTE_VALUES_OUTPUT=false'
     Write-Host 'SECRET_VALUES_OUTPUT=false'
@@ -329,11 +328,13 @@ try {
     Write-Host 'APPLY_EXECUTED=false'
     Write-Host 'MUTATION=false'
     Write-Host 'DONE=true'
-    $successful = $true
 }
 finally {
-    Remove-Item -LiteralPath $workRoot -Recurse -Force -ErrorAction SilentlyContinue
-    if ($successful -and -not [string]::IsNullOrWhiteSpace([string]$basePlanWorkRoot)) {
+    if (
+        -not [string]::IsNullOrWhiteSpace([string]$basePlanWorkRoot) -and
+        (Test-Path -LiteralPath $basePlanWorkRoot -PathType Container)
+    ) {
         Remove-Item -LiteralPath $basePlanWorkRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
+    Remove-Item -LiteralPath $workRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
