@@ -61,6 +61,7 @@ function Resolve-ExistingFile {
 
 function Invoke-JsonCommand {
     param([string]$Command,[string[]]$Arguments,[string]$Label)
+
     $tmpOut = [System.IO.Path]::GetTempFileName()
     $tmpErr = [System.IO.Path]::GetTempFileName()
     try {
@@ -68,10 +69,12 @@ function Invoke-JsonCommand {
         $exitCode = $LASTEXITCODE
         $stdout = [System.IO.File]::ReadAllText($tmpOut)
         $stderr = [System.IO.File]::ReadAllText($tmpErr)
+
         if ($exitCode -ne 0) {
             Stop-Gate 'STOP_COMMAND_FAILED' ("{0} failed ({1}): {2}" -f $Label,$exitCode,$stderr.Trim())
         }
         if ([string]::IsNullOrWhiteSpace($stdout)) { return $null }
+
         try { return ($stdout | ConvertFrom-Json) }
         catch { Stop-Gate 'STOP_JSON_PARSE' ("{0} did not return valid JSON." -f $Label) }
     }
@@ -98,6 +101,7 @@ function Test-VerifiedTrue {
 
 function Assert-BackendAuthorityReceipt {
     param([string]$Path)
+
     $receipt = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
     $remote = Get-PropertyValue $receipt 'remote_backend_initialized'
     $planSafe = Get-PropertyValue $receipt 'plan_no_destroy_verified'
@@ -112,6 +116,7 @@ function Assert-BackendAuthorityReceipt {
     if (-not (Test-VerifiedTrue $reconciled)) {
         Stop-Gate 'STOP_BACKEND_AUTHORITY' 'Receipt does not prove config_state_reconciled=true/PASS.'
     }
+
     return $receipt
 }
 
@@ -124,6 +129,7 @@ function Protect-OperatorDirectory {
             $acl = New-Object System.Security.AccessControl.DirectorySecurity
             $acl.SetOwner($sid)
             $acl.SetAccessRuleProtection($true,$false)
+
             $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
                 $sid,
                 'FullControl',
@@ -151,8 +157,6 @@ function Protect-OperatorFile {
     param([string]$Path)
 
     if ($RunningOnWindows) {
-        # Files are created only after their parent has an explicit,
-        # inheritance-protected current-user-only ACL.
         return
     }
 
@@ -190,10 +194,12 @@ function Test-PathContainedBy {
         [System.IO.Path]::DirectorySeparatorChar,
         [System.IO.Path]::AltDirectorySeparatorChar
     )
+
     $candidateFull = [System.IO.Path]::GetFullPath($Candidate).TrimEnd($separators)
     $rootFull = [System.IO.Path]::GetFullPath($Root).TrimEnd($separators)
 
     if ($candidateFull.Equals($rootFull,$PathComparison)) { return $true }
+
     $prefix = $rootFull + [System.IO.Path]::DirectorySeparatorChar
     return $candidateFull.StartsWith($prefix,$PathComparison)
 }
@@ -224,80 +230,247 @@ function Assert-NoReparsePointInPath {
     }
 }
 
+function Assert-TrustedOperatorDirectory {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+        Stop-Gate 'STOP_ARTIFACT_ANCESTOR_INVALID' ("Trusted artifact ancestor is missing: {0}" -f $Path)
+    }
+
+    if ($RunningOnWindows) {
+        try {
+            $currentSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+            $acl = Get-Acl -LiteralPath $Path
+
+            $ownerAccount = New-Object System.Security.Principal.NTAccount($acl.Owner)
+            $ownerSid = $ownerAccount.Translate([System.Security.Principal.SecurityIdentifier]).Value
+            if ($ownerSid -ne $currentSid) {
+                Stop-Gate 'STOP_ARTIFACT_ANCESTOR_UNTRUSTED' ("Artifact ancestor is not owned by the current operator: {0}" -f $Path)
+            }
+
+            $trustedSids = @(
+                $currentSid,
+                'S-1-5-18',
+                'S-1-5-32-544'
+            )
+
+            $writeMask = (
+                [System.Security.AccessControl.FileSystemRights]::WriteData -bor
+                [System.Security.AccessControl.FileSystemRights]::CreateDirectories -bor
+                [System.Security.AccessControl.FileSystemRights]::AppendData -bor
+                [System.Security.AccessControl.FileSystemRights]::WriteAttributes -bor
+                [System.Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor
+                [System.Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
+                [System.Security.AccessControl.FileSystemRights]::Delete -bor
+                [System.Security.AccessControl.FileSystemRights]::ChangePermissions -bor
+                [System.Security.AccessControl.FileSystemRights]::TakeOwnership
+            )
+
+            foreach ($rule in @($acl.Access)) {
+                if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) {
+                    continue
+                }
+
+                if (($rule.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly) -ne 0) {
+                    continue
+                }
+
+                $ruleSid = $null
+                try {
+                    $ruleSid = $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value
+                }
+                catch {
+                    Stop-Gate 'STOP_ARTIFACT_ANCESTOR_UNTRUSTED' ("Could not resolve ACL identity on artifact ancestor: {0}" -f $Path)
+                }
+
+                if ($trustedSids -contains $ruleSid) {
+                    continue
+                }
+
+                if (($rule.FileSystemRights -band $writeMask) -ne 0) {
+                    Stop-Gate 'STOP_ARTIFACT_ANCESTOR_UNTRUSTED' ("Artifact ancestor grants write/delete control to another principal: {0}" -f $Path)
+                }
+            }
+        }
+        catch {
+            if ($_.Exception.Message -like 'STOP_*') { throw }
+            Stop-Gate 'STOP_ARTIFACT_ANCESTOR_CHECK_FAILED' ("Could not verify Windows artifact ancestor controls: {0}" -f $_.Exception.Message)
+        }
+
+        return
+    }
+
+    Require-Command 'id'
+    Require-Command 'stat'
+
+    $currentUid = (& id -u | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($currentUid)) {
+        Stop-Gate 'STOP_ARTIFACT_ANCESTOR_CHECK_FAILED' 'Could not determine current Unix uid.'
+    }
+
+    $statText = (& stat -c '%u %A' -- $Path 2>$null | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($statText)) {
+        $statText = (& stat -f '%u %Sp' $Path 2>$null | Out-String).Trim()
+    }
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($statText)) {
+        Stop-Gate 'STOP_ARTIFACT_ANCESTOR_CHECK_FAILED' ("Could not inspect Unix ownership/mode for: {0}" -f $Path)
+    }
+
+    $parts = $statText -split '\s+',2
+    if ($parts.Count -ne 2) {
+        Stop-Gate 'STOP_ARTIFACT_ANCESTOR_CHECK_FAILED' ("Unexpected stat output for: {0}" -f $Path)
+    }
+
+    $ownerUid = $parts[0]
+    $permissions = $parts[1]
+
+    if ($ownerUid -ne $currentUid) {
+        Stop-Gate 'STOP_ARTIFACT_ANCESTOR_UNTRUSTED' ("Artifact ancestor is not owned by the current operator: {0}" -f $Path)
+    }
+
+    if ($permissions.Length -lt 9) {
+        Stop-Gate 'STOP_ARTIFACT_ANCESTOR_CHECK_FAILED' ("Unexpected permission string for: {0}" -f $Path)
+    }
+
+    $groupWritable = ($permissions[5] -eq 'w')
+    $otherWritable = ($permissions[8] -eq 'w')
+    if ($groupWritable -or $otherWritable) {
+        Stop-Gate 'STOP_ARTIFACT_ANCESTOR_UNTRUSTED' ("Artifact ancestor is writable by group/other principals: {0}" -f $Path)
+    }
+}
+
+function Assert-TrustedArtifactAncestorChain {
+    param([string]$Root,[string]$OperatorHome)
+
+    if (-not (Test-PathContainedBy $Root $OperatorHome)) {
+        Stop-Gate 'STOP_ARTIFACT_ROOT_UNTRUSTED' 'Artifact root is outside the current operator home.'
+    }
+
+    $cursor = [System.IO.Path]::GetFullPath($Root)
+    $homeFull = [System.IO.Path]::GetFullPath($OperatorHome)
+
+    while ($true) {
+        Assert-TrustedOperatorDirectory $cursor
+
+        if ($cursor.Equals($homeFull,$PathComparison)) {
+            break
+        }
+
+        $parent = [System.IO.Directory]::GetParent($cursor)
+        if ($null -eq $parent) {
+            Stop-Gate 'STOP_ARTIFACT_ANCESTOR_UNTRUSTED' 'Artifact ancestor chain escaped the operator home.'
+        }
+
+        $cursor = $parent.FullName
+        if (-not (Test-PathContainedBy $cursor $homeFull)) {
+            Stop-Gate 'STOP_ARTIFACT_ANCESTOR_UNTRUSTED' 'Artifact ancestor chain escaped the operator home.'
+        }
+    }
+}
+
 function Get-OperatorHomeRoot {
     $homePath = [string]$HOME
     if ([string]::IsNullOrWhiteSpace($homePath) -and $RunningOnWindows) {
         $homePath = [string]$env:USERPROFILE
     }
+
     if ([string]::IsNullOrWhiteSpace($homePath) -or
         -not (Test-Path -LiteralPath $homePath -PathType Container)) {
         Stop-Gate 'STOP_ARTIFACT_HOME_UNAVAILABLE' 'A valid current-user home directory is required for governed artifact storage.'
     }
 
     Assert-NoReparsePointInPath $homePath
-    return (Resolve-Path -LiteralPath $homePath).Path
+    $resolvedHome = (Resolve-Path -LiteralPath $homePath).Path
+    Assert-TrustedOperatorDirectory $resolvedHome
+    return $resolvedHome
+}
+
+function Get-CanonicalArtifactRoot {
+    param([string]$RequestedRoot)
+
+    $operatorHome = Get-OperatorHomeRoot
+    $gitWorkTreeRoot = Get-GitWorkTreeRoot $TerraformDirectory
+
+    $governedParent = Join-Path $operatorHome '.soaiacore-governed-artifacts'
+    $canonicalRoot = Join-Path $governedParent 'p0-teardown-evidence'
+
+    if (Test-PathContainedBy $canonicalRoot $gitWorkTreeRoot) {
+        Stop-Gate 'STOP_OUTPUT_INSIDE_REPO' 'Canonical artifact storage must remain outside the complete Git working tree.'
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($RequestedRoot)) {
+        $requestedFull = [System.IO.Path]::GetFullPath($RequestedRoot)
+        $canonicalFull = [System.IO.Path]::GetFullPath($canonicalRoot)
+        if (-not $requestedFull.Equals($canonicalFull,$PathComparison)) {
+            Stop-Gate 'STOP_ARTIFACT_ROOT_UNTRUSTED' ("Custom ArtifactRoot is disabled; use the canonical operator-controlled root: {0}" -f $canonicalFull)
+        }
+    }
+
+    if (-not (Test-Path -LiteralPath $governedParent -PathType Container)) {
+        try {
+            New-Item -ItemType Directory -Path $governedParent -ErrorAction Stop | Out-Null
+        }
+        catch {
+            Stop-Gate 'STOP_ARTIFACT_ROOT_CREATE' ("Could not create canonical governed artifact parent: {0}" -f $_.Exception.Message)
+        }
+    }
+
+    Assert-NoReparsePointInPath $governedParent
+    Protect-OperatorDirectory $governedParent
+    Assert-TrustedArtifactAncestorChain $governedParent $operatorHome
+
+    if (-not (Test-Path -LiteralPath $canonicalRoot -PathType Container)) {
+        try {
+            New-Item -ItemType Directory -Path $canonicalRoot -ErrorAction Stop | Out-Null
+        }
+        catch {
+            Stop-Gate 'STOP_ARTIFACT_ROOT_CREATE' ("Could not create canonical artifact root: {0}" -f $_.Exception.Message)
+        }
+    }
+
+    Assert-NoReparsePointInPath $canonicalRoot
+    Protect-OperatorDirectory $canonicalRoot
+    Assert-TrustedArtifactAncestorChain $canonicalRoot $operatorHome
+
+    return (Resolve-Path -LiteralPath $canonicalRoot).Path
 }
 
 function New-SecureArtifactDirectory {
     param([string]$RequestedRoot)
 
-    $operatorHome = Get-OperatorHomeRoot
-    if ([string]::IsNullOrWhiteSpace($RequestedRoot)) {
-        $soaRoot = Join-Path $operatorHome 'SOAIACORE'
-        if (-not (Test-Path -LiteralPath $soaRoot -PathType Container)) {
-            New-Item -ItemType Directory -Path $soaRoot -ErrorAction Stop | Out-Null
-        }
-        $RequestedRoot = Join-Path $soaRoot 'p0-teardown-evidence'
-    }
-
-    if (-not (Test-Path -LiteralPath $RequestedRoot -PathType Container)) {
-        try {
-            New-Item -ItemType Directory -Path $RequestedRoot -ErrorAction Stop | Out-Null
-        }
-        catch {
-            Stop-Gate 'STOP_ARTIFACT_ROOT_CREATE' ("Could not create artifact root exclusively: {0}" -f $_.Exception.Message)
-        }
-    }
-
-    Assert-NoReparsePointInPath $RequestedRoot
-    $resolvedRoot = (Resolve-Path -LiteralPath $RequestedRoot).Path
-
-    if (-not (Test-PathContainedBy $resolvedRoot $operatorHome)) {
-        Stop-Gate 'STOP_ARTIFACT_ROOT_UNTRUSTED' 'ArtifactRoot must be inside the current user home directory.'
-    }
-
-    $gitWorkTreeRoot = Get-GitWorkTreeRoot $TerraformDirectory
-    if (Test-PathContainedBy $resolvedRoot $gitWorkTreeRoot) {
-        Stop-Gate 'STOP_OUTPUT_INSIDE_REPO' 'ArtifactRoot must remain outside the complete Git working tree.'
-    }
-
-    # ArtifactRoot itself is the namespace parent of every staged plan. Restrict
-    # it before allocating children so another principal cannot rename/replace a
-    # validated child through a writable parent directory.
-    Protect-OperatorDirectory $resolvedRoot
+    $resolvedRoot = Get-CanonicalArtifactRoot $RequestedRoot
 
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
     $nonce = [guid]::NewGuid().ToString('N')
     $outputDir = Join-Path $resolvedRoot ("soaiacore-p0-teardown-{0}-{1}" -f $stamp,$nonce)
+
     if (Test-Path -LiteralPath $outputDir) {
         Stop-Gate 'STOP_ARTIFACT_COLLISION' 'Generated artifact directory already exists; refusing to reuse it.'
     }
+
     try {
         New-Item -ItemType Directory -Path $outputDir -ErrorAction Stop | Out-Null
     }
     catch {
         Stop-Gate 'STOP_ARTIFACT_COLLISION' ("Could not allocate an exclusive artifact directory: {0}" -f $_.Exception.Message)
     }
+
     Protect-OperatorDirectory $outputDir
+    $operatorHome = Get-OperatorHomeRoot
+    Assert-NoReparsePointInPath $outputDir
+    Assert-TrustedArtifactAncestorChain $outputDir $operatorHome
+
     return (Resolve-Path -LiteralPath $outputDir).Path
 }
 
 function Get-PlanActions {
     param($PlanJson)
+
     $rows = @()
     foreach ($rc in @($PlanJson.resource_changes)) {
         $actions = @($rc.change.actions)
         $before = Get-PropertyValue $rc.change 'before'
+
         $rows += [pscustomobject]@{
             address = [string]$rc.address
             mode = [string]$rc.mode
@@ -309,11 +482,13 @@ function Get-PlanActions {
             prior_resource_group_name = [string](Get-PropertyValue $before 'resource_group_name')
         }
     }
+
     return $rows
 }
 
 function Assert-DestroyPlanShape {
     param([object[]]$ActionRows)
+
     $destructiveCount = 0
     foreach ($row in @($ActionRows)) {
         foreach ($action in @($row.actions)) {
@@ -321,11 +496,16 @@ function Assert-DestroyPlanShape {
                 Stop-Gate 'STOP_UNEXPECTED_PLAN_ACTION' ("Plan contains {0} for {1}." -f $action,$row.address)
             }
         }
-        if (@($row.actions) -contains 'delete') { $destructiveCount++ }
+
+        if (@($row.actions) -contains 'delete') {
+            $destructiveCount++
+        }
     }
+
     if ($destructiveCount -lt 1) {
         Stop-Gate 'STOP_EMPTY_DESTROY_PLAN' 'Plan contains no delete actions.'
     }
+
     return $destructiveCount
 }
 
@@ -368,6 +548,7 @@ function Assert-DestroyPlanScope {
 
         $insidePilot = $priorId.Equals($pilotPrefix,[System.StringComparison]::OrdinalIgnoreCase) -or
             $priorId.StartsWith(($pilotPrefix + '/'),[System.StringComparison]::OrdinalIgnoreCase)
+
         if (-not $insidePilot) {
             Stop-Gate 'STOP_PLAN_SCOPE_MISMATCH' ("Azure delete {0} is outside pinned P0 scope." -f $row.address)
         }
@@ -388,6 +569,7 @@ function Assert-DestroyPlanScope {
 
 function Assert-AzureInventoryScope {
     param([object[]]$Inventory)
+
     $pilotPrefix = "/subscriptions/$ExpectedSubscriptionId/resourceGroups/$ExpectedPilotResourceGroup/"
     foreach ($resource in @($Inventory)) {
         $id = [string](Get-PropertyValue $resource 'id')
@@ -400,6 +582,7 @@ function Assert-AzureInventoryScope {
 
 function Get-SanitizedActionRows {
     param([object[]]$ActionRows)
+
     $safe = @()
     foreach ($row in @($ActionRows)) {
         $safe += [pscustomobject]@{
@@ -411,6 +594,7 @@ function Get-SanitizedActionRows {
             actions = @($row.actions)
         }
     }
+
     return $safe
 }
 
@@ -434,6 +618,7 @@ $pilotRg = Invoke-JsonCommand 'az' @('group','show','--name',$ExpectedPilotResou
 if (-not ([string]$pilotRg.name).Equals($ExpectedPilotResourceGroup,[System.StringComparison]::OrdinalIgnoreCase)) {
     Stop-Gate 'STOP_SCOPE_MISMATCH' 'Pilot resource group mismatch.'
 }
+
 $stateRg = Invoke-JsonCommand 'az' @('group','show','--name',$ExpectedStateResourceGroup,'--only-show-errors','--output','json') 'State RG precheck'
 if (-not ([string]$stateRg.name).Equals($ExpectedStateResourceGroup,[System.StringComparison]::OrdinalIgnoreCase)) {
     Stop-Gate 'STOP_SCOPE_MISMATCH' 'State RG precheck mismatch.'
@@ -442,13 +627,25 @@ if (-not ([string]$stateRg.name).Equals($ExpectedStateResourceGroup,[System.Stri
 Push-Location $TerraformDirectory
 try {
     & terraform init -reconfigure -input=false ("-backend-config={0}" -f $BackendConfigPath)
-    if ($LASTEXITCODE -ne 0) { Stop-Gate 'STOP_TERRAFORM_INIT' 'terraform init failed.' }
+    if ($LASTEXITCODE -ne 0) {
+        Stop-Gate 'STOP_TERRAFORM_INIT' 'terraform init failed.'
+    }
 
     $stateAddresses = @(& terraform state list)
-    if ($LASTEXITCODE -ne 0) { Stop-Gate 'STOP_STATE_READ' 'terraform state list failed.' }
-    if ($stateAddresses.Count -lt 1) { Stop-Gate 'STOP_EMPTY_STATE' 'Remote state contains no resource addresses.' }
+    if ($LASTEXITCODE -ne 0) {
+        Stop-Gate 'STOP_STATE_READ' 'terraform state list failed.'
+    }
+    if ($stateAddresses.Count -lt 1) {
+        Stop-Gate 'STOP_EMPTY_STATE' 'Remote state contains no resource addresses.'
+    }
 
-    $azureInventory = @(Invoke-JsonCommand 'az' @('resource','list','--resource-group',$ExpectedPilotResourceGroup,'--only-show-errors','--output','json') 'Pilot inventory')
+    $azureInventory = @(Invoke-JsonCommand 'az' @(
+        'resource','list',
+        '--resource-group',$ExpectedPilotResourceGroup,
+        '--only-show-errors',
+        '--output','json'
+    ) 'Pilot inventory')
+
     Assert-AzureInventoryScope $azureInventory
 
     if ($Mode -eq 'PlanOnly') {
@@ -459,12 +656,21 @@ try {
         $receiptPath = Join-Path $outputDir 'p0-destroy-plan-receipt.sanitized.json'
 
         & terraform plan -destroy -input=false -out=$planPath ("-var-file={0}" -f $VarFilePath)
-        if ($LASTEXITCODE -ne 0) { Stop-Gate 'STOP_DESTROY_PLAN_FAILED' 'terraform plan -destroy failed. No apply attempted.' }
+        if ($LASTEXITCODE -ne 0) {
+            Stop-Gate 'STOP_DESTROY_PLAN_FAILED' 'terraform plan -destroy failed. No apply attempted.'
+        }
         Protect-OperatorFile $planPath
 
         $planJsonText = (& terraform show -json $planPath | Out-String)
-        if ($LASTEXITCODE -ne 0) { Stop-Gate 'STOP_PLAN_JSON_FAILED' 'terraform show -json failed.' }
-        [System.IO.File]::WriteAllText($planJsonPath,$planJsonText,(New-Object System.Text.UTF8Encoding($false)))
+        if ($LASTEXITCODE -ne 0) {
+            Stop-Gate 'STOP_PLAN_JSON_FAILED' 'terraform show -json failed.'
+        }
+
+        [System.IO.File]::WriteAllText(
+            $planJsonPath,
+            $planJsonText,
+            (New-Object System.Text.UTF8Encoding($false))
+        )
         Protect-OperatorFile $planJsonPath
 
         $planJson = $planJsonText | ConvertFrom-Json
@@ -475,11 +681,16 @@ try {
 
         $inventoryRows = @()
         foreach ($r in @($azureInventory)) {
-            $inventoryRows += [pscustomobject]@{ name=$r.name; type=$r.type; id=$r.id; location=$r.location }
+            $inventoryRows += [pscustomobject]@{
+                name = $r.name
+                type = $r.type
+                id = $r.id
+                location = $r.location
+            }
         }
 
         $sanitized = [ordered]@{
-            schema = 'SOAIACORE_P0_DESTROY_PLAN_RECEIPT_V2'
+            schema = 'SOAIACORE_P0_DESTROY_PLAN_RECEIPT_V3'
             mode = 'PLAN_ONLY'
             created_utc = (Get-Date).ToUniversalTime().ToString('o')
             subscription_id = $ExpectedSubscriptionId
@@ -497,8 +708,10 @@ try {
             scoped_azurerm_delete_count = $azureDeleteCount
             plan_actions = @(Get-SanitizedActionRows $actionRows)
             plan_scope_verified = $true
+            canonical_artifact_root = $true
             artifact_directory_owner_only = $true
             artifact_parent_owner_only = $true
+            artifact_ancestor_chain_verified = $true
             artifact_path_reparse_free = $true
             apply_executed = $false
             state_backend_preserved = $true
@@ -506,7 +719,12 @@ try {
             adjudication_authority_required = $RequiredAdjudicationAuthority
             adjudication_decision_required = $true
         }
-        [System.IO.File]::WriteAllText($receiptPath,($sanitized | ConvertTo-Json -Depth 20),(New-Object System.Text.UTF8Encoding($false)))
+
+        [System.IO.File]::WriteAllText(
+            $receiptPath,
+            ($sanitized | ConvertTo-Json -Depth 20),
+            (New-Object System.Text.UTF8Encoding($false))
+        )
         Protect-OperatorFile $receiptPath
 
         Write-Host '=== P0 GOVERNED TEARDOWN PLAN ==='
@@ -516,8 +734,10 @@ try {
         Write-Host ("DELETE_ACTION_COUNT={0}" -f $deleteCount)
         Write-Host ("SCOPED_AZURERM_DELETE_COUNT={0}" -f $azureDeleteCount)
         Write-Host 'PLAN_SCOPE_VERIFIED=true'
+        Write-Host 'CANONICAL_ARTIFACT_ROOT=true'
         Write-Host 'ARTIFACT_DIRECTORY_OWNER_ONLY=true'
         Write-Host 'ARTIFACT_PARENT_OWNER_ONLY=true'
+        Write-Host 'ARTIFACT_ANCESTOR_CHAIN_VERIFIED=true'
         Write-Host 'ARTIFACT_PATH_REPARSE_FREE=true'
         Write-Host ("PLAN_SHA256={0}" -f $planHash)
         Write-Host ("PLAN_FILE={0}" -f $planPath)
@@ -532,6 +752,7 @@ try {
 
     if ($Mode -eq 'ApplyReviewedPlan') {
         $sourcePlanFile = Resolve-ExistingFile $PlanFile 'PlanFile'
+
         if ([string]::IsNullOrWhiteSpace($ExpectedPlanSha256)) {
             Stop-Gate 'STOP_PLAN_HASH_REQUIRED' 'ExpectedPlanSha256 is required for ApplyReviewedPlan.'
         }
@@ -546,15 +767,12 @@ try {
             Stop-Gate 'STOP_ADJUDICATION_EVIDENCE' 'AuthorizationEvidenceRef is required for ApplyReviewedPlan.'
         }
 
-        # TOCTOU control: copy the caller-supplied plan exactly once into a newly
-        # allocated owner-only directory whose parent is itself owner-only, under
-        # the current user's non-reparse home namespace. From this point onward,
-        # hash verification, scope inspection, re-hash and eventual apply use only
-        # the staged copy. The caller's original path is never reopened.
         $reviewDir = New-SecureArtifactDirectory $ArtifactRoot
         $stagedPlanFile = Join-Path $reviewDir 'reviewed-p0-destroy.staged.tfplan'
+
         Copy-Item -LiteralPath $sourcePlanFile -Destination $stagedPlanFile -ErrorAction Stop
         Protect-OperatorFile $stagedPlanFile
+
         $sourcePlanFile = $null
         $PlanFile = $null
 
@@ -564,14 +782,18 @@ try {
         }
 
         $planJsonText = (& terraform show -json $stagedPlanFile | Out-String)
-        if ($LASTEXITCODE -ne 0) { Stop-Gate 'STOP_PLAN_JSON_FAILED' 'Cannot inspect staged reviewed plan.' }
+        if ($LASTEXITCODE -ne 0) {
+            Stop-Gate 'STOP_PLAN_JSON_FAILED' 'Cannot inspect staged reviewed plan.'
+        }
+
         $planJson = $planJsonText | ConvertFrom-Json
         $actionRows = @(Get-PlanActions $planJson)
         $deleteCount = Assert-DestroyPlanShape $actionRows
         $azureDeleteCount = Assert-DestroyPlanScope $planJson $actionRows
 
         $preApplyHash = (Get-FileHash -LiteralPath $stagedPlanFile -Algorithm SHA256).Hash.ToLower()
-        if ($preApplyHash -ne $actualHash -or $preApplyHash -ne $ExpectedPlanSha256.ToLower()) {
+        if ($preApplyHash -ne $actualHash -or
+            $preApplyHash -ne $ExpectedPlanSha256.ToLower()) {
             Stop-Gate 'STOP_PRE_APPLY_PLAN_HASH_MISMATCH' 'Protected staged plan changed after validation; apply refused.'
         }
 
@@ -582,9 +804,11 @@ try {
         Write-Host ("DELETE_ACTION_COUNT={0}" -f $deleteCount)
         Write-Host ("SCOPED_AZURERM_DELETE_COUNT={0}" -f $azureDeleteCount)
         Write-Host 'PLAN_SCOPE_VERIFIED=true'
+        Write-Host 'CANONICAL_ARTIFACT_ROOT=true'
         Write-Host 'REVIEWED_PLAN_STAGED_OWNER_ONLY=true'
         Write-Host 'REVIEWED_PLAN_STAGING_EXCLUSIVE=true'
         Write-Host 'REVIEWED_PLAN_PARENT_OWNER_ONLY=true'
+        Write-Host 'REVIEWED_PLAN_ANCESTOR_CHAIN_VERIFIED=true'
         Write-Host 'REVIEWED_PLAN_PATH_REPARSE_FREE=true'
         Write-Host ("ADJUDICATION_AUTHORITY={0}" -f $AdjudicationAuthority)
         Write-Host ("AUTHORIZATION_EVIDENCE_REF={0}" -f $AuthorizationEvidenceRef)
@@ -592,24 +816,31 @@ try {
         Write-Host 'APPLYING_EXACT_REVIEWED_PLAN=true'
 
         & terraform apply -input=false $stagedPlanFile
-        if ($LASTEXITCODE -ne 0) { Stop-Gate 'STOP_APPLY_FAILED' 'Exact staged reviewed destroy plan did not apply successfully.' }
+        if ($LASTEXITCODE -ne 0) {
+            Stop-Gate 'STOP_APPLY_FAILED' 'Exact staged reviewed destroy plan did not apply successfully.'
+        }
 
         $existsText = (& az group exists --name $ExpectedPilotResourceGroup --only-show-errors --output tsv).Trim()
-        if ($LASTEXITCODE -ne 0) { Stop-Gate 'STOP_POSTCHECK_FAILED' 'Could not verify pilot RG after apply.' }
+        if ($LASTEXITCODE -ne 0) {
+            Stop-Gate 'STOP_POSTCHECK_FAILED' 'Could not verify pilot RG after apply.'
+        }
         $rgAbsent = ($existsText -eq 'false')
 
         $finalDir = New-SecureArtifactDirectory $ArtifactRoot
         $finalPath = Join-Path $finalDir 'p0-teardown-final.sanitized.json'
+
         $finalReceipt = [ordered]@{
-            schema = 'SOAIACORE_P0_TEARDOWN_RECEIPT_V3'
+            schema = 'SOAIACORE_P0_TEARDOWN_RECEIPT_V4'
             mode = 'APPLY_REVIEWED_PLAN'
             completed_utc = (Get-Date).ToUniversalTime().ToString('o')
             subscription_id = $ExpectedSubscriptionId
             pilot_resource_group = $ExpectedPilotResourceGroup
             reviewed_plan_sha256 = $preApplyHash
+            canonical_artifact_root = $true
             reviewed_plan_staged_owner_only = $true
             reviewed_plan_staging_exclusive = $true
             reviewed_plan_parent_owner_only = $true
+            reviewed_plan_ancestor_chain_verified = $true
             reviewed_plan_path_reparse_free = $true
             reviewed_plan_source_reopened_after_staging = $false
             delete_action_count = $deleteCount
@@ -623,7 +854,12 @@ try {
             ghcr_credential_revocation_required = $true
             ghcr_credential_revocation_verified = $false
         }
-        [System.IO.File]::WriteAllText($finalPath,($finalReceipt | ConvertTo-Json -Depth 10),(New-Object System.Text.UTF8Encoding($false)))
+
+        [System.IO.File]::WriteAllText(
+            $finalPath,
+            ($finalReceipt | ConvertTo-Json -Depth 10),
+            (New-Object System.Text.UTF8Encoding($false))
+        )
         Protect-OperatorFile $finalPath
 
         if (-not $rgAbsent) {
@@ -635,8 +871,10 @@ try {
         Write-Host 'PILOT_RESOURCE_GROUP_ABSENT=true'
         Write-Host 'STATE_BACKEND_PRESERVED=true'
         Write-Host 'GHCR_CREDENTIAL_REVOCATION_REQUIRED=true'
+        Write-Host 'CANONICAL_ARTIFACT_ROOT=true'
         Write-Host 'REVIEWED_PLAN_STAGING_EXCLUSIVE=true'
         Write-Host 'REVIEWED_PLAN_PARENT_OWNER_ONLY=true'
+        Write-Host 'REVIEWED_PLAN_ANCESTOR_CHAIN_VERIFIED=true'
         Write-Host 'REVIEWED_PLAN_PATH_REPARSE_FREE=true'
         Write-Host 'REVIEWED_PLAN_SOURCE_REOPENED_AFTER_STAGING=false'
         Write-Host ("ADJUDICATION_AUTHORITY={0}" -f $AdjudicationAuthority)
