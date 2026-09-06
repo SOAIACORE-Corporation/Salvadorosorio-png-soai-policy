@@ -44,8 +44,14 @@ function Patch-DiagnosticScriptText {
     $patched = $patched.Replace($oldPlan, $newPlan)
 
     # Make the pinned child remove its sensitive plan work root on any failure.
-    $oldWorkRootMarker = "$backendPath = Join-Path $workRoot 'backend.production.hcl'`n`ntry {"
-    $newWorkRootMarker = "$backendPath = Join-Path $workRoot 'backend.production.hcl'`n`$diagnosticSucceeded = `$false`n`ntry {"
+    $lineBreak = [Environment]::NewLine
+    $oldWorkRootMarker =
+        '$backendPath = Join-Path $workRoot ''backend.production.hcl''' +
+        $lineBreak + $lineBreak + 'try {'
+    $newWorkRootMarker =
+        '$backendPath = Join-Path $workRoot ''backend.production.hcl''' +
+        $lineBreak + '$diagnosticSucceeded = $false' +
+        $lineBreak + $lineBreak + 'try {'
     if ([regex]::Matches($patched, [regex]::Escape($oldWorkRootMarker)).Count -ne 1) {
         Stop-Gate 'STOP_BASE_SCRIPT_WORKROOT_MARKER_MISMATCH' 'Expected one child work-root marker in the base diagnostic script.'
     }
