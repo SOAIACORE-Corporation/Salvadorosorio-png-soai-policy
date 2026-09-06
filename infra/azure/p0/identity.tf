@@ -5,6 +5,27 @@ resource "azurerm_user_assigned_identity" "workload" {
   tags                = local.required_tags
 }
 
+resource "azurerm_user_assigned_identity" "core_secrets" {
+  name                = "id-${local.name_prefix}-core-secrets-${random_string.suffix.result}"
+  location            = azurerm_resource_group.pilot.location
+  resource_group_name = azurerm_resource_group.pilot.name
+  tags                = local.required_tags
+}
+
+resource "azurerm_user_assigned_identity" "web_secrets" {
+  name                = "id-${local.name_prefix}-web-secrets-${random_string.suffix.result}"
+  location            = azurerm_resource_group.pilot.location
+  resource_group_name = azurerm_resource_group.pilot.name
+  tags                = local.required_tags
+}
+
+resource "azurerm_user_assigned_identity" "worker_secrets" {
+  name                = "id-${local.name_prefix}-worker-secrets-${random_string.suffix.result}"
+  location            = azurerm_resource_group.pilot.location
+  resource_group_name = azurerm_resource_group.pilot.name
+  tags                = local.required_tags
+}
+
 resource "azurerm_user_assigned_identity" "deployer" {
   name                = "id-${local.name_prefix}-deployer-${random_string.suffix.result}"
   location            = azurerm_resource_group.pilot.location
