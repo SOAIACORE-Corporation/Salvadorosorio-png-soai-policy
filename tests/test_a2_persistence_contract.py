@@ -11,6 +11,8 @@ from soaiacore_runtime.a2_persistence import _require_scope, canonical_memory_as
 ROOT = Path(__file__).resolve().parents[1]
 A2_MIGRATION = ROOT / "db" / "a2_migrations" / "1001_memory_decision_bitemporal.sql"
 A2_RUNNER = ROOT / "packages" / "python-runtime" / "src" / "soaiacore_runtime" / "a2_persistence.py"
+WORKER_MAIN = ROOT / "apps" / "worker" / "src" / "soaiacore_worker" / "__main__.py"
+WORKER_DOCKERFILE = ROOT / "apps" / "worker" / "Dockerfile"
 
 
 def _sql() -> str:
@@ -102,3 +104,16 @@ def test_overlay_runner_is_crash_safe_between_sql_commit_and_registry_receipt() 
     assert "if _overlay_objects_present(connection):" in runner
     assert ":BASELINED" in runner
     assert "baselined=True" in runner
+
+
+def test_worker_image_packages_a2_overlay_and_exposes_explicit_commands() -> None:
+    dockerfile = WORKER_DOCKERFILE.read_text(encoding="utf-8")
+    worker = WORKER_MAIN.read_text(encoding="utf-8")
+
+    assert "COPY db/a2_migrations /app/db/a2_migrations" in dockerfile
+    assert '"a2-migrate"' in worker
+    assert '"a2-verify"' in worker
+    assert "apply_a2_persistence(" in worker
+    assert "verify_a2_persistence(" in worker
+    assert '"A2_MIGRATE_PASS"' in worker
+    assert '"A2_VERIFY_PASS"' in worker
