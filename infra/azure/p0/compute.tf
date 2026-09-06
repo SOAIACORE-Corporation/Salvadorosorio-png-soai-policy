@@ -31,7 +31,7 @@ resource "azurerm_container_app" "core" {
   tags                         = local.required_tags
 
   identity {
-    type         = "UserAssigned"
+    type = "UserAssigned"
     identity_ids = [
       azurerm_user_assigned_identity.workload.id,
       azurerm_user_assigned_identity.core_secrets.id
@@ -200,7 +200,7 @@ resource "azurerm_container_app" "web" {
   tags                         = local.required_tags
 
   identity {
-    type         = "UserAssigned"
+    type = "UserAssigned"
     identity_ids = [
       azurerm_user_assigned_identity.workload.id,
       azurerm_user_assigned_identity.web_secrets.id
@@ -336,7 +336,7 @@ resource "azurerm_container_app_job" "worker" {
   tags                         = local.required_tags
 
   identity {
-    type         = "UserAssigned"
+    type = "UserAssigned"
     identity_ids = [
       azurerm_user_assigned_identity.workload.id,
       azurerm_user_assigned_identity.worker_secrets.id
