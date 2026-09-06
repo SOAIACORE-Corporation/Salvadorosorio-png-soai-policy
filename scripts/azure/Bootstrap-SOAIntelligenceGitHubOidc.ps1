@@ -101,11 +101,24 @@ function Ensure-FederatedCredential {
 
     if ($LASTEXITCODE -eq 0) {
         $existingObject = $existing | ConvertFrom-Json
-        if ([string]$existingObject.subject -ne $Subject) {
+        $existingIssuer = [string]$existingObject.issuer
+        $existingSubject = [string]$existingObject.subject
+        $existingAudiences = @($existingObject.audiences | ForEach-Object { [string]$_ })
+
+        if ($existingIssuer -ne $issuer) {
+            throw "Federated credential '$Name' exists with an unexpected issuer. Refusing implicit replacement."
+        }
+        if ($existingSubject -ne $Subject) {
             throw "Federated credential '$Name' exists with an unexpected subject. Refusing implicit replacement."
         }
+        if ($existingAudiences.Count -ne 1 -or $existingAudiences[0] -ne $audience) {
+            throw "Federated credential '$Name' exists with an unexpected audience set. Refusing implicit replacement."
+        }
+
         Write-Boundary ("FEDERATED_CREDENTIAL_{0}_CREATED" -f $Name.ToUpperInvariant()) 'false'
+        Write-Boundary ("FEDERATED_CREDENTIAL_{0}_ISSUER_MATCH" -f $Name.ToUpperInvariant()) 'true'
         Write-Boundary ("FEDERATED_CREDENTIAL_{0}_SUBJECT_MATCH" -f $Name.ToUpperInvariant()) 'true'
+        Write-Boundary ("FEDERATED_CREDENTIAL_{0}_AUDIENCE_MATCH" -f $Name.ToUpperInvariant()) 'true'
         return
     }
 
@@ -119,7 +132,9 @@ function Ensure-FederatedCredential {
         '--audiences',$audience
     ) | Out-Null
     Write-Boundary ("FEDERATED_CREDENTIAL_{0}_CREATED" -f $Name.ToUpperInvariant()) 'true'
+    Write-Boundary ("FEDERATED_CREDENTIAL_{0}_ISSUER_MATCH" -f $Name.ToUpperInvariant()) 'true'
     Write-Boundary ("FEDERATED_CREDENTIAL_{0}_SUBJECT_MATCH" -f $Name.ToUpperInvariant()) 'true'
+    Write-Boundary ("FEDERATED_CREDENTIAL_{0}_AUDIENCE_MATCH" -f $Name.ToUpperInvariant()) 'true'
 }
 
 function Ensure-RoleAssignment {
