@@ -2,6 +2,7 @@ resource "azurerm_postgresql_flexible_server" "soa_intelligence" {
   name                          = "psql-soaintelligence-${var.environment}-${random_string.suffix.result}"
   resource_group_name           = azurerm_resource_group.soa_intelligence.name
   location                      = azurerm_resource_group.soa_intelligence.location
+  zone                          = "2"
   version                       = var.postgresql_version
   delegated_subnet_id           = azurerm_subnet.postgresql.id
   private_dns_zone_id           = azurerm_private_dns_zone.postgresql.id

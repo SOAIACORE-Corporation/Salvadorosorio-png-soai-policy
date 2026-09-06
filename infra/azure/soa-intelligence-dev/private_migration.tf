@@ -45,7 +45,7 @@ resource "azurerm_container_app_environment" "a2_migration" {
 }
 
 resource "azurerm_container_app_job" "a2_migration" {
-  name                         = "caj-${local.name_prefix}-migration"
+  name                         = "caj-soaintelligence-dev-migrate"
   location                     = azurerm_resource_group.soa_intelligence.location
   resource_group_name          = azurerm_resource_group.soa_intelligence.name
   container_app_environment_id = azurerm_container_app_environment.a2_migration.id
