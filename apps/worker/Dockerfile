@@ -39,6 +39,7 @@ COPY --from=builder /src/.venv /app/.venv
 COPY schemas /app/schemas
 COPY contracts /app/contracts
 COPY db/migrations /app/db/migrations
+COPY db/a2_migrations /app/db/a2_migrations
 COPY packages/mock-fixtures /app/packages/mock-fixtures
 USER 65532:65532
 CMD ["python", "-m", "soaiacore_worker", "run-one"]

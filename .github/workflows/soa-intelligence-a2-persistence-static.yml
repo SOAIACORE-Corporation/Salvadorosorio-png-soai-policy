@@ -1,0 +1,98 @@
+name: SOA Intelligence A2 Persistence Static
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/soa-intelligence-a2-persistence-static.yml
+      - db/a2_migrations/**
+      - packages/python-runtime/src/soaiacore_runtime/a2_persistence.py
+      - apps/worker/src/soaiacore_worker/__main__.py
+      - apps/worker/Dockerfile
+      - tests/test_a2_persistence_contract.py
+      - docs/persistence/SOA_INTELLIGENCE_A2_PERSISTENCE_OVERLAY_v0.1.md
+      - pyproject.toml
+      - uv.lock
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/soa-intelligence-a2-persistence-static.yml
+      - db/a2_migrations/**
+      - packages/python-runtime/src/soaiacore_runtime/a2_persistence.py
+      - apps/worker/src/soaiacore_worker/__main__.py
+      - apps/worker/Dockerfile
+      - tests/test_a2_persistence_contract.py
+      - docs/persistence/SOA_INTELLIGENCE_A2_PERSISTENCE_OVERLAY_v0.1.md
+      - pyproject.toml
+      - uv.lock
+
+permissions:
+  contents: read
+
+concurrency:
+  group: a2-persistence-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  static:
+    name: A2 persistence contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: pgvector/pgvector@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f
+        env:
+          POSTGRES_DB: soaiacore
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d soaiacore"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: 3.12.14
+
+      - name: Compile A2 persistence and worker entrypoint
+        run: |
+          python -m py_compile \
+            packages/python-runtime/src/soaiacore_runtime/a2_persistence.py \
+            apps/worker/src/soaiacore_worker/__main__.py
+
+      - name: Run A2 persistence contract tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}/packages/python-runtime/src
+          SOAIACORE_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/soaiacore
+          SOAIACORE_PROVIDER_MODE: MOCK
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir uv==0.12.5
+          uv sync --frozen
+          uv run --frozen pytest -q tests/test_a2_persistence_contract.py
+
+      - name: Enforce no live-cloud boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -R -E "az (group|network|containerapp|postgres).* (create|update|delete|start)" \
+            db/a2_migrations \
+            packages/python-runtime/src/soaiacore_runtime/a2_persistence.py \
+            tests/test_a2_persistence_contract.py
+          test -z "$(grep -R -E 'public_network_access_enabled[[:space:]]*=[[:space:]]*true' db/a2_migrations packages/python-runtime/src/soaiacore_runtime/a2_persistence.py || true)"
+
+      - name: Record gate
+        run: |
+          echo "A2_PERSISTENCE_R1_STATIC=PASS"
+          echo "AZURE_MUTATION=false"
+          echo "LIVE_DATABASE_MUTATION=false"
