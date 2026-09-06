@@ -109,6 +109,7 @@ function Invoke-ProcessTextWithTimeout {
         $stderrTask = $process.StandardError.ReadToEndAsync()
         if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
             try { $process.Kill($true) } catch {}
+            try { [void]$process.WaitForExit(30000) } catch {}
             Stop-Gate 'STOP_PROCESS_TIMEOUT' ("{0} exceeded {1} seconds and its process tree was terminated." -f $Label, $TimeoutSeconds)
         }
         return [pscustomobject]@{
@@ -120,6 +121,7 @@ function Invoke-ProcessTextWithTimeout {
     finally {
         if ($null -ne $process -and -not $process.HasExited) {
             try { $process.Kill($true) } catch {}
+            try { [void]$process.WaitForExit(30000) } catch {}
         }
         if ($null -ne $process) { $process.Dispose() }
     }
@@ -340,8 +342,40 @@ try {
     $planEvidenceDir = Split-Path -Parent $planLog
     $basePlanWorkRoot = Split-Path -Parent $planEvidenceDir
 
-    if ([int]$baseReceipt.action_counts.delete -gt 0 -or [int]$baseReceipt.action_counts.replace -gt 0) {
-        Stop-Gate 'STOP_DESTRUCTIVE_PLAN' 'Base plan contains delete or replace actions; parsing halted.'
+    $allowedRevocationAddress = 'azurerm_role_assignment.workload_key_vault_secrets_user'
+    $destructiveRows = @(
+        @($baseReceipt.changed_resources) |
+            Where-Object { @($_.actions) -contains 'delete' }
+    )
+    $unexpectedDestructiveRows = @(
+        $destructiveRows |
+            Where-Object { [string]$_.address -ne $allowedRevocationAddress }
+    )
+    $invalidRevocationRows = @(
+        $destructiveRows |
+            Where-Object {
+                [string]$_.address -eq $allowedRevocationAddress -and
+                (@($_.actions).Count -ne 1 -or @($_.actions) -notcontains 'delete')
+            }
+    )
+    if (
+        [int]$baseReceipt.action_counts.replace -gt 0 -or
+        $unexpectedDestructiveRows.Count -gt 0 -or
+        $invalidRevocationRows.Count -gt 0
+    ) {
+        Stop-Gate 'STOP_DESTRUCTIVE_PLAN' (
+            'Base plan contains an unapproved delete/replace action; parsing halted.'
+        )
+    }
+    $allowedDestructiveAddresses = @(
+        $destructiveRows |
+            Where-Object { [string]$_.address -eq $allowedRevocationAddress } |
+            ForEach-Object { [string]$_.address } |
+            Sort-Object -Unique
+    )
+    $planGate = [string]$baseReceipt.plan_gate
+    if ($allowedDestructiveAddresses.Count -gt 0) {
+        $planGate = 'ALLOWED_SECRET_RBAC_REVOCATION_REVIEW_REQUIRED'
     }
 
     $allowed = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
@@ -391,10 +425,12 @@ try {
         state_address_count                          = [int]$baseReceipt.state_address_count
         plan_exit_code                               = [int]$baseReceipt.plan_exit_code
         plan_sha256                                  = [string]$baseReceipt.plan_sha256
-        plan_gate                                    = [string]$baseReceipt.plan_gate
+        plan_gate                                    = $planGate
         action_counts                                = $baseReceipt.action_counts
+        allowed_destructive_addresses                = $allowedDestructiveAddresses
+        destructive_action_exception                 = if ($allowedDestructiveAddresses.Count -gt 0) { 'KEY_VAULT_BROAD_ROLE_REVOCATION' } else { 'NONE' }
         changed_resources                            = $rows
-        plan_text_address_set_verified                = $true
+        plan_text_address_set_verified               = $true
         attribute_values_output                      = $false
         secret_values_output                         = $false
         raw_plan_json_created                        = $false
@@ -416,7 +452,8 @@ try {
     Write-Host ("DELETE_COUNT={0}" -f $baseReceipt.action_counts.delete)
     Write-Host ("REPLACE_COUNT={0}" -f $baseReceipt.action_counts.replace)
     Write-Host 'PLAN_TEXT_ADDRESS_SET=PASS'
-    Write-Host ("PLAN_GATE={0}" -f $baseReceipt.plan_gate)
+    Write-Host ("ALLOWED_DESTRUCTIVE_ADDRESSES={0}" -f ($allowedDestructiveAddresses -join ','))
+    Write-Host ("PLAN_GATE={0}" -f $planGate)
     Write-Host ("PLAN_SHA256={0}" -f $baseReceipt.plan_sha256)
     Write-Host ("SANITIZED_RECEIPT={0}" -f $receiptPath)
     Write-Host ("RECEIPT_SHA256={0}" -f $receiptHash)
