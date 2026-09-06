@@ -57,6 +57,28 @@ variable "backup_retention_days" {
   }
 }
 
+variable "migration_worker_image" {
+  description = "Immutable SOA Intelligence Worker OCI reference used only by the private A2 migration job. Must be digest-pinned."
+  type        = string
+
+  validation {
+    condition     = can(regex("@sha256:[0-9a-f]{64}$", var.migration_worker_image))
+    error_message = "migration_worker_image must be an immutable OCI reference pinned by sha256 digest."
+  }
+}
+
+variable "ghcr_username" {
+  description = "GHCR username used for authenticated private image pull by the A2 migration job."
+  type        = string
+  sensitive   = true
+}
+
+variable "ghcr_token" {
+  description = "Read-only GHCR token used only as a Container Apps Job registry secret. Never output."
+  type        = string
+  sensitive   = true
+}
+
 variable "tags" {
   description = "Additional tags merged with mandatory SOA Intelligence tags."
   type        = map(string)
