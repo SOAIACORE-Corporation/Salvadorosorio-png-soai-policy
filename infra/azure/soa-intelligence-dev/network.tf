@@ -31,10 +31,9 @@ resource "azurerm_private_dns_zone" "postgresql" {
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "postgresql" {
-  name                  = "link-${local.name_prefix}-postgresql"
-  resource_group_name   = azurerm_resource_group.soa_intelligence.name
-  private_dns_zone_name = azurerm_private_dns_zone.postgresql.name
-  virtual_network_id    = azurerm_virtual_network.soa_intelligence.id
-  registration_enabled  = false
-  tags                  = local.required_tags
+  name                 = "link-${local.name_prefix}-postgresql"
+  private_dns_zone_id  = azurerm_private_dns_zone.postgresql.id
+  virtual_network_id   = azurerm_virtual_network.soa_intelligence.id
+  registration_enabled = false
+  tags                 = local.required_tags
 }
