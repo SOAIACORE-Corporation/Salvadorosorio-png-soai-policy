@@ -78,7 +78,7 @@ jobs:
           file=infra/azure/soa-intelligence-dev/private_migration.tf
           grep -F 'address_prefixes     = ["10.60.20.0/27"]' "$file"
           grep -F 'name = "Microsoft.App/environments"' "$file"
-          grep -F 'command = ["python", "-m", "soaiacore_worker", "a2-bootstrap"]' "$file"
+          grep -F 'command = ["/app/.venv/bin/python", "-m", "soaiacore_worker", "a2-bootstrap"]' "$file"
           grep -F 'replica_retry_limit          = 0' "$file"
           grep -F 'public_network_access_enabled = false' infra/azure/soa-intelligence-dev/postgresql.tf
           ! grep -R -E 'azurerm_postgresql_flexible_server_firewall_rule|azurerm_role_assignment' "$file"
