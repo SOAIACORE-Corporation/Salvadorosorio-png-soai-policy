@@ -72,6 +72,27 @@ The PR workflow performs only:
 
 It performs **no Azure login, no plan, no apply, no destroy**.
 
+## OIDC bootstrap security rule
+
+The one-time GitHub↔Azure OIDC bootstrap is an R3 action. It MUST run only from an authenticated private Azure session such as Azure Cloud Shell or a trusted administrator terminal. Do **not** use `az login --use-device-code` inside GitHub Actions for this public repository, because the temporary device code would be emitted to public workflow logs.
+
+Approved bootstrap scope:
+
+- create isolated identity `id-soa-intelligence-gha-dev`;
+- create GitHub federated credentials for pull-request and `main` subjects;
+- grant only `Reader` on the governed Terraform backend resource group;
+- grant only `Storage Blob Data Reader` on the governed Terraform state storage account;
+- create no client secret;
+- grant no subscription-wide `Contributor` role.
+
+From Azure Cloud Shell PowerShell or another private authenticated Azure CLI session:
+
+```powershell
+./scripts/azure/Bootstrap-SOAIntelligenceGitHubOidc.ps1 -Apply -AuthorizeIam
+```
+
+After bootstrap, use the returned non-secret client/tenant identifiers to configure the OIDC preflight and re-run the read-only backend validation before any live Terraform plan.
+
 ## Apply preconditions
 
 Before the first live apply:
