@@ -29,6 +29,8 @@ function Require-Command {
 function Patch-DiagnosticScriptText {
     param([string]$ScriptText)
 
+    $ScriptText = $ScriptText -replace "`r`n", "`n"
+
     $oldPin = '$ExpectedConfigCommit = ''' + $OriginalConfigCommit + ''''
     $newPin = '$ExpectedConfigCommit = ''' + $TargetConfigCommit + ''''
     if ([regex]::Matches($ScriptText, [regex]::Escape($oldPin)).Count -ne 1) {
@@ -43,8 +45,15 @@ function Patch-DiagnosticScriptText {
     }
     $patched = $patched.Replace($oldPlan, $newPlan)
 
+    $oldChildRootMarker = '$workRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("soaiacore-p0-recovery-plan-{0}" -f $stamp)'
+    $newChildRootMarker = '$workRoot = if (-not [string]::IsNullOrWhiteSpace($env:SOAIACORE_P0_CHILD_WORK_ROOT)) { $env:SOAIACORE_P0_CHILD_WORK_ROOT } else { Join-Path ([System.IO.Path]::GetTempPath()) ("soaiacore-p0-recovery-plan-{0}" -f $stamp) }'
+    if ([regex]::Matches($patched, [regex]::Escape($oldChildRootMarker)).Count -ne 1) {
+        Stop-Gate 'STOP_BASE_SCRIPT_CHILD_ROOT_MARKER_MISMATCH' 'Expected one child work-root assignment in the base diagnostic script.'
+    }
+    $patched = $patched.Replace($oldChildRootMarker, $newChildRootMarker)
+
     # Make the pinned child remove its sensitive plan work root on any failure.
-    $lineBreak = [Environment]::NewLine
+    $lineBreak = [char]10
     $oldWorkRootMarker =
         '$backendPath = Join-Path $workRoot ''backend.production.hcl''' +
         $lineBreak + $lineBreak + 'try {'
@@ -227,6 +236,7 @@ if ($SelfTest) {
 
     $fixtureScript = @'
 $ExpectedConfigCommit = '4b47fe25bb89c5733783920b1f8497c7dfadbb92'
+$workRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("soaiacore-p0-recovery-plan-{0}" -f $stamp)
 $backendPath = Join-Path $workRoot 'backend.production.hcl'
 
 try {
@@ -245,7 +255,8 @@ finally {
     if ($patched -notmatch [regex]::Escape($TargetConfigCommit) -or
         $patched -notmatch 'plan -lock-timeout=15s -input=false' -or
         $patched -notmatch 'diagnosticSucceeded' -or
-        $patched -notmatch 'Remove-Item -LiteralPath \$workRoot -Recurse -Force') {
+        $patched -notmatch 'Remove-Item -LiteralPath \$workRoot -Recurse -Force' -or
+        $patched -notmatch 'SOAIACORE_P0_CHILD_WORK_ROOT') {
         throw 'SELFTEST_PLAN_PATCH_FAILED'
     }
 
@@ -288,7 +299,14 @@ try {
     Write-Host 'PHASE=PREPARE_BASE_DIAGNOSTIC DONE'
 
     Write-Host 'PHASE=BASE_DIAGNOSTIC START timeout_seconds=300 lock_timeout_seconds=15'
-    $baseProcess = Invoke-ProcessTextWithTimeout -FilePath $pwshPath -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',$baseScriptPath) -TimeoutSeconds $BaseTimeoutSeconds -Label 'Pinned base diagnostic'
+    $childWorkRoot = Join-Path $workRoot 'child-recovery-plan'
+    $env:SOAIACORE_P0_CHILD_WORK_ROOT = $childWorkRoot
+    try {
+        $baseProcess = Invoke-ProcessTextWithTimeout -FilePath $pwshPath -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',$baseScriptPath) -TimeoutSeconds $BaseTimeoutSeconds -Label 'Pinned base diagnostic'
+    }
+    finally {
+        Remove-Item Env:SOAIACORE_P0_CHILD_WORK_ROOT -ErrorAction SilentlyContinue
+    }
     if ($baseProcess.ExitCode -ne 0) {
         @($baseProcess.StdOut, $baseProcess.StdErr) | Set-Content -LiteralPath $baseFailurePath -Encoding utf8
         Stop-Gate 'STOP_BASE_DIAGNOSTIC_FAILED' ("Pinned base diagnostic failed with exit code {0}. Failure log retained at {1}." -f $baseProcess.ExitCode, $baseFailurePath)
