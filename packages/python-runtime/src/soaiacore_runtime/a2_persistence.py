@@ -1,0 +1,265 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+import hashlib
+from pathlib import Path
+from typing import Any
+
+from .database import Database
+from .errors import contract_error
+from .migrations import apply_migrations, verify_migrations
+
+
+A2_REQUIRED_RELATIONS = (
+    "soa_memory.canonical_memory",
+    "soa_memory.episodic_temporal_memory",
+    "soa_memory.operational_state",
+    "soa_memory.memory_claim_lineage",
+    "soa_decision.decision_ledger",
+)
+
+A2_REQUIRED_FUNCTIONS = (
+    "soa_memory.canonical_memory_as_of(text,timestamp with time zone,timestamp with time zone)",
+    "soa_memory.episodic_memory_as_of(text,timestamp with time zone,timestamp with time zone)",
+    "soa_memory.operational_state_as_of(text,timestamp with time zone,timestamp with time zone)",
+    "soa_decision.decision_state_as_of(text,timestamp with time zone,timestamp with time zone)",
+)
+
+
+@dataclass(frozen=True)
+class A2PersistenceVerification:
+    vector_installed: bool
+    base_migrations: dict[str, str]
+    overlay_migrations: dict[str, str]
+    relations: tuple[str, ...]
+    functions: tuple[str, ...]
+
+
+def _overlay_files(migration_dir: Path) -> list[Path]:
+    return sorted(migration_dir.glob("[0-9][0-9][0-9][0-9]_*.sql"))
+
+
+def _checksum(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _relation_exists(connection, qualified_name: str) -> bool:
+    row = connection.execute(
+        "SELECT to_regclass(%s) IS NOT NULL AS present", (qualified_name,)
+    ).fetchone()
+    return bool(row and row["present"])
+
+
+def _function_exists(connection, signature: str) -> bool:
+    row = connection.execute(
+        "SELECT to_regprocedure(%s) IS NOT NULL AS present", (signature,)
+    ).fetchone()
+    return bool(row and row["present"])
+
+
+def _vector_installed(connection) -> bool:
+    row = connection.execute(
+        "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname='vector') AS present"
+    ).fetchone()
+    return bool(row and row["present"])
+
+
+def _overlay_objects_present(connection) -> bool:
+    return all(_relation_exists(connection, name) for name in A2_REQUIRED_RELATIONS) and all(
+        _function_exists(connection, signature) for signature in A2_REQUIRED_FUNCTIONS
+    )
+
+
+def _overlay_registry_row(connection, path: Path):
+    return connection.execute(
+        """
+        SELECT schema_name, version, checksum_sha256
+        FROM soa_ops.schema_registry
+        WHERE schema_name=%s
+        """,
+        (f"a2-migration:{path.name}",),
+    ).fetchone()
+
+
+def _record_overlay(connection, path: Path, checksum: str) -> None:
+    connection.execute(
+        """
+        INSERT INTO soa_ops.schema_registry(schema_name,version,maturity,checksum_sha256,metadata)
+        VALUES (%s,%s,'M1',%s,%s::jsonb)
+        ON CONFLICT (schema_name) DO NOTHING
+        """,
+        (
+            f"a2-migration:{path.name}",
+            path.stem.split("_", 1)[0],
+            checksum,
+            '{"runner":"soa-intelligence-a2","overlay":true,"baselined":false}',
+        ),
+    )
+
+
+def apply_a2_persistence(
+    database: Database,
+    *,
+    base_migration_dir: Path,
+    a2_migration_dir: Path,
+) -> dict[str, list[str]]:
+    """Apply the shared persistence baseline, then the isolated A2 overlay.
+
+    This function performs database mutation and therefore must only be called
+    after the environment-specific execution gate is satisfied. It never opens
+    networking, changes IAM, or changes Azure resources.
+    """
+
+    base_applied = apply_migrations(database, base_migration_dir)
+    overlay_applied: list[str] = []
+    files = _overlay_files(a2_migration_dir)
+    if not files:
+        raise contract_error(
+            "A2_MIGRATIONS_NOT_FOUND",
+            "No SOA Intelligence A2 overlay migrations were found",
+            "MIGRATE",
+            status_code=500,
+        )
+
+    with database.connect(autocommit=True) as connection:
+        if not _vector_installed(connection):
+            raise contract_error(
+                "A2_VECTOR_EXTENSION_MISSING",
+                "Base migration did not install pgvector before the A2 overlay",
+                "MIGRATE",
+                status_code=503,
+            )
+
+        for path in files:
+            checksum = _checksum(path)
+            registered = _overlay_registry_row(connection, path)
+            if registered:
+                if registered["checksum_sha256"] != checksum:
+                    raise contract_error(
+                        "A2_MIGRATION_CHECKSUM_MISMATCH",
+                        f"Checksum mismatch for {path.name}",
+                        "MIGRATE",
+                        status_code=500,
+                    )
+                if not _overlay_objects_present(connection):
+                    raise contract_error(
+                        "A2_MIGRATION_OBJECTS_MISSING",
+                        f"Registered A2 migration {path.name} is incomplete",
+                        "MIGRATE",
+                        status_code=500,
+                    )
+                continue
+
+            sql = path.read_text(encoding="utf-8")
+            connection.execute(sql, prepare=False)
+            if not _overlay_objects_present(connection):
+                raise contract_error(
+                    "A2_MIGRATION_VERIFICATION_FAILED",
+                    f"A2 migration {path.name} did not create required objects",
+                    "MIGRATE",
+                    status_code=500,
+                )
+            _record_overlay(connection, path, checksum)
+            overlay_applied.append(f"{path.name}:APPLIED")
+
+    return {"base": base_applied, "a2_overlay": overlay_applied}
+
+
+def verify_a2_persistence(
+    database: Database,
+    *,
+    base_migration_dir: Path,
+    a2_migration_dir: Path,
+) -> A2PersistenceVerification:
+    base = verify_migrations(database, base_migration_dir)
+    overlay: dict[str, str] = {}
+    files = _overlay_files(a2_migration_dir)
+    if not files:
+        raise contract_error(
+            "A2_MIGRATIONS_NOT_FOUND",
+            "No SOA Intelligence A2 overlay migrations were found",
+            "PRECHECK",
+            status_code=503,
+        )
+
+    with database.connect(autocommit=True) as connection:
+        if not _vector_installed(connection):
+            raise contract_error(
+                "A2_VECTOR_EXTENSION_MISSING",
+                "pgvector is not installed in the A2 database",
+                "PRECHECK",
+                status_code=503,
+            )
+        if not _overlay_objects_present(connection):
+            raise contract_error(
+                "A2_PERSISTENCE_OBJECTS_MISSING",
+                "One or more A2 persistence relations/functions are absent",
+                "PRECHECK",
+                status_code=503,
+            )
+        for path in files:
+            checksum = _checksum(path)
+            row = _overlay_registry_row(connection, path)
+            if not row or row["checksum_sha256"] != checksum:
+                raise contract_error(
+                    "A2_MIGRATION_CHECKSUM_MISMATCH",
+                    f"A2 migration registry is missing or mismatched for {path.name}",
+                    "PRECHECK",
+                    status_code=503,
+                )
+            overlay[path.name] = checksum
+
+    return A2PersistenceVerification(
+        vector_installed=True,
+        base_migrations=base,
+        overlay_migrations=overlay,
+        relations=A2_REQUIRED_RELATIONS,
+        functions=A2_REQUIRED_FUNCTIONS,
+    )
+
+
+def _require_scope(project_scope: str) -> str:
+    scope = project_scope.strip()
+    if not scope:
+        raise ValueError("project_scope is mandatory for A2 persistence reads")
+    return scope
+
+
+def canonical_memory_as_of(
+    database: Database,
+    *,
+    project_scope: str,
+    valid_at: datetime,
+    recorded_at: datetime,
+) -> list[dict[str, Any]]:
+    """Return canonical memory visible at both business-time and record-time.
+
+    Supplying recorded_at is mandatory. This is the application-side companion
+    to the SQL recorded_time <= p_recorded_at guard that prevents T2 evidence
+    from leaking into a query situated at T1.
+    """
+
+    scope = _require_scope(project_scope)
+    with database.connect(autocommit=True) as connection:
+        rows = connection.execute(
+            "SELECT * FROM soa_memory.canonical_memory_as_of(%s,%s,%s)",
+            (scope, valid_at, recorded_at),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def decision_state_as_of(
+    database: Database,
+    *,
+    project_scope: str,
+    valid_at: datetime,
+    recorded_at: datetime,
+) -> list[dict[str, Any]]:
+    scope = _require_scope(project_scope)
+    with database.connect(autocommit=True) as connection:
+        rows = connection.execute(
+            "SELECT * FROM soa_decision.decision_state_as_of(%s,%s,%s)",
+            (scope, valid_at, recorded_at),
+        ).fetchall()
+    return [dict(row) for row in rows]
