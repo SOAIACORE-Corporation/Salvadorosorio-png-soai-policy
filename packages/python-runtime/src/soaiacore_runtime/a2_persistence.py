@@ -82,7 +82,11 @@ def _overlay_registry_row(connection, path: Path):
     ).fetchone()
 
 
-def _record_overlay(connection, path: Path, checksum: str) -> None:
+def _record_overlay(connection, path: Path, checksum: str, *, baselined: bool) -> None:
+    metadata = (
+        '{"runner":"soa-intelligence-a2","overlay":true,"baselined":%s}'
+        % ("true" if baselined else "false")
+    )
     connection.execute(
         """
         INSERT INTO soa_ops.schema_registry(schema_name,version,maturity,checksum_sha256,metadata)
@@ -93,7 +97,7 @@ def _record_overlay(connection, path: Path, checksum: str) -> None:
             f"a2-migration:{path.name}",
             path.stem.split("_", 1)[0],
             checksum,
-            '{"runner":"soa-intelligence-a2","overlay":true,"baselined":false}',
+            metadata,
         ),
     )
 
@@ -151,6 +155,14 @@ def apply_a2_persistence(
                     )
                 continue
 
+            # Crash-safe recovery: if the SQL transaction committed but the
+            # checksum registry write did not, do not recreate canonical
+            # objects. Verify the complete object set and baseline the receipt.
+            if _overlay_objects_present(connection):
+                _record_overlay(connection, path, checksum, baselined=True)
+                overlay_applied.append(f"{path.name}:BASELINED")
+                continue
+
             sql = path.read_text(encoding="utf-8")
             connection.execute(sql, prepare=False)
             if not _overlay_objects_present(connection):
@@ -160,7 +172,7 @@ def apply_a2_persistence(
                     "MIGRATE",
                     status_code=500,
                 )
-            _record_overlay(connection, path, checksum)
+            _record_overlay(connection, path, checksum, baselined=False)
             overlay_applied.append(f"{path.name}:APPLIED")
 
     return {"base": base_applied, "a2_overlay": overlay_applied}

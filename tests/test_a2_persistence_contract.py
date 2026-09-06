@@ -10,6 +10,7 @@ from soaiacore_runtime.a2_persistence import _require_scope, canonical_memory_as
 
 ROOT = Path(__file__).resolve().parents[1]
 A2_MIGRATION = ROOT / "db" / "a2_migrations" / "1001_memory_decision_bitemporal.sql"
+A2_RUNNER = ROOT / "packages" / "python-runtime" / "src" / "soaiacore_runtime" / "a2_persistence.py"
 
 
 def _sql() -> str:
@@ -94,3 +95,10 @@ def test_application_read_contract_requires_recorded_at_and_project_scope() -> N
     with pytest.raises(ValueError):
         _require_scope("   ")
     assert _require_scope("project-a") == "project-a"
+
+
+def test_overlay_runner_is_crash_safe_between_sql_commit_and_registry_receipt() -> None:
+    runner = A2_RUNNER.read_text(encoding="utf-8")
+    assert "if _overlay_objects_present(connection):" in runner
+    assert ":BASELINED" in runner
+    assert "baselined=True" in runner
