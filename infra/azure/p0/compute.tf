@@ -31,18 +31,29 @@ resource "azurerm_container_app" "core" {
   tags                         = local.required_tags
 
   identity {
-    type         = "UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.workload.id]
+    type = "UserAssigned"
+    identity_ids = [
+      azurerm_user_assigned_identity.workload.id,
+      azurerm_user_assigned_identity.core_secrets.id
+    ]
   }
 
   secret {
-    name  = "postgres-password"
-    value = random_password.postgresql.result
+    name                = "postgres-password"
+    key_vault_secret_id = azurerm_key_vault_secret.postgresql.versionless_id
+    identity            = azurerm_user_assigned_identity.core_secrets.id
   }
 
   secret {
-    name  = local.ghcr_secret_name
-    value = var.ghcr_token
+    name                = "internal-auth-secret"
+    key_vault_secret_id = azurerm_key_vault_secret.internal_auth.versionless_id
+    identity            = azurerm_user_assigned_identity.core_secrets.id
+  }
+
+  secret {
+    name                = local.ghcr_secret_name
+    key_vault_secret_id = azurerm_key_vault_secret.ghcr.versionless_id
+    identity            = azurerm_user_assigned_identity.core_secrets.id
   }
 
   registry {
@@ -63,8 +74,9 @@ resource "azurerm_container_app" "core" {
   }
 
   template {
-    min_replicas = 0
+    min_replicas = 1
     max_replicas = 1
+    # Azure generates a unique revision suffix for each template update.
 
     container {
       name   = "core"
@@ -103,6 +115,16 @@ resource "azurerm_container_app" "core" {
       env {
         name  = "SOAIACORE_DISPATCH_MODE"
         value = "AZURE"
+      }
+
+      env {
+        name        = "SOAIACORE_INTERNAL_AUTH_SECRET"
+        secret_name = "internal-auth-secret"
+      }
+
+      env {
+        name  = "SOAIACORE_INTERNAL_AUTH_REQUIRED"
+        value = "true"
       }
 
       env {
@@ -161,6 +183,12 @@ resource "azurerm_container_app" "core" {
       }
     }
   }
+
+  depends_on = [
+    azurerm_role_assignment.core_postgresql_secret_reader,
+    azurerm_role_assignment.core_internal_auth_secret_reader,
+    azurerm_role_assignment.core_ghcr_secret_reader
+  ]
 }
 
 resource "azurerm_container_app" "web" {
@@ -172,13 +200,29 @@ resource "azurerm_container_app" "web" {
   tags                         = local.required_tags
 
   identity {
-    type         = "UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.workload.id]
+    type = "UserAssigned"
+    identity_ids = [
+      azurerm_user_assigned_identity.workload.id,
+      azurerm_user_assigned_identity.web_secrets.id
+    ]
   }
 
   secret {
-    name  = local.ghcr_secret_name
-    value = var.ghcr_token
+    name                = "internal-auth-secret"
+    key_vault_secret_id = azurerm_key_vault_secret.internal_auth.versionless_id
+    identity            = azurerm_user_assigned_identity.web_secrets.id
+  }
+
+  secret {
+    name                = "oidc-client-secret"
+    key_vault_secret_id = azurerm_key_vault_secret.oidc[0].versionless_id
+    identity            = azurerm_user_assigned_identity.web_secrets.id
+  }
+
+  secret {
+    name                = local.ghcr_secret_name
+    key_vault_secret_id = azurerm_key_vault_secret.ghcr.versionless_id
+    identity            = azurerm_user_assigned_identity.web_secrets.id
   }
 
   registry {
@@ -199,8 +243,9 @@ resource "azurerm_container_app" "web" {
   }
 
   template {
-    min_replicas = 0
+    min_replicas = 1
     max_replicas = 1
+    # Azure generates a unique revision suffix for each template update.
 
     container {
       name   = "web"
@@ -235,8 +280,49 @@ resource "azurerm_container_app" "web" {
         name  = "CORE_API_BASE_URL"
         value = "https://${azurerm_container_app.core.ingress[0].fqdn}"
       }
+
+      env {
+        name        = "SOAIACORE_INTERNAL_AUTH_SECRET"
+        secret_name = "internal-auth-secret"
+      }
+
+      env {
+        name  = "SOAIACORE_OIDC_ISSUER"
+        value = local.oidc_issuer
+      }
+
+      env {
+        name  = "SOAIACORE_OIDC_CLIENT_ID"
+        value = var.oidc_client_id
+      }
+
+      env {
+        name  = "SOAIACORE_WEB_BASE_URL"
+        value = local.oidc_web_base_url
+      }
+
+      env {
+        name  = "SOAIACORE_OIDC_OPERATOR_GROUP"
+        value = "SOAIACORE_OPERATOR"
+      }
+
+      env {
+        name  = "SOAIACORE_OIDC_ADMIN_GROUP"
+        value = "SOAIACORE_ADMIN"
+      }
+
+      env {
+        name        = "SOAIACORE_OIDC_CLIENT_SECRET"
+        secret_name = "oidc-client-secret"
+      }
     }
   }
+
+  depends_on = [
+    azurerm_role_assignment.web_internal_auth_secret_reader,
+    azurerm_role_assignment.web_oidc_secret_reader,
+    azurerm_role_assignment.web_ghcr_secret_reader
+  ]
 }
 
 resource "azurerm_container_app_job" "worker" {
@@ -250,18 +336,23 @@ resource "azurerm_container_app_job" "worker" {
   tags                         = local.required_tags
 
   identity {
-    type         = "UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.workload.id]
+    type = "UserAssigned"
+    identity_ids = [
+      azurerm_user_assigned_identity.workload.id,
+      azurerm_user_assigned_identity.worker_secrets.id
+    ]
   }
 
   secret {
-    name  = "postgres-password"
-    value = random_password.postgresql.result
+    name                = "postgres-password"
+    key_vault_secret_id = azurerm_key_vault_secret.postgresql.versionless_id
+    identity            = azurerm_user_assigned_identity.worker_secrets.id
   }
 
   secret {
-    name  = local.ghcr_secret_name
-    value = var.ghcr_token
+    name                = local.ghcr_secret_name
+    key_vault_secret_id = azurerm_key_vault_secret.ghcr.versionless_id
+    identity            = azurerm_user_assigned_identity.worker_secrets.id
   }
 
   registry {
@@ -328,4 +419,9 @@ resource "azurerm_container_app_job" "worker" {
       }
     }
   }
+
+  depends_on = [
+    azurerm_role_assignment.worker_postgresql_secret_reader,
+    azurerm_role_assignment.worker_ghcr_secret_reader
+  ]
 }
