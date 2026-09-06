@@ -4,13 +4,10 @@ on:
   push:
     branches:
       - feature/soa-intelligence-a2-postgres-20260906-r2
-    paths:
-      - .github/workflows/azure-soa-intelligence-auth-preflight.yml
-  pull_request:
-    branches:
       - main
     paths:
       - .github/workflows/azure-soa-intelligence-auth-preflight.yml
+      - scripts/azure/Bootstrap-SOAIntelligenceGitHubOidc.ps1
 
 permissions:
   id-token: write
@@ -18,6 +15,9 @@ permissions:
 
 env:
   AZURE_CORE_OUTPUT: none
+  AZURE_CLIENT_ID: 62a6c6fd-3d8a-4fb2-a17a-56fc7cf1ada2
+  AZURE_TENANT_ID: a586520f-832e-4e56-9bc4-923cd77fb52b
+  AZURE_SUBSCRIPTION_ID: 108eb4dd-25b3-4a7f-8d5e-4ec4389c3f0d
 
 jobs:
   azure-read-only-preflight:
@@ -26,12 +26,12 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Azure login with OIDC
+      - name: Azure login with branch-scoped OIDC
         uses: azure/login@v3
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Verify subscription context without emitting identifiers
         shell: bash
@@ -71,6 +71,7 @@ jobs:
       - name: Record execution boundary
         shell: bash
         run: |
+          echo 'OIDC_SUBJECT_SCOPE=TRUSTED_BRANCH_ONLY'
           echo 'AZURE_MUTATION=false'
           echo 'TERRAFORM_INIT=false'
           echo 'TERRAFORM_PLAN=false'
