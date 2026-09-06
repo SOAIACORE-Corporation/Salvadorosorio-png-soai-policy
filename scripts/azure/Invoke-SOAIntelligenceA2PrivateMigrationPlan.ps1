@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][string]$MigrationWorkerImage,
+    [string]$MigrationWorkerImage = 'ghcr.io/soaiacore-corporation/soaiacore-worker@sha256:0effb661f90cb59d57c152f88eb4b4ddc3a9d8958b3286ed3949a29b6af8abdc',
     [Parameter(Mandatory)][string]$GhcrUsername,
     [SecureString]$GhcrToken,
     [string]$SubscriptionId = '108eb4dd-25b3-4a7f-8d5e-4ec4389c3f0d',
@@ -15,6 +15,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+$CanonicalMigrationWorkerImage = 'ghcr.io/soaiacore-corporation/soaiacore-worker@sha256:0effb661f90cb59d57c152f88eb4b4ddc3a9d8958b3286ed3949a29b6af8abdc'
+
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     throw 'This governed A2 private-migration plan runner requires PowerShell 7 or newer.'
 }
@@ -23,6 +25,9 @@ if (-not $IsWindows) {
 }
 if ($MigrationWorkerImage -notmatch '@sha256:[0-9a-f]{64}$') {
     throw 'MigrationWorkerImage must be immutable and pinned by sha256 digest.'
+}
+if ($MigrationWorkerImage -ne $CanonicalMigrationWorkerImage) {
+    throw "MigrationWorkerImage differs from the canonical security-gated Worker published from main. Expected '$CanonicalMigrationWorkerImage'."
 }
 if ($null -eq $GhcrToken) {
     $GhcrToken = Read-Host 'GHCR read-only token' -AsSecureString
@@ -71,6 +76,7 @@ if ($localHead -ne $remoteHead) {
 }
 Write-Boundary 'CONFIG_COMMIT' $localHead
 Write-Boundary 'BRANCH_SYNC' 'PASS'
+Write-Boundary 'CANONICAL_WORKER_IMAGE' $CanonicalMigrationWorkerImage
 
 $terraformInfo = (& terraform version -json) | ConvertFrom-Json
 Assert-LastExitCode 'terraform version -json'
