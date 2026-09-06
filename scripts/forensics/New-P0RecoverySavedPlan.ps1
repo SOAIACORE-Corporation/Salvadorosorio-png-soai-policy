@@ -93,8 +93,45 @@ function Protect-OperatorDirectory {
         Stop-Gate 'STOP_ARTIFACT_ACL_FAILED' 'Could not grant the operator exclusive control of the artifact root.'
     }
 
+    $acl = Get-Acl -LiteralPath $Path
+    $unexpectedRules = @(
+        $acl.Access | Where-Object {
+            $_.IsInherited -or
+            [string]$_.IdentityReference -ne $identity -or
+            $_.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow
+        }
+    )
+    $operatorRules = @(
+        $acl.Access | Where-Object {
+            -not $_.IsInherited -and
+            [string]$_.IdentityReference -eq $identity -and
+            $_.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow -and
+            ($_.FileSystemRights -band [System.Security.AccessControl.FileSystemRights]::FullControl)
+        }
+    )
+    if ($unexpectedRules.Count -ne 0 -or $operatorRules.Count -lt 1) {
+        Stop-Gate 'STOP_ARTIFACT_ACL_VERIFY_FAILED' 'Artifact ACL is not exclusive to the current operator.'
+    }
+
     Write-Host ("ARTIFACT_OPERATOR={0}" -f $identity)
     Write-Host 'ARTIFACT_ACL=OPERATOR_ONLY'
+}
+
+function Assert-NoReparseAncestors {
+    param([string]$Path)
+
+    $cursor = [System.IO.Path]::GetFullPath($Path)
+    while (-not [string]::IsNullOrWhiteSpace($cursor)) {
+        if (Test-Path -LiteralPath $cursor) {
+            $item = Get-Item -LiteralPath $cursor -Force
+            if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                Stop-Gate 'STOP_REPARSE_POINT_PRESENT' ("Reparse point rejected: {0}" -f $cursor)
+            }
+        }
+        $parent = [System.IO.Directory]::GetParent($cursor)
+        if ($null -eq $parent) { break }
+        $cursor = $parent.FullName
+    }
 }
 
 function Patch-BaseDiagnostic {
@@ -282,10 +319,12 @@ $patchedScriptPath = Join-Path $workRoot 'Invoke-P0RecoveryDiagnosticPlan.saved.
 $receiptPath = Join-Path $env:USERPROFILE ("SOAIACORE_P51_SAVED_PLAN_RECEIPT_{0}.sanitized.json" -f $stamp)
 $succeeded = $false
 
-New-Item -ItemType Directory -Path $workRoot -Force | Out-Null
-Protect-OperatorDirectory -Path $workRoot
-
 try {
+    Assert-NoReparseAncestors -Path $controlledRoot
+    New-Item -ItemType Directory -Path $workRoot -Force | Out-Null
+    Assert-NoReparseAncestors -Path $workRoot
+    Protect-OperatorDirectory -Path $workRoot
+
     $downloadPath = Join-Path $workRoot 'base.ps1'
     Invoke-WebRequest -UseBasicParsing $BaseDiagnosticUrl -OutFile $downloadPath
     $baseText = Get-Content -LiteralPath $downloadPath -Raw
