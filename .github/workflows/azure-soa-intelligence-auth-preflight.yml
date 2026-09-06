@@ -1,0 +1,115 @@
+name: Azure SOA Intelligence Auth Preflight
+
+on:
+  push:
+    branches:
+      - feature/soa-intelligence-a2-postgres-20260906-r2
+      - main
+    paths:
+      - .github/workflows/azure-soa-intelligence-auth-preflight.yml
+      - scripts/azure/Bootstrap-SOAIntelligenceGitHubOidc.ps1
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_CORE_OUTPUT: none
+  AZURE_CLIENT_ID: 62a6c6fd-3d8a-4fb2-a17a-56fc7cf1ada2
+  AZURE_TENANT_ID: a586520f-832e-4e56-9bc4-923cd77fb52b
+  AZURE_SUBSCRIPTION_ID: 108eb4dd-25b3-4a7f-8d5e-4ec4389c3f0d
+
+jobs:
+  azure-read-only-preflight:
+    name: Azure OIDC and backend read-only preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Azure login with branch-scoped OIDC
+        uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3.0.2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Verify subscription context without emitting identifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          az account show >/dev/null
+          echo 'AZURE_OIDC_LOGIN=PASS'
+          echo 'AZURE_SUBSCRIPTION_CONTEXT=PASS'
+
+      - name: Verify governed Terraform backend management-plane resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          az group show --name rg-soaiacore-tfstate-34utxi >/dev/null
+          az storage account show \
+            --resource-group rg-soaiacore-tfstate-34utxi \
+            --name stsoaiacoretf34utxi >/dev/null
+          echo 'STATE_RESOURCE_GROUP_READ=PASS'
+          echo 'STATE_STORAGE_ACCOUNT_READ=PASS'
+
+      - name: Inspect backend network posture read-only
+        shell: bash
+        env:
+          AZURE_CORE_OUTPUT: json
+        run: |
+          set -euo pipefail
+          account_args=(
+            --resource-group rg-soaiacore-tfstate-34utxi
+            --name stsoaiacoretf34utxi
+            --output tsv
+          )
+          public_network_access=$(az storage account show "${account_args[@]}" --query publicNetworkAccess)
+          default_action=$(az storage account show "${account_args[@]}" --query networkRuleSet.defaultAction)
+          bypass=$(az storage account show "${account_args[@]}" --query networkRuleSet.bypass)
+          ip_rule_count=$(az storage account show "${account_args[@]}" --query 'length(networkRuleSet.ipRules)')
+          vnet_rule_count=$(az storage account show "${account_args[@]}" --query 'length(networkRuleSet.virtualNetworkRules)')
+          resource_access_rule_count=$(az storage account show "${account_args[@]}" --query 'length(networkRuleSet.resourceAccessRules)')
+          private_endpoint_count=$(az storage account show "${account_args[@]}" --query 'length(privateEndpointConnections)')
+
+          echo "STATE_PUBLIC_NETWORK_ACCESS=$public_network_access"
+          echo "STATE_NETWORK_DEFAULT_ACTION=$default_action"
+          echo "STATE_NETWORK_BYPASS=$bypass"
+          echo "STATE_IP_RULE_COUNT=$ip_rule_count"
+          echo "STATE_VNET_RULE_COUNT=$vnet_rule_count"
+          echo "STATE_RESOURCE_ACCESS_RULE_COUNT=$resource_access_rule_count"
+          echo "STATE_PRIVATE_ENDPOINT_COUNT=$private_endpoint_count"
+          echo 'STATE_NETWORK_POSTURE_READ=PASS'
+
+      - name: Verify Terraform state container data-plane access
+        id: state_data
+        shell: bash
+        env:
+          AZURE_CORE_OUTPUT: json
+        run: |
+          set -euo pipefail
+          exists=$(az storage container exists \
+            --auth-mode login \
+            --account-name stsoaiacoretf34utxi \
+            --name tfstate \
+            --query exists \
+            --output tsv)
+          test "$exists" = "true"
+          echo 'STATE_CONTAINER_EXISTS=PASS'
+          echo 'STATE_DATA_PLANE_READ=PASS'
+
+      - name: Record execution boundary
+        if: always()
+        shell: bash
+        run: |
+          echo 'OIDC_SUBJECT_SCOPE=TRUSTED_BRANCH_ONLY'
+          echo 'AZURE_MUTATION=false'
+          echo 'TERRAFORM_INIT=false'
+          echo 'TERRAFORM_PLAN=false'
+          echo 'TERRAFORM_APPLY=false'
+          echo 'TERRAFORM_DESTROY=false'
+          echo 'STATE_DATA_PLANE_OUTCOME=${{ steps.state_data.outcome }}'
+          if [ '${{ steps.state_data.outcome }}' = 'success' ]; then
+            echo 'SOA_INTELLIGENCE_AZURE_AUTH_PREFLIGHT=PASS'
+          else
+            echo 'SOA_INTELLIGENCE_AZURE_AUTH_PREFLIGHT=HOLD_NETWORK'
+          fi
