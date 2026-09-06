@@ -32,25 +32,28 @@ resource "azurerm_container_app" "core" {
 
   identity {
     type         = "UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.workload.id]
+    identity_ids = [
+      azurerm_user_assigned_identity.workload.id,
+      azurerm_user_assigned_identity.core_secrets.id
+    ]
   }
 
   secret {
     name                = "postgres-password"
     key_vault_secret_id = azurerm_key_vault_secret.postgresql.versionless_id
-    identity            = azurerm_user_assigned_identity.workload.id
+    identity            = azurerm_user_assigned_identity.core_secrets.id
   }
 
   secret {
     name                = "internal-auth-secret"
     key_vault_secret_id = azurerm_key_vault_secret.internal_auth.versionless_id
-    identity            = azurerm_user_assigned_identity.workload.id
+    identity            = azurerm_user_assigned_identity.core_secrets.id
   }
 
   secret {
     name                = local.ghcr_secret_name
     key_vault_secret_id = azurerm_key_vault_secret.ghcr.versionless_id
-    identity            = azurerm_user_assigned_identity.workload.id
+    identity            = azurerm_user_assigned_identity.core_secrets.id
   }
 
   registry {
@@ -181,7 +184,11 @@ resource "azurerm_container_app" "core" {
     }
   }
 
-  depends_on = [azurerm_role_assignment.workload_key_vault_secrets_user]
+  depends_on = [
+    azurerm_role_assignment.core_postgresql_secret_reader,
+    azurerm_role_assignment.core_internal_auth_secret_reader,
+    azurerm_role_assignment.core_ghcr_secret_reader
+  ]
 }
 
 resource "azurerm_container_app" "web" {
@@ -194,25 +201,28 @@ resource "azurerm_container_app" "web" {
 
   identity {
     type         = "UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.workload.id]
+    identity_ids = [
+      azurerm_user_assigned_identity.workload.id,
+      azurerm_user_assigned_identity.web_secrets.id
+    ]
   }
 
   secret {
     name                = "internal-auth-secret"
     key_vault_secret_id = azurerm_key_vault_secret.internal_auth.versionless_id
-    identity            = azurerm_user_assigned_identity.workload.id
+    identity            = azurerm_user_assigned_identity.web_secrets.id
   }
 
   secret {
     name                = "oidc-client-secret"
     key_vault_secret_id = azurerm_key_vault_secret.oidc[0].versionless_id
-    identity            = azurerm_user_assigned_identity.workload.id
+    identity            = azurerm_user_assigned_identity.web_secrets.id
   }
 
   secret {
     name                = local.ghcr_secret_name
     key_vault_secret_id = azurerm_key_vault_secret.ghcr.versionless_id
-    identity            = azurerm_user_assigned_identity.workload.id
+    identity            = azurerm_user_assigned_identity.web_secrets.id
   }
 
   registry {
@@ -308,7 +318,11 @@ resource "azurerm_container_app" "web" {
     }
   }
 
-  depends_on = [azurerm_role_assignment.workload_key_vault_secrets_user]
+  depends_on = [
+    azurerm_role_assignment.web_internal_auth_secret_reader,
+    azurerm_role_assignment.web_oidc_secret_reader,
+    azurerm_role_assignment.web_ghcr_secret_reader
+  ]
 }
 
 resource "azurerm_container_app_job" "worker" {
@@ -323,19 +337,22 @@ resource "azurerm_container_app_job" "worker" {
 
   identity {
     type         = "UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.workload.id]
+    identity_ids = [
+      azurerm_user_assigned_identity.workload.id,
+      azurerm_user_assigned_identity.worker_secrets.id
+    ]
   }
 
   secret {
     name                = "postgres-password"
     key_vault_secret_id = azurerm_key_vault_secret.postgresql.versionless_id
-    identity            = azurerm_user_assigned_identity.workload.id
+    identity            = azurerm_user_assigned_identity.worker_secrets.id
   }
 
   secret {
     name                = local.ghcr_secret_name
     key_vault_secret_id = azurerm_key_vault_secret.ghcr.versionless_id
-    identity            = azurerm_user_assigned_identity.workload.id
+    identity            = azurerm_user_assigned_identity.worker_secrets.id
   }
 
   registry {
@@ -403,5 +420,8 @@ resource "azurerm_container_app_job" "worker" {
     }
   }
 
-  depends_on = [azurerm_role_assignment.workload_key_vault_secrets_user]
+  depends_on = [
+    azurerm_role_assignment.worker_postgresql_secret_reader,
+    azurerm_role_assignment.worker_ghcr_secret_reader
+  ]
 }
