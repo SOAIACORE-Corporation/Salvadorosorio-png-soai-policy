@@ -8,6 +8,7 @@ on:
       - .github/workflows/terraform-soa-intelligence-dev-static.yml
       - infra/azure/soa-intelligence-dev/**
       - scripts/azure/Bootstrap-SOAIntelligenceGitHubOidc.ps1
+      - scripts/azure/Invoke-SOAIntelligenceA2Plan.ps1
   push:
     branches:
       - feature/soa-intelligence-a2-postgres-20260906-r2
@@ -15,6 +16,7 @@ on:
       - .github/workflows/terraform-soa-intelligence-dev-static.yml
       - infra/azure/soa-intelligence-dev/**
       - scripts/azure/Bootstrap-SOAIntelligenceGitHubOidc.ps1
+      - scripts/azure/Invoke-SOAIntelligenceA2Plan.ps1
 
 permissions:
   contents: read
@@ -35,22 +37,27 @@ jobs:
           terraform_version: 1.15.0
           terraform_wrapper: false
 
-      - name: Parse OIDC bootstrap PowerShell
+      - name: Parse governed PowerShell helpers
         shell: pwsh
         run: |
-          $path = 'scripts/azure/Bootstrap-SOAIntelligenceGitHubOidc.ps1'
-          $tokens = $null
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path $path),
-            [ref]$tokens,
-            [ref]$errors
-          ) | Out-Null
-          if ($errors.Count -gt 0) {
-            $errors | ForEach-Object { Write-Error ("{0}:{1}:{2} {3}" -f $path,$_.Extent.StartLineNumber,$_.Extent.StartColumnNumber,$_.Message) }
-            exit 1
+          $paths = @(
+            'scripts/azure/Bootstrap-SOAIntelligenceGitHubOidc.ps1',
+            'scripts/azure/Invoke-SOAIntelligenceA2Plan.ps1'
+          )
+          foreach ($path in $paths) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $path),
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error ("{0}:{1}:{2} {3}" -f $path,$_.Extent.StartLineNumber,$_.Extent.StartColumnNumber,$_.Message) }
+              exit 1
+            }
+            Write-Host "POWERSHELL_PARSE=PASS path=$path"
           }
-          Write-Host 'OIDC_BOOTSTRAP_POWERSHELL_PARSE=PASS'
 
       - name: Check formatting
         run: terraform fmt -check -diff infra/azure/soa-intelligence-dev
