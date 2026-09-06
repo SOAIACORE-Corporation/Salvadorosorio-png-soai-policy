@@ -29,7 +29,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
 
       - name: Set up Terraform 1.15.0
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
         with:
           terraform_version: 1.15.0
           terraform_wrapper: false
@@ -50,11 +50,27 @@ jobs:
       - name: Terraform formatting
         run: terraform fmt -check -recursive infra/azure/soa-intelligence-dev
 
-      - name: Initialize without backend
-        run: terraform -chdir=infra/azure/soa-intelligence-dev init -backend=false -input=false
+      - name: Build isolated backend-free validation copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -R infra/azure/soa-intelligence-dev "$RUNNER_TEMP/soa-intelligence-dev"
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          path = Path(os.environ["RUNNER_TEMP"]) / "soa-intelligence-dev" / "versions.tf"
+          text = path.read_text(encoding="utf-8")
+          needle = '  backend "azurerm" {}\n\n'
+          if text.count(needle) != 1:
+              raise SystemExit("Expected exactly one empty azurerm backend declaration")
+          path.write_text(text.replace(needle, "", 1), encoding="utf-8")
+          PY
+
+      - name: Initialize isolated validation copy
+        run: terraform -chdir="$RUNNER_TEMP/soa-intelligence-dev" init -backend=false -input=false -no-color
 
       - name: Validate Terraform configuration
-        run: terraform -chdir=infra/azure/soa-intelligence-dev validate
+        run: terraform -chdir="$RUNNER_TEMP/soa-intelligence-dev" validate -no-color
 
       - name: Enforce private migration boundary
         shell: bash
@@ -78,8 +94,8 @@ jobs:
           grep -F "'azurerm_log_analytics_workspace.a2_migration'" "$script"
           grep -F "'azurerm_container_app_environment.a2_migration'" "$script"
           grep -F "'azurerm_container_app_job.a2_migration'" "$script"
-          grep -F "plan_json_persisted = \$false" "$script"
-          grep -F "terraform_apply = \$false" "$script"
+          grep -F 'plan_json_persisted = $false' "$script"
+          grep -F 'terraform_apply = $false' "$script"
           ! grep -E 'terraform .* apply' "$script"
 
       - name: Record gate
