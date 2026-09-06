@@ -113,7 +113,11 @@ def test_worker_image_packages_a2_overlay_and_exposes_explicit_commands() -> Non
     assert "COPY db/a2_migrations /app/db/a2_migrations" in dockerfile
     assert '"a2-migrate"' in worker
     assert '"a2-verify"' in worker
+    assert '"a2-bootstrap"' in worker
     assert "apply_a2_persistence(" in worker
     assert "verify_a2_persistence(" in worker
     assert '"A2_MIGRATE_PASS"' in worker
     assert '"A2_VERIFY_PASS"' in worker
+    assert '"A2_BOOTSTRAP_PASS"' in worker
+    assert "project_scope_required=True" in worker
+    assert "recorded_time_guard=True" in worker
