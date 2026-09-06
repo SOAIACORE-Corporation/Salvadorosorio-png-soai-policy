@@ -5,7 +5,7 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
-WORKDIR /src
+WORKDIR /app
 RUN python -m pip install --no-cache-dir uv==0.12.5
 COPY pyproject.toml uv.lock .python-version ./
 COPY packages/python-runtime/pyproject.toml packages/python-runtime/pyproject.toml
@@ -35,11 +35,11 @@ RUN apt-get update \
       bsdutils libblkid1 liblastlog2-2 libmount1 libsmartcols1 libuuid1 \
       login mount util-linux libssl3t64 openssl openssl-provider-legacy \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /src/.venv /app/.venv
+COPY --from=builder /app/.venv /app/.venv
 COPY schemas /app/schemas
 COPY contracts /app/contracts
 COPY db/migrations /app/db/migrations
 COPY db/a2_migrations /app/db/a2_migrations
 COPY packages/mock-fixtures /app/packages/mock-fixtures
 USER 65532:65532
-CMD ["python", "-m", "soaiacore_worker", "run-one"]
+CMD ["/app/.venv/bin/python", "-m", "soaiacore_worker", "run-one"]
