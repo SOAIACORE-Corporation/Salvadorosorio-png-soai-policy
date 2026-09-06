@@ -269,16 +269,19 @@ try {
     if ([bool]$baseReceipt.terraform_apply_executed -or [bool]$baseReceipt.mutation) {
         Stop-Gate 'STOP_MUTATION_BOUNDARY' 'Base receipt indicates an unexpected mutation boundary violation.'
     }
-    if ([int]$baseReceipt.action_counts.delete -gt 0 -or [int]$baseReceipt.action_counts.replace -gt 0) {
-        Stop-Gate 'STOP_DESTRUCTIVE_PLAN' 'Base plan contains delete or replace actions; parsing halted.'
-    }
 
+    # Resolve the base diagnostic work root before any plan-action gate so
+    # destructive-plan rejection still cleans up the sensitive saved plan.
     $planLog = [string]$baseReceipt.diagnostic_plan_log
     if ([string]::IsNullOrWhiteSpace($planLog) -or -not (Test-Path -LiteralPath $planLog -PathType Leaf)) {
         Stop-Gate 'STOP_PLAN_LOG_MISSING' 'Base diagnostic plan log is unavailable.'
     }
     $planEvidenceDir = Split-Path -Parent $planLog
     $basePlanWorkRoot = Split-Path -Parent $planEvidenceDir
+
+    if ([int]$baseReceipt.action_counts.delete -gt 0 -or [int]$baseReceipt.action_counts.replace -gt 0) {
+        Stop-Gate 'STOP_DESTRUCTIVE_PLAN' 'Base plan contains delete or replace actions; parsing halted.'
+    }
 
     $allowed = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     foreach ($changed in @($baseReceipt.changed_resources)) {
