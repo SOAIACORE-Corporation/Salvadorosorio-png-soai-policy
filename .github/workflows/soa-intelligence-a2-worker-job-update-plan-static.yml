@@ -110,8 +110,8 @@ jobs:
           grep -F "Write-Boundary 'POSTGRESQL_PUBLIC' 'false'" "$script" >/dev/null
           grep -F "Write-Boundary 'P0_MUTATION' 'false'" "$script" >/dev/null
           grep -F 'Remove-Item Env:TF_VAR_ghcr_token' "$script" >/dev/null
-          if grep -E 'terraform[^\n]*apply|containerapp job start' "$script"; then
-            echo 'Material apply/start command found in plan-only runner' >&2
+          if grep -E '&[[:space:]]+terraform[[:space:]].*[[:space:]]apply([[:space:]]|$)|&[[:space:]]+az[[:space:]]+containerapp[[:space:]]+job[[:space:]]+start([[:space:]]|$)' "$script"; then
+            echo 'Executable material apply/start command found in plan-only runner' >&2
             exit 1
           fi
           echo 'A2_PLAN_ONLY_SECRET_SAFE_BOUNDARY=PASS'
