@@ -5,7 +5,6 @@ on:
   pull_request:
     branches:
       - main
-      - feature/soa-intelligence-a2-postgres-20260906-r2
     paths:
       - .github/workflows/soa-intelligence-a2-private-migration-static.yml
       - infra/azure/soa-intelligence-dev/**
@@ -96,12 +95,17 @@ jobs:
           grep -F "'azurerm_container_app_job.a2_migration'" "$script"
           grep -F 'plan_json_persisted = $false' "$script"
           grep -F 'terraform_apply = $false' "$script"
+          grep -F "ExpectedBranch = 'main'" "$script"
+          grep -F 'ghcr.io/soaiacore-corporation/soaiacore-worker@sha256:0effb661f90cb59d57c152f88eb4b4ddc3a9d8958b3286ed3949a29b6af8abdc' "$script"
+          grep -F 'MigrationWorkerImage -ne $CanonicalMigrationWorkerImage' "$script"
           ! grep -E 'terraform .* apply' "$script"
 
       - name: Record gate
         run: |
           echo "A2_PRIVATE_MIGRATION_STATIC=PASS"
           echo "EXPECTED_CREATE_COUNT=4"
+          echo "CANONICAL_SOURCE_BRANCH=main"
+          echo "CANONICAL_WORKER_DIGEST=sha256:0effb661f90cb59d57c152f88eb4b4ddc3a9d8958b3286ed3949a29b6af8abdc"
           echo "PLAN_JSON_PERSISTED=false"
           echo "AZURE_MUTATION=false"
           echo "DATABASE_MUTATION=false"
