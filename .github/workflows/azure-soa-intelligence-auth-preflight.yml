@@ -1,6 +1,7 @@
 name: Azure SOA Intelligence Auth Preflight
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - feature/soa-intelligence-a2-postgres-20260906-r2
