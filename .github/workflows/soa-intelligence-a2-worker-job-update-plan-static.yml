@@ -1,0 +1,133 @@
+name: SOA Intelligence A2 Worker Job Update Plan Static
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/soa-intelligence-a2-worker-job-update-plan-static.yml
+      - scripts/azure/Invoke-SOAIntelligenceA2WorkerJobUpdatePlan.ps1
+      - infra/azure/soa-intelligence-dev/private_migration.tf
+      - infra/azure/soa-intelligence-dev/variables.tf
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/soa-intelligence-a2-worker-job-update-plan-static.yml
+      - scripts/azure/Invoke-SOAIntelligenceA2WorkerJobUpdatePlan.ps1
+      - infra/azure/soa-intelligence-dev/private_migration.tf
+      - infra/azure/soa-intelligence-dev/variables.tf
+
+permissions:
+  contents: read
+
+concurrency:
+  group: a2-worker-job-update-plan-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  static:
+    name: A2 Worker Job update plan contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Parse governed PowerShell runner
+        shell: pwsh
+        run: |
+          $path = 'scripts/azure/Invoke-SOAIntelligenceA2WorkerJobUpdatePlan.ps1'
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
+          if ($errors.Count -ne 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host 'A2_WORKER_JOB_UPDATE_PLAN_RUNNER_PARSE=PASS'
+
+      - name: Enforce canonical Worker and transition contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          script='scripts/azure/Invoke-SOAIntelligenceA2WorkerJobUpdatePlan.ps1'
+          tf='infra/azure/soa-intelligence-dev/private_migration.tf'
+
+          grep -F 'ghcr.io/soaiacore-corporation/soaiacore-worker@sha256:85f27c3640edf98ec391feaa24fd3bd1ddb678ee1bf12220fa5a11f82bb07b2d' "$script" >/dev/null
+          grep -F 'ghcr.io/soaiacore-corporation/soaiacore-worker@sha256:0effb661f90cb59d57c152f88eb4b4ddc3a9d8958b3286ed3949a29b6af8abdc' "$script" >/dev/null
+          grep -F "ExpectedUpdateAddress = 'azurerm_container_app_job.a2_migration'" "$script" >/dev/null
+          grep -F "ExpectedCommand = @('/app/.venv/bin/python', '-m', 'soaiacore_worker', 'a2-bootstrap')" "$script" >/dev/null
+          grep -F "PreviousCommand = @('python', '-m', 'soaiacore_worker', 'a2-bootstrap')" "$script" >/dev/null
+          grep -F 'command = ["/app/.venv/bin/python", "-m", "soaiacore_worker", "a2-bootstrap"]' "$tf" >/dev/null
+          echo 'A2_WORKER_TRANSITION_CONTRACT=PASS'
+
+      - name: Enforce exact 15-state and one-update policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          script='scripts/azure/Invoke-SOAIntelligenceA2WorkerJobUpdatePlan.ps1'
+          for address in \
+            'data.azurerm_client_config.current' \
+            'random_string.suffix' \
+            'random_password.postgresql' \
+            'azurerm_resource_group.soa_intelligence' \
+            'azurerm_virtual_network.soa_intelligence' \
+            'azurerm_subnet.postgresql' \
+            'azurerm_private_dns_zone.postgresql' \
+            'azurerm_private_dns_zone_virtual_network_link.postgresql' \
+            'azurerm_postgresql_flexible_server.soa_intelligence' \
+            'azurerm_postgresql_flexible_server_database.soa_intelligence' \
+            'azurerm_postgresql_flexible_server_configuration.extensions' \
+            'azurerm_subnet.container_apps' \
+            'azurerm_log_analytics_workspace.a2_migration' \
+            'azurerm_container_app_environment.a2_migration' \
+            'azurerm_container_app_job.a2_migration'; do
+              grep -F "'$address'" "$script" >/dev/null
+          done
+          grep -F '$stateAddresses.Count -ne 15' "$script" >/dev/null
+          grep -F '$createAddresses.Count -eq 0' "$script" >/dev/null
+          grep -F '$updateAddresses.Count -eq 1' "$script" >/dev/null
+          grep -F '$deleteAddresses.Count -eq 0' "$script" >/dev/null
+          grep -F '$replaceAddresses.Count -eq 0' "$script" >/dev/null
+          echo 'A2_EXACT_15_STATE_ONE_UPDATE_POLICY=PASS'
+
+      - name: Enforce plan-only secret-safe boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          script='scripts/azure/Invoke-SOAIntelligenceA2WorkerJobUpdatePlan.ps1'
+          grep -F "ExpectedBranch = 'main'" "$script" >/dev/null
+          grep -F "Read-Host 'GHCR read-only token' -AsSecureString" "$script" >/dev/null
+          grep -F 'PLAN_JSON_PERSISTED' "$script" >/dev/null
+          grep -F "Write-Boundary 'TERRAFORM_APPLY' 'false'" "$script" >/dev/null
+          grep -F "Write-Boundary 'DATABASE_MUTATION' 'false'" "$script" >/dev/null
+          grep -F "Write-Boundary 'JOB_START' 'false'" "$script" >/dev/null
+          grep -F "Write-Boundary 'IAM_MUTATION' 'false'" "$script" >/dev/null
+          grep -F "Write-Boundary 'FIREWALL_OPENED' 'false'" "$script" >/dev/null
+          grep -F "Write-Boundary 'POSTGRESQL_PUBLIC' 'false'" "$script" >/dev/null
+          grep -F "Write-Boundary 'P0_MUTATION' 'false'" "$script" >/dev/null
+          grep -F 'Remove-Item Env:TF_VAR_ghcr_token' "$script" >/dev/null
+          if grep -E '&[[:space:]]+terraform[[:space:]].*[[:space:]]apply([[:space:]]|$)|&[[:space:]]+az[[:space:]]+containerapp[[:space:]]+job[[:space:]]+start([[:space:]]|$)' "$script"; then
+            echo 'Executable material apply/start command found in plan-only runner' >&2
+            exit 1
+          fi
+          echo 'A2_PLAN_ONLY_SECRET_SAFE_BOUNDARY=PASS'
+
+      - name: Record gate
+        shell: bash
+        run: |
+          {
+            echo '## A2 Worker Job update plan static gate'
+            echo
+            echo '- Expected remote state: `15` addresses'
+            echo '- Expected Terraform action set: `0 CREATE / 1 UPDATE / 0 DELETE / 0 REPLACE`'
+            echo '- Expected update address: `azurerm_container_app_job.a2_migration`'
+            echo '- Canonical Worker: `sha256:85f27c3640edf98ec391feaa24fd3bd1ddb678ee1bf12220fa5a11f82bb07b2d`'
+            echo '- Terraform apply: `false`'
+            echo '- Container Apps Job start: `false`'
+            echo '- Plan JSON persistence: `false`'
+            echo '- Azure/DB/IAM/firewall/P0 mutation: `false`'
+          } >> "$GITHUB_STEP_SUMMARY"
