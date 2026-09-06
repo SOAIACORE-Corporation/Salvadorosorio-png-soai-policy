@@ -14,7 +14,14 @@ COPY apps/core/pyproject.toml apps/core/pyproject.toml
 COPY apps/core/src apps/core/src
 COPY apps/worker/pyproject.toml apps/worker/pyproject.toml
 COPY apps/worker/src apps/worker/src
-RUN uv sync --frozen --no-dev --no-editable --package soaiacore-worker
+RUN uv sync \
+    --python /usr/local/bin/python \
+    --no-managed-python \
+    --no-python-downloads \
+    --frozen \
+    --no-dev \
+    --no-editable \
+    --package soaiacore-worker
 
 FROM --platform=linux/amd64 docker.io/library/python:3.12-slim-trixie@sha256:2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a AS runtime
 ARG VCS_REF=uncommitted
