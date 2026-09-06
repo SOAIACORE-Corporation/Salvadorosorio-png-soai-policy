@@ -12,6 +12,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    throw 'This controlled A2 plan runner requires PowerShell 7 or newer (pwsh.exe).'
+}
 if (-not $IsWindows) {
     throw 'This controlled A2 plan runner must be executed from the authorized Windows operator workstation, not Cloud Shell or a GitHub-hosted runner.'
 }
@@ -119,7 +122,6 @@ $artifactRoot = Join-Path $HOME ("SOAIACORE\controlled-a2-plan\$timestamp")
 $evidenceDir = Join-Path $artifactRoot 'evidence'
 New-Item -ItemType Directory -Path $evidenceDir -Force | Out-Null
 
-# Fail closed on artifact permissions. The binary plan may contain sensitive infrastructure metadata.
 $identity = (& whoami).Trim()
 & icacls $artifactRoot /inheritance:r | Out-Null
 Assert-LastExitCode 'icacls disable inheritance'
@@ -140,6 +142,11 @@ subscription_id       = "$SubscriptionId"
 "@ | Set-Content -Path $backendConfigPath -Encoding utf8NoBOM
 
 $stackDir = Join-Path $repoRoot 'infra\azure\soa-intelligence-dev'
+if (-not (Test-Path -LiteralPath $stackDir -PathType Container)) {
+    throw "Terraform stack directory not found: $stackDir"
+}
+Write-Boundary 'STACK_PATH' 'PASS'
+
 $planPath = Join-Path $evidenceDir 'soa-intelligence-a2.tfplan'
 $planJsonPath = Join-Path $evidenceDir 'soa-intelligence-a2.tfplan.json'
 $receiptPath = Join-Path $artifactRoot 'SOA_INTELLIGENCE_A2_PLAN_RECEIPT.sanitized.json'
@@ -152,16 +159,17 @@ $env:ARM_TENANT_ID = $tenantId
 $env:ARM_USE_AZUREAD = 'true'
 $env:ARM_USE_CLI = 'true'
 
-& terraform -chdir=$stackDir fmt -check -diff
+$chdirArg = "-chdir=$stackDir"
+& terraform $chdirArg fmt -check -diff
 Assert-LastExitCode 'terraform fmt -check'
-& terraform -chdir=$stackDir init -reconfigure -input=false -backend-config=$backendConfigPath
+& terraform $chdirArg init -reconfigure -input=false "-backend-config=$backendConfigPath"
 Assert-LastExitCode 'terraform init'
-& terraform -chdir=$stackDir validate -no-color
+& terraform $chdirArg validate -no-color
 Assert-LastExitCode 'terraform validate'
 Write-Boundary 'TERRAFORM_INIT' 'PASS'
 Write-Boundary 'TERRAFORM_VALIDATE' 'PASS'
 
-& terraform -chdir=$stackDir plan -input=false -no-color -out=$planPath -detailed-exitcode
+& terraform $chdirArg plan -input=false -no-color "-out=$planPath" -detailed-exitcode
 $planExit = $LASTEXITCODE
 if ($planExit -eq 0) {
     throw 'Terraform returned no changes. A first A2 plan is expected to contain the isolated DEV resources.'
@@ -170,7 +178,7 @@ if ($planExit -ne 2) {
     throw "terraform plan failed with exit code $planExit."
 }
 
-$planJsonRaw = & terraform -chdir=$stackDir show -json $planPath
+$planJsonRaw = & terraform $chdirArg show -json $planPath
 Assert-LastExitCode 'terraform show -json'
 $planJsonRaw | Set-Content -Path $planJsonPath -Encoding utf8NoBOM
 $plan = $planJsonRaw | ConvertFrom-Json -Depth 100
