@@ -1,0 +1,113 @@
+name: SOA Intelligence A2 Private Migration Static
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/soa-intelligence-a2-private-migration-static.yml
+      - infra/azure/soa-intelligence-dev/**
+      - scripts/azure/Invoke-SOAIntelligenceA2PrivateMigrationPlan.ps1
+
+permissions:
+  contents: read
+
+concurrency:
+  group: a2-private-migration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: A2 private migration Terraform contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Set up Terraform 1.15.0
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: 1.15.0
+          terraform_wrapper: false
+
+      - name: Parse governed PowerShell plan runner
+        shell: pwsh
+        run: |
+          $path = 'scripts/azure/Invoke-SOAIntelligenceA2PrivateMigrationPlan.ps1'
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
+          if ($errors.Count -ne 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host 'A2_PRIVATE_MIGRATION_PLAN_RUNNER_PARSE=PASS'
+
+      - name: Terraform formatting
+        run: terraform fmt -check -recursive infra/azure/soa-intelligence-dev
+
+      - name: Build isolated backend-free validation copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -R infra/azure/soa-intelligence-dev "$RUNNER_TEMP/soa-intelligence-dev"
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          path = Path(os.environ["RUNNER_TEMP"]) / "soa-intelligence-dev" / "versions.tf"
+          text = path.read_text(encoding="utf-8")
+          needle = '  backend "azurerm" {}\n\n'
+          if text.count(needle) != 1:
+              raise SystemExit("Expected exactly one empty azurerm backend declaration")
+          path.write_text(text.replace(needle, "", 1), encoding="utf-8")
+          PY
+
+      - name: Initialize isolated validation copy
+        run: terraform -chdir="$RUNNER_TEMP/soa-intelligence-dev" init -backend=false -input=false -no-color
+
+      - name: Validate Terraform configuration
+        run: terraform -chdir="$RUNNER_TEMP/soa-intelligence-dev" validate -no-color
+
+      - name: Enforce private migration boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=infra/azure/soa-intelligence-dev/private_migration.tf
+          grep -F 'address_prefixes     = ["10.60.20.0/27"]' "$file"
+          grep -F 'name = "Microsoft.App/environments"' "$file"
+          grep -F 'command = ["python", "-m", "soaiacore_worker", "a2-bootstrap"]' "$file"
+          grep -F 'replica_retry_limit          = 0' "$file"
+          grep -F 'public_network_access_enabled = false' infra/azure/soa-intelligence-dev/postgresql.tf
+          ! grep -R -E 'azurerm_postgresql_flexible_server_firewall_rule|azurerm_role_assignment' "$file"
+          ! grep -R -E 'public_network_access_enabled[[:space:]]*=[[:space:]]*true' infra/azure/soa-intelligence-dev
+
+      - name: Enforce governed plan safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          script=scripts/azure/Invoke-SOAIntelligenceA2PrivateMigrationPlan.ps1
+          grep -F "'azurerm_subnet.container_apps'" "$script"
+          grep -F "'azurerm_log_analytics_workspace.a2_migration'" "$script"
+          grep -F "'azurerm_container_app_environment.a2_migration'" "$script"
+          grep -F "'azurerm_container_app_job.a2_migration'" "$script"
+          grep -F 'plan_json_persisted = $false' "$script"
+          grep -F 'terraform_apply = $false' "$script"
+          grep -F "ExpectedBranch = 'main'" "$script"
+          grep -F 'ghcr.io/soaiacore-corporation/soaiacore-worker@sha256:0effb661f90cb59d57c152f88eb4b4ddc3a9d8958b3286ed3949a29b6af8abdc' "$script"
+          grep -F 'MigrationWorkerImage -ne $CanonicalMigrationWorkerImage' "$script"
+          ! grep -E 'terraform .* apply' "$script"
+
+      - name: Record gate
+        run: |
+          echo "A2_PRIVATE_MIGRATION_STATIC=PASS"
+          echo "EXPECTED_CREATE_COUNT=4"
+          echo "CANONICAL_SOURCE_BRANCH=main"
+          echo "CANONICAL_WORKER_DIGEST=sha256:0effb661f90cb59d57c152f88eb4b4ddc3a9d8958b3286ed3949a29b6af8abdc"
+          echo "PLAN_JSON_PERSISTED=false"
+          echo "AZURE_MUTATION=false"
+          echo "DATABASE_MUTATION=false"
+          echo "IAM_MUTATION=false"
+          echo "FIREWALL_OPENED=false"

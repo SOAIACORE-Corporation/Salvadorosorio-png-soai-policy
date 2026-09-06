@@ -32,3 +32,18 @@ output "private_dns_zone_id" {
   description = "Private DNS zone linked to the SOA Intelligence VNet."
   value       = azurerm_private_dns_zone.postgresql.id
 }
+
+output "container_apps_subnet_id" {
+  description = "Dedicated Microsoft.App/environments delegated subnet for the private A2 migration runtime."
+  value       = azurerm_subnet.container_apps.id
+}
+
+output "a2_migration_environment_id" {
+  description = "Container Apps environment used only for private A2 migration execution."
+  value       = azurerm_container_app_environment.a2_migration.id
+}
+
+output "a2_migration_job_name" {
+  description = "Manual Container Apps Job that executes the governed A2 bootstrap command."
+  value       = azurerm_container_app_job.a2_migration.name
+}
