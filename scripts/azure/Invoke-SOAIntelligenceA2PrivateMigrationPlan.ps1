@@ -4,7 +4,7 @@ param(
     [Parameter(Mandatory)][string]$GhcrUsername,
     [SecureString]$GhcrToken,
     [string]$SubscriptionId = '108eb4dd-25b3-4a7f-8d5e-4ec4389c3f0d',
-    [string]$ExpectedBranch = 'feature/soa-intelligence-a2-private-migration-20260906',
+    [string]$ExpectedBranch = 'main',
     [string]$StateResourceGroup = 'rg-soaiacore-tfstate-34utxi',
     [string]$StateStorageAccount = 'stsoaiacoretf34utxi',
     [string]$StateContainer = 'tfstate',
@@ -67,7 +67,7 @@ if ($dirty.Count -ne 0) {
 }
 
 & git fetch origin $ExpectedBranch --quiet
-Assert-LastExitCode 'git fetch feature branch'
+Assert-LastExitCode 'git fetch expected branch'
 $localHead = (& git rev-parse HEAD).Trim()
 $remoteHead = (& git rev-parse "origin/$ExpectedBranch").Trim()
 Assert-LastExitCode 'git rev-parse remote branch'
@@ -76,6 +76,7 @@ if ($localHead -ne $remoteHead) {
 }
 Write-Boundary 'CONFIG_COMMIT' $localHead
 Write-Boundary 'BRANCH_SYNC' 'PASS'
+Write-Boundary 'CANONICAL_SOURCE_BRANCH' $ExpectedBranch
 Write-Boundary 'CANONICAL_WORKER_IMAGE' $CanonicalMigrationWorkerImage
 
 $terraformInfo = (& terraform version -json) | ConvertFrom-Json
