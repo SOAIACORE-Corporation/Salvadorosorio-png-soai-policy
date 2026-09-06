@@ -21,6 +21,7 @@ locals {
   name_prefix = "${var.project_name}-${var.environment}"
 
   required_tags = merge(
+    var.tags,
     {
       project        = "SOA Intelligence"
       architecture   = "SOAiaCore"
@@ -30,7 +31,6 @@ locals {
       data_class     = "restricted"
       canonical_role = "persistence-dev"
     },
-    var.tags,
   )
 }
 
