@@ -10,6 +10,7 @@ on:
       - scripts/forensics/Invoke-P0RecoveryDiagnosticPlan.ps1
       - scripts/forensics/Invoke-P0RecoveryPlanTextDiagnostic.ps1
       - scripts/forensics/New-P0RecoverySavedPlan.ps1
+      - scripts/forensics/Invoke-P0AuthorizedSavedPlanApply.ps1
 
 permissions:
   contents: read
@@ -36,7 +37,8 @@ jobs:
           $paths = @(
             'scripts/forensics/Invoke-P0RecoveryDiagnosticPlan.ps1',
             'scripts/forensics/Invoke-P0RecoveryPlanTextDiagnostic.ps1',
-            'scripts/forensics/New-P0RecoverySavedPlan.ps1'
+            'scripts/forensics/New-P0RecoverySavedPlan.ps1',
+            'scripts/forensics/Invoke-P0AuthorizedSavedPlanApply.ps1'
           )
           foreach ($path in $paths) {
             $tokens = $null
@@ -59,7 +61,8 @@ jobs:
           $paths = @(
             'scripts/forensics/Invoke-P0RecoveryDiagnosticPlan.ps1',
             'scripts/forensics/Invoke-P0RecoveryPlanTextDiagnostic.ps1',
-            'scripts/forensics/New-P0RecoverySavedPlan.ps1'
+            'scripts/forensics/New-P0RecoverySavedPlan.ps1',
+            'scripts/forensics/Invoke-P0AuthorizedSavedPlanApply.ps1'
           )
           foreach ($path in $paths) {
             & pwsh -NoProfile -File $path -SelfTest
