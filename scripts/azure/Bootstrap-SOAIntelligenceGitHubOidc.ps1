@@ -7,6 +7,7 @@ param(
     [string]$BootstrapResourceGroup = 'rg-soa-intelligence-bootstrap',
     [string]$IdentityName = 'id-soa-intelligence-gha-dev',
     [string]$Repository = 'SOAIACORE-Corporation/Salvadorosorio-png-soai-policy',
+    [string]$FeatureBranch = 'feature/soa-intelligence-a2-postgres-20260906-r2',
     [string]$StateResourceGroup = 'rg-soaiacore-tfstate-34utxi',
     [string]$StateStorageAccount = 'stsoaiacoretf34utxi'
 )
@@ -32,7 +33,7 @@ function Write-Boundary {
 $account = Invoke-AzJson -Arguments @('account','show')
 if (-not $account) { throw 'Azure CLI is not authenticated. Run az login / Cloud Shell first.' }
 if ($account.id -ne $SubscriptionId) {
-    throw "Authenticated subscription does not match expected subscription. Refusing to continue."
+    throw 'Authenticated subscription does not match expected subscription. Refusing to continue.'
 }
 
 $tenantId = [string]$account.tenantId
@@ -43,21 +44,22 @@ Write-Boundary 'IAM_AUTHORIZED' ($(if ($AuthorizeIam) { 'YES' } else { 'NO' }))
 
 $issuer = 'https://token.actions.githubusercontent.com'
 $audience = 'api://AzureADTokenExchange'
-$prSubject = "repo:${Repository}:pull_request"
+$featureSubject = "repo:${Repository}:ref:refs/heads/${FeatureBranch}"
 $mainSubject = "repo:${Repository}:ref:refs/heads/main"
 
 Write-Host ''
 Write-Host 'Planned identity:'
-Write-Host "  resource-group: $BootstrapResourceGroup"
-Write-Host "  identity:       $IdentityName"
-Write-Host "  PR subject:     $prSubject"
-Write-Host "  main subject:   $mainSubject"
+Write-Host "  resource-group:  $BootstrapResourceGroup"
+Write-Host "  identity:        $IdentityName"
+Write-Host "  feature subject: $featureSubject"
+Write-Host "  main subject:    $mainSubject"
+Write-Host '  generic PR subject: FORBIDDEN / removed if present'
 Write-Host ''
 
 if (-not $Apply) {
-    Write-Host 'PLAN_ONLY: no Azure resources or RBAC assignments were changed.'
-    Write-Host 'To execute identity creation, rerun with -Apply.'
-    Write-Host 'To also grant the narrowly-scoped preflight RBAC roles, use -Apply -AuthorizeIam.'
+    Write-Host 'PLAN_ONLY: no Azure resources, federated credentials, or RBAC assignments were changed.'
+    Write-Host 'To execute identity/federation reconciliation, rerun with -Apply.'
+    Write-Host 'To also ensure the narrowly-scoped backend read roles, use -Apply -AuthorizeIam.'
     Write-Boundary 'AZURE_MUTATION' 'false'
     exit 0
 }
@@ -98,7 +100,12 @@ function Ensure-FederatedCredential {
         --only-show-errors --output json 2>$null
 
     if ($LASTEXITCODE -eq 0) {
+        $existingObject = $existing | ConvertFrom-Json
+        if ([string]$existingObject.subject -ne $Subject) {
+            throw "Federated credential '$Name' exists with an unexpected subject. Refusing implicit replacement."
+        }
         Write-Boundary ("FEDERATED_CREDENTIAL_{0}_CREATED" -f $Name.ToUpperInvariant()) 'false'
+        Write-Boundary ("FEDERATED_CREDENTIAL_{0}_SUBJECT_MATCH" -f $Name.ToUpperInvariant()) 'true'
         return
     }
 
@@ -112,9 +119,29 @@ function Ensure-FederatedCredential {
         '--audiences',$audience
     ) | Out-Null
     Write-Boundary ("FEDERATED_CREDENTIAL_{0}_CREATED" -f $Name.ToUpperInvariant()) 'true'
+    Write-Boundary ("FEDERATED_CREDENTIAL_{0}_SUBJECT_MATCH" -f $Name.ToUpperInvariant()) 'true'
 }
 
-Ensure-FederatedCredential -Name 'github-pr' -Subject $prSubject
+# Security hardening: a generic repo:...:pull_request subject is too broad for a public repository.
+$legacyPrCredential = & az identity federated-credential show `
+    --resource-group $BootstrapResourceGroup `
+    --identity-name $IdentityName `
+    --name 'github-pr' `
+    --only-show-errors --output json 2>$null
+if ($LASTEXITCODE -eq 0) {
+    & az identity federated-credential delete `
+        --resource-group $BootstrapResourceGroup `
+        --identity-name $IdentityName `
+        --name 'github-pr' `
+        --yes `
+        --only-show-errors
+    if ($LASTEXITCODE -ne 0) { throw 'Failed removing legacy generic PR federated credential.' }
+    Write-Boundary 'LEGACY_GENERIC_PR_CREDENTIAL_REMOVED' 'true'
+} else {
+    Write-Boundary 'LEGACY_GENERIC_PR_CREDENTIAL_REMOVED' 'false'
+}
+
+Ensure-FederatedCredential -Name 'github-feature-a2' -Subject $featureSubject
 Ensure-FederatedCredential -Name 'github-main' -Subject $mainSubject
 
 if ($AuthorizeIam) {
@@ -133,7 +160,7 @@ if ($AuthorizeIam) {
         --role Reader `
         --scope $stateRgId `
         --only-show-errors --output none
-    if ($LASTEXITCODE -ne 0) { throw 'Failed assigning Reader on state resource group.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Failed ensuring Reader on state resource group.' }
 
     & az role assignment create `
         --assignee-object-id $principalId `
@@ -141,12 +168,12 @@ if ($AuthorizeIam) {
         --role 'Storage Blob Data Reader' `
         --scope $storageId `
         --only-show-errors --output none
-    if ($LASTEXITCODE -ne 0) { throw 'Failed assigning Storage Blob Data Reader on state account.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Failed ensuring Storage Blob Data Reader on state account.' }
 
-    Write-Boundary 'STATE_RG_READER_GRANTED' 'true'
-    Write-Boundary 'STATE_BLOB_DATA_READER_GRANTED' 'true'
+    Write-Boundary 'STATE_RG_READER_GRANTED_OR_PRESENT' 'true'
+    Write-Boundary 'STATE_BLOB_DATA_READER_GRANTED_OR_PRESENT' 'true'
 } else {
-    Write-Host 'IAM NOT CHANGED. OIDC identity exists, but the backend preflight will still require scoped read roles.'
+    Write-Host 'IAM NOT CHANGED. OIDC federation was reconciled, but backend preflight requires the scoped read roles.'
 }
 
 Write-Host ''
@@ -156,6 +183,7 @@ Write-Host "AZURE_TENANT_ID=$tenantId"
 Write-Host "AZURE_SUBSCRIPTION_ID=$SubscriptionId"
 Write-Host ''
 Write-Host 'These identifiers are not credentials. Do not store passwords or client secrets.'
+Write-Boundary 'GENERIC_PULL_REQUEST_FEDERATION_PRESENT' 'false'
 Write-Boundary 'CLIENT_SECRET_CREATED' 'false'
 Write-Boundary 'SUBSCRIPTION_CONTRIBUTOR_GRANTED' 'false'
 Write-Boundary 'BOOTSTRAP_STATUS' 'PASS'
