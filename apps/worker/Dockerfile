@@ -5,7 +5,7 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
-WORKDIR /src
+WORKDIR /app
 RUN python -m pip install --no-cache-dir uv==0.12.5
 COPY pyproject.toml uv.lock .python-version ./
 COPY packages/python-runtime/pyproject.toml packages/python-runtime/pyproject.toml
@@ -14,7 +14,14 @@ COPY apps/core/pyproject.toml apps/core/pyproject.toml
 COPY apps/core/src apps/core/src
 COPY apps/worker/pyproject.toml apps/worker/pyproject.toml
 COPY apps/worker/src apps/worker/src
-RUN uv sync --frozen --no-dev --no-editable --package soaiacore-worker
+RUN uv sync \
+    --python /usr/local/bin/python \
+    --no-managed-python \
+    --no-python-downloads \
+    --frozen \
+    --no-dev \
+    --no-editable \
+    --package soaiacore-worker
 
 FROM --platform=linux/amd64 docker.io/library/python:3.12-slim-trixie@sha256:2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a AS runtime
 ARG VCS_REF=uncommitted
@@ -35,11 +42,11 @@ RUN apt-get update \
       bsdutils libblkid1 liblastlog2-2 libmount1 libsmartcols1 libuuid1 \
       login mount util-linux libssl3t64 openssl openssl-provider-legacy \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /src/.venv /app/.venv
+COPY --from=builder /app/.venv /app/.venv
 COPY schemas /app/schemas
 COPY contracts /app/contracts
 COPY db/migrations /app/db/migrations
 COPY db/a2_migrations /app/db/a2_migrations
 COPY packages/mock-fixtures /app/packages/mock-fixtures
 USER 65532:65532
-CMD ["python", "-m", "soaiacore_worker", "run-one"]
+CMD ["/app/.venv/bin/python", "-m", "soaiacore_worker", "run-one"]

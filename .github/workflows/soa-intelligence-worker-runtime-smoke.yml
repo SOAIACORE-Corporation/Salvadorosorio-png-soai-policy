@@ -1,0 +1,115 @@
+name: SOA Intelligence Worker OCI Runtime Smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/soa-intelligence-worker-runtime-smoke.yml
+      - apps/worker/**
+      - packages/python-runtime/**
+      - db/migrations/**
+      - db/a2_migrations/**
+      - infra/azure/soa-intelligence-dev/private_migration.tf
+      - pyproject.toml
+      - uv.lock
+      - .python-version
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/soa-intelligence-worker-runtime-smoke.yml
+      - apps/worker/**
+      - packages/python-runtime/**
+      - db/migrations/**
+      - db/a2_migrations/**
+      - infra/azure/soa-intelligence-dev/private_migration.tf
+      - pyproject.toml
+      - uv.lock
+      - .python-version
+
+permissions:
+  contents: read
+
+concurrency:
+  group: a2-worker-runtime-smoke-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  WORKER_IMAGE: local/soaiacore-worker-runtime-smoke
+
+jobs:
+  worker-runtime-smoke:
+    name: Worker OCI runtime contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out the authorized commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Build Worker for linux/amd64
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: apps/worker/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          provenance: false
+          build-args: VCS_REF=${{ github.sha }}
+          tags: ${{ env.WORKER_IMAGE }}:${{ github.sha }}
+
+      - name: Verify Worker module through exact runtime interpreter
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --entrypoint /app/.venv/bin/python \
+            "${WORKER_IMAGE}:${GITHUB_SHA}" \
+            -m soaiacore_worker --help >/dev/null
+          docker run --rm \
+            --entrypoint /app/.venv/bin/python \
+            "${WORKER_IMAGE}:${GITHUB_SHA}" \
+            -c 'import soaiacore_worker, soaiacore_runtime; print("WORKER_RUNTIME_IMPORT_PASS")'
+
+      - name: Verify runtime filesystem contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --entrypoint /bin/sh \
+            "${WORKER_IMAGE}:${GITHUB_SHA}" \
+            -c 'test -d /app/schemas && test -d /app/db/migrations && test -d /app/db/a2_migrations'
+
+      - name: Verify immutable Worker command contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(docker image inspect "${WORKER_IMAGE}:${GITHUB_SHA}" --format '{{json .Config.Cmd}}')"
+          expected='["/app/.venv/bin/python","-m","soaiacore_worker","run-one"]'
+          test "${actual}" = "${expected}"
+          grep -F 'command = ["/app/.venv/bin/python", "-m", "soaiacore_worker", "a2-bootstrap"]' \
+            infra/azure/soa-intelligence-dev/private_migration.tf >/dev/null
+
+      - name: Record smoke receipt
+        shell: bash
+        run: |
+          {
+            echo '## SOA Intelligence Worker OCI runtime smoke'
+            echo
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo '- Platform: `linux/amd64`'
+            echo '- `/app/.venv/bin/python -m soaiacore_worker --help`: `PASS`'
+            echo '- Worker/runtime imports: `PASS`'
+            echo '- Runtime migration directories: `PASS`'
+            echo '- Docker CMD explicit venv interpreter: `PASS`'
+            echo '- A2 migration Job command explicit venv interpreter: `PASS`'
+            echo '- LIVE_PROVIDER_CALLS: `0`'
+          } >> "${GITHUB_STEP_SUMMARY}"
