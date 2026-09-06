@@ -122,6 +122,41 @@ function Ensure-FederatedCredential {
     Write-Boundary ("FEDERATED_CREDENTIAL_{0}_SUBJECT_MATCH" -f $Name.ToUpperInvariant()) 'true'
 }
 
+function Ensure-RoleAssignment {
+    param(
+        [Parameter(Mandatory)][string]$RoleName,
+        [Parameter(Mandatory)][string]$Scope,
+        [Parameter(Mandatory)][string]$BoundaryName
+    )
+
+    $existingAssignmentId = & az role assignment list `
+        --assignee $principalId `
+        --role $RoleName `
+        --scope $Scope `
+        --query '[0].id' `
+        --output tsv `
+        --only-show-errors
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed checking existing role assignment '$RoleName' at scope '$Scope'."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace([string]$existingAssignmentId)) {
+        Write-Boundary $BoundaryName 'present'
+        return
+    }
+
+    & az role assignment create `
+        --assignee-object-id $principalId `
+        --assignee-principal-type ServicePrincipal `
+        --role $RoleName `
+        --scope $Scope `
+        --only-show-errors --output none
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed creating role assignment '$RoleName' at scope '$Scope'."
+    }
+    Write-Boundary $BoundaryName 'created'
+}
+
 # Security hardening: a generic repo:...:pull_request subject is too broad for a public repository.
 $legacyPrCredential = & az identity federated-credential show `
     --resource-group $BootstrapResourceGroup `
@@ -154,24 +189,8 @@ if ($AuthorizeIam) {
         --query id --output tsv --only-show-errors
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($storageId)) { throw 'State storage account not found.' }
 
-    & az role assignment create `
-        --assignee-object-id $principalId `
-        --assignee-principal-type ServicePrincipal `
-        --role Reader `
-        --scope $stateRgId `
-        --only-show-errors --output none
-    if ($LASTEXITCODE -ne 0) { throw 'Failed ensuring Reader on state resource group.' }
-
-    & az role assignment create `
-        --assignee-object-id $principalId `
-        --assignee-principal-type ServicePrincipal `
-        --role 'Storage Blob Data Reader' `
-        --scope $storageId `
-        --only-show-errors --output none
-    if ($LASTEXITCODE -ne 0) { throw 'Failed ensuring Storage Blob Data Reader on state account.' }
-
-    Write-Boundary 'STATE_RG_READER_GRANTED_OR_PRESENT' 'true'
-    Write-Boundary 'STATE_BLOB_DATA_READER_GRANTED_OR_PRESENT' 'true'
+    Ensure-RoleAssignment -RoleName 'Reader' -Scope $stateRgId -BoundaryName 'STATE_RG_READER'
+    Ensure-RoleAssignment -RoleName 'Storage Blob Data Reader' -Scope $storageId -BoundaryName 'STATE_BLOB_DATA_READER'
 } else {
     Write-Host 'IAM NOT CHANGED. OIDC federation was reconciled, but backend preflight requires the scoped read roles.'
 }
