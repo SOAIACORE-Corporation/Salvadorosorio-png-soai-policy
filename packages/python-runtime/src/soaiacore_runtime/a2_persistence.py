@@ -24,6 +24,16 @@ A2_REQUIRED_FUNCTIONS = (
     "soa_memory.episodic_memory_as_of(text,timestamp with time zone,timestamp with time zone)",
     "soa_memory.operational_state_as_of(text,timestamp with time zone,timestamp with time zone)",
     "soa_decision.decision_state_as_of(text,timestamp with time zone,timestamp with time zone)",
+    "soa_memory.reject_history_mutation()",
+    "soa_decision.enforce_decision_transition()",
+)
+
+A2_REQUIRED_TRIGGERS = (
+    ("soa_memory", "canonical_memory", "trg_a2_canonical_memory_append_only"),
+    ("soa_memory", "episodic_temporal_memory", "trg_a2_episode_append_only"),
+    ("soa_memory", "operational_state", "trg_a2_operational_state_append_only"),
+    ("soa_decision", "decision_ledger", "trg_a2_decision_transition"),
+    ("soa_decision", "decision_ledger", "trg_a2_decision_ledger_append_only"),
 )
 
 
@@ -34,6 +44,8 @@ class A2PersistenceVerification:
     overlay_migrations: dict[str, str]
     relations: tuple[str, ...]
     functions: tuple[str, ...]
+    triggers: tuple[tuple[str, str, str], ...]
+    working_assumption_enabled: bool
 
 
 def _overlay_files(migration_dir: Path) -> list[Path]:
@@ -58,6 +70,38 @@ def _function_exists(connection, signature: str) -> bool:
     return bool(row and row["present"])
 
 
+def _trigger_exists(connection, schema: str, table: str, trigger: str) -> bool:
+    row = connection.execute(
+        """
+        SELECT EXISTS (
+          SELECT 1
+          FROM pg_trigger t
+          JOIN pg_class c ON c.oid=t.tgrelid
+          JOIN pg_namespace n ON n.oid=c.relnamespace
+          WHERE NOT t.tgisinternal
+            AND n.nspname=%s AND c.relname=%s AND t.tgname=%s
+        ) AS present
+        """,
+        (schema, table, trigger),
+    ).fetchone()
+    return bool(row and row["present"])
+
+
+def _working_assumption_enabled(connection) -> bool:
+    row = connection.execute(
+        """
+        SELECT pg_get_constraintdef(c.oid) AS definition
+        FROM pg_constraint c
+        JOIN pg_class r ON r.oid=c.conrelid
+        JOIN pg_namespace n ON n.oid=r.relnamespace
+        WHERE n.nspname='soa_core'
+          AND r.relname='claims'
+          AND c.conname='claims_epistemic_class_check'
+        """
+    ).fetchone()
+    return bool(row and "WORKING_ASSUMPTION" in row["definition"])
+
+
 def _vector_installed(connection) -> bool:
     row = connection.execute(
         "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname='vector') AS present"
@@ -66,8 +110,11 @@ def _vector_installed(connection) -> bool:
 
 
 def _overlay_objects_present(connection) -> bool:
-    return all(_relation_exists(connection, name) for name in A2_REQUIRED_RELATIONS) and all(
-        _function_exists(connection, signature) for signature in A2_REQUIRED_FUNCTIONS
+    return (
+        all(_relation_exists(connection, name) for name in A2_REQUIRED_RELATIONS)
+        and all(_function_exists(connection, signature) for signature in A2_REQUIRED_FUNCTIONS)
+        and all(_trigger_exists(connection, *spec) for spec in A2_REQUIRED_TRIGGERS)
+        and _working_assumption_enabled(connection)
     )
 
 
@@ -108,11 +155,10 @@ def apply_a2_persistence(
     base_migration_dir: Path,
     a2_migration_dir: Path,
 ) -> dict[str, list[str]]:
-    """Apply the shared persistence baseline, then the isolated A2 overlay.
+    """Apply shared migrations, then the isolated A2 overlay.
 
-    This function performs database mutation and therefore must only be called
-    after the environment-specific execution gate is satisfied. It never opens
-    networking, changes IAM, or changes Azure resources.
+    This mutates only the target database. It never changes networking, IAM or
+    Azure resources and must be called only after the environment execution gate.
     """
 
     base_applied = apply_migrations(database, base_migration_dir)
@@ -155,9 +201,6 @@ def apply_a2_persistence(
                     )
                 continue
 
-            # Crash-safe recovery: if the SQL transaction committed but the
-            # checksum registry write did not, do not recreate canonical
-            # objects. Verify the complete object set and baseline the receipt.
             if _overlay_objects_present(connection):
                 _record_overlay(connection, path, checksum, baselined=True)
                 overlay_applied.append(f"{path.name}:BASELINED")
@@ -206,7 +249,7 @@ def verify_a2_persistence(
         if not _overlay_objects_present(connection):
             raise contract_error(
                 "A2_PERSISTENCE_OBJECTS_MISSING",
-                "One or more A2 persistence relations/functions are absent",
+                "One or more A2 persistence invariants are absent",
                 "PRECHECK",
                 status_code=503,
             )
@@ -228,6 +271,8 @@ def verify_a2_persistence(
         overlay_migrations=overlay,
         relations=A2_REQUIRED_RELATIONS,
         functions=A2_REQUIRED_FUNCTIONS,
+        triggers=A2_REQUIRED_TRIGGERS,
+        working_assumption_enabled=True,
     )
 
 
@@ -245,13 +290,6 @@ def canonical_memory_as_of(
     valid_at: datetime,
     recorded_at: datetime,
 ) -> list[dict[str, Any]]:
-    """Return canonical memory visible at both business-time and record-time.
-
-    Supplying recorded_at is mandatory. This is the application-side companion
-    to the SQL recorded_time <= p_recorded_at guard that prevents T2 evidence
-    from leaking into a query situated at T1.
-    """
-
     scope = _require_scope(project_scope)
     with database.connect(autocommit=True) as connection:
         rows = connection.execute(

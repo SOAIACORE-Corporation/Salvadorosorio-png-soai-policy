@@ -1,12 +1,20 @@
 BEGIN;
 
 -- SOA Intelligence A2 persistence overlay.
--- This migration is intentionally isolated from db/migrations (P0 baseline).
--- It must only be executed against the dedicated A2 database after the base
--- migrations have installed pgvector and the shared evidence/claim schemas.
+-- Intentionally isolated from db/migrations (P0 baseline).
+-- Execute only against the dedicated A2 database after the shared baseline.
 
 CREATE SCHEMA IF NOT EXISTS soa_memory;
 CREATE SCHEMA IF NOT EXISTS soa_decision;
+
+-- A2 extends the P0 claim vocabulary without changing the P0 migration files.
+ALTER TABLE soa_core.claims
+    DROP CONSTRAINT IF EXISTS claims_epistemic_class_check;
+ALTER TABLE soa_core.claims
+    ADD CONSTRAINT claims_epistemic_class_check CHECK (epistemic_class IN (
+        'DOCUMENTED_FACT','CONFIRMED_CONTEXT','INFERENCE','HYPOTHESIS',
+        'WORKING_ASSUMPTION','CONTRADICTION','UNKNOWN','STALE','STALE_INFORMATION'
+    ));
 
 CREATE TABLE soa_memory.canonical_memory (
     memory_id text PRIMARY KEY,
@@ -16,12 +24,8 @@ CREATE TABLE soa_memory.canonical_memory (
     subject_ref text,
     content jsonb NOT NULL,
     epistemic_class text NOT NULL CHECK (epistemic_class IN (
-        'DOCUMENTED_FACT',
-        'CONFIRMED_CONTEXT',
-        'INFERENCE',
-        'HYPOTHESIS',
-        'WORKING_ASSUMPTION',
-        'STALE_INFORMATION'
+        'DOCUMENTED_FACT','CONFIRMED_CONTEXT','INFERENCE','HYPOTHESIS',
+        'WORKING_ASSUMPTION','STALE_INFORMATION'
     )),
     admission_state text NOT NULL CHECK (admission_state IN (
         'PROPOSED','ADMITTED','REJECTED','SUPERSEDED','REVOKED'
@@ -115,6 +119,7 @@ CREATE TABLE soa_decision.decision_ledger (
 );
 
 CREATE TABLE soa_memory.memory_claim_lineage (
+    lineage_id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     memory_id text NOT NULL REFERENCES soa_memory.canonical_memory(memory_id),
     claim_id text NOT NULL REFERENCES soa_core.claims(claim_id),
     evidence_ref_id text REFERENCES soa_evidence.evidence_references(evidence_ref_id),
@@ -122,7 +127,7 @@ CREATE TABLE soa_memory.memory_claim_lineage (
         'SOURCE','SUPPORT','CONTRADICTION','ADMISSION_BASIS'
     )),
     created_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (memory_id, claim_id, lineage_role)
+    UNIQUE NULLS NOT DISTINCT (memory_id, claim_id, evidence_ref_id, lineage_role)
 );
 
 CREATE INDEX idx_a2_canonical_memory_asof
@@ -136,8 +141,7 @@ CREATE INDEX idx_a2_decision_asof
 CREATE INDEX idx_a2_memory_claim_lineage_claim
     ON soa_memory.memory_claim_lineage(claim_id, memory_id);
 
--- Bitemporal read functions. Callers MUST provide both valid-time and
--- recorded-time cutoffs. The recorded-time predicate is the T2 -> T1 leak guard.
+-- Bitemporal reads require both situated valid-time and record-time.
 CREATE OR REPLACE FUNCTION soa_memory.canonical_memory_as_of(
     p_project_scope text,
     p_valid_at timestamptz,
@@ -211,8 +215,7 @@ AS $$
     ORDER BY dl.decision_id, dl.recorded_time DESC, dl.event_seq DESC;
 $$;
 
--- Canonical history is append-only. State changes are represented by new
--- versions/events rather than in-place mutation.
+-- History is append-only.
 CREATE OR REPLACE FUNCTION soa_memory.reject_history_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -222,18 +225,74 @@ BEGIN
 END;
 $$;
 
+-- DecisionOS transition/authority enforcement.
+CREATE OR REPLACE FUNCTION soa_decision.enforce_decision_transition()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    previous soa_decision.decision_ledger%ROWTYPE;
+BEGIN
+    IF NEW.event_seq = 1 THEN
+        IF NEW.previous_event_id IS NOT NULL OR NEW.state <> 'PROPOSED' OR NEW.authority_level <> 'R1' THEN
+            RAISE EXCEPTION 'DecisionOS first event must be PROPOSED at R1 with no previous event';
+        END IF;
+    ELSE
+        IF NEW.previous_event_id IS NULL THEN
+            RAISE EXCEPTION 'DecisionOS event_seq > 1 requires previous_event_id';
+        END IF;
+
+        SELECT * INTO previous
+        FROM soa_decision.decision_ledger
+        WHERE decision_event_id = NEW.previous_event_id;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'DecisionOS previous event does not exist';
+        END IF;
+        IF previous.project_scope <> NEW.project_scope OR previous.decision_id <> NEW.decision_id THEN
+            RAISE EXCEPTION 'DecisionOS transition cannot cross project_scope or decision_id';
+        END IF;
+        IF NEW.event_seq <> previous.event_seq + 1 THEN
+            RAISE EXCEPTION 'DecisionOS event_seq must advance exactly by one';
+        END IF;
+
+        IF previous.state = 'PROPOSED' AND NEW.state NOT IN ('APPROVED','REVOKED','FAILED') THEN
+            RAISE EXCEPTION 'Illegal DecisionOS transition from PROPOSED';
+        ELSIF previous.state = 'APPROVED' AND NEW.state NOT IN ('EXECUTED','REVOKED','SUPERSEDED','FAILED') THEN
+            RAISE EXCEPTION 'Illegal DecisionOS transition from APPROVED';
+        ELSIF previous.state = 'EXECUTED' AND NEW.state NOT IN ('VALIDATED','REVOKED','FAILED') THEN
+            RAISE EXCEPTION 'Illegal DecisionOS transition from EXECUTED';
+        ELSIF previous.state = 'VALIDATED' AND NEW.state NOT IN ('SUPERSEDED','REVOKED') THEN
+            RAISE EXCEPTION 'Illegal DecisionOS transition from VALIDATED';
+        ELSIF previous.state IN ('SUPERSEDED','REVOKED','FAILED') THEN
+            RAISE EXCEPTION 'DecisionOS terminal state cannot transition';
+        END IF;
+    END IF;
+
+    IF NEW.state IN ('APPROVED','SUPERSEDED','REVOKED') AND NEW.authority_level = 'R1' THEN
+        RAISE EXCEPTION 'DecisionOS state requires R2 or R3 authority';
+    END IF;
+    IF NEW.authority_level = 'R3' AND NEW.human_authorization_ref IS NULL THEN
+        RAISE EXCEPTION 'DecisionOS R3 event requires explicit human authorization reference';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_a2_decision_transition
+    BEFORE INSERT ON soa_decision.decision_ledger
+    FOR EACH ROW EXECUTE FUNCTION soa_decision.enforce_decision_transition();
+
 CREATE TRIGGER trg_a2_canonical_memory_append_only
     BEFORE UPDATE OR DELETE ON soa_memory.canonical_memory
     FOR EACH ROW EXECUTE FUNCTION soa_memory.reject_history_mutation();
-
 CREATE TRIGGER trg_a2_episode_append_only
     BEFORE UPDATE OR DELETE ON soa_memory.episodic_temporal_memory
     FOR EACH ROW EXECUTE FUNCTION soa_memory.reject_history_mutation();
-
 CREATE TRIGGER trg_a2_operational_state_append_only
     BEFORE UPDATE OR DELETE ON soa_memory.operational_state
     FOR EACH ROW EXECUTE FUNCTION soa_memory.reject_history_mutation();
-
 CREATE TRIGGER trg_a2_decision_ledger_append_only
     BEFORE UPDATE OR DELETE ON soa_decision.decision_ledger
     FOR EACH ROW EXECUTE FUNCTION soa_memory.reject_history_mutation();
