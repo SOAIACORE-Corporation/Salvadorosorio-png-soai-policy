@@ -98,7 +98,23 @@ function Get-PlanTextKeys {
     $currentAddress = $null
 
     foreach ($line in $Lines) {
-        $header = [regex]::Match($line, '^\s*#\s+(\S+)\s+will be\s+(.+?)\s*
+        $header = [regex]::Match($line, '^\s*#\s+(\S+)\s+will be\s+(.+?)\s*$')
+        if ($header.Success) {
+            $candidate = $header.Groups[1].Value
+            $action = $header.Groups[2].Value
+            if ($action -match '^read\b') {
+                $currentAddress = $null
+                continue
+            }
+            if (-not $AllowedAddresses.Contains($candidate)) {
+                Stop-Gate 'STOP_PLAN_TEXT_UNEXPECTED_ADDRESS' ("Plan text contains an unapproved actionable address: {0}" -f $candidate)
+            }
+            $currentAddress = $candidate
+            if (-not $map.Contains($candidate)) {
+                $map[$candidate] = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+            }
+            continue
+        }
 
         if ([string]::IsNullOrWhiteSpace($currentAddress)) { continue }
 
