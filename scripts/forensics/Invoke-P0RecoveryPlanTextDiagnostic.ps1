@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param(
-    [switch]$SelfTest
+    [switch]$SelfTest,
+    [ValidateRange(300, 1800)]
+    [int]$BaseTimeoutSeconds = 900
 )
 
 Set-StrictMode -Version 2.0
@@ -10,7 +12,6 @@ $TargetConfigCommit = '685ca1d13238949e7254d452b0f11fb23777855c'
 $BaseDiagnosticCommit = 'a62bdb0a28c78610eeecaa0b4005bdbd2b83c7e9'
 $BaseDiagnosticUrl = "https://raw.githubusercontent.com/SOAIACORE-Corporation/Salvadorosorio-png-soai-policy/$BaseDiagnosticCommit/scripts/forensics/Invoke-P0RecoveryDiagnosticPlan.ps1"
 $OriginalConfigCommit = '4b47fe25bb89c5733783920b1f8497c7dfadbb92'
-$BaseTimeoutSeconds = 300
 
 function Stop-Gate {
     param([string]$Code, [string]$Message)
@@ -144,12 +145,35 @@ function Invoke-ProcessTextWithTimeout {
         $processStarted = $true
         $stdoutTask = $process.StandardOutput.ReadToEndAsync()
         $stderrTask = $process.StandardError.ReadToEndAsync()
-        if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
-            $timedOut = $true
-            try { $process.Kill($true) } catch {}
-            try { [void]$process.WaitForExit(30000) } catch {}
-            Stop-Gate 'STOP_PROCESS_TIMEOUT' ("{0} exceeded {1} seconds and its process tree was terminated." -f $Label, $TimeoutSeconds)
+        $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        while (-not $process.HasExited) {
+            $remainingMilliseconds = [int][Math]::Max(
+                1,
+                (($TimeoutSeconds * 1000) - $stopwatch.ElapsedMilliseconds)
+            )
+            $waitSliceMilliseconds = [int][Math]::Min(30000, $remainingMilliseconds)
+            if ($process.WaitForExit($waitSliceMilliseconds)) { break }
+
+            $elapsedSeconds = [int][Math]::Floor($stopwatch.Elapsed.TotalSeconds)
+            Write-Host (
+                "PROCESS_HEARTBEAT={0}|ELAPSED_SECONDS={1}|TIMEOUT_SECONDS={2}" -f
+                $Label,
+                $elapsedSeconds,
+                $TimeoutSeconds
+            )
+
+            if ($stopwatch.Elapsed.TotalSeconds -ge $TimeoutSeconds) {
+                $timedOut = $true
+                try { $process.Kill($true) } catch {}
+                try { [void]$process.WaitForExit(30000) } catch {}
+                Stop-Gate 'STOP_PROCESS_TIMEOUT' (
+                    "{0} exceeded {1} seconds and its process tree was terminated." -f
+                    $Label,
+                    $TimeoutSeconds
+                )
+            }
         }
+        $stopwatch.Stop()
         return [pscustomobject]@{
             ExitCode = $process.ExitCode
             StdOut   = $stdoutTask.GetAwaiter().GetResult()
@@ -376,7 +400,7 @@ try {
     Set-Content -LiteralPath $baseScriptPath -Value $patchedText -Encoding utf8
     Write-Host 'PHASE=PREPARE_BASE_DIAGNOSTIC DONE'
 
-    Write-Host 'PHASE=BASE_DIAGNOSTIC START timeout_seconds=300 lock_timeout_seconds=15'
+    Write-Host ("PHASE=BASE_DIAGNOSTIC START timeout_seconds={0} lock_timeout_seconds=15" -f $BaseTimeoutSeconds)
     $childWorkRoot = Join-Path $workRoot 'child-recovery-plan'
     $env:SOAIACORE_P0_CHILD_WORK_ROOT = $childWorkRoot
     try {
@@ -503,6 +527,7 @@ try {
         base_diagnostic_commit                       = $BaseDiagnosticCommit
         terraform_refresh                            = $true
         terraform_lock_timeout_seconds               = 15
+        base_process_timeout_seconds                  = $BaseTimeoutSeconds
         state_address_count                          = [int]$baseReceipt.state_address_count
         plan_exit_code                               = [int]$baseReceipt.plan_exit_code
         plan_sha256                                  = [string]$baseReceipt.plan_sha256
@@ -540,6 +565,7 @@ try {
     Write-Host ("RECEIPT_SHA256={0}" -f $receiptHash)
     Write-Host 'TERRAFORM_REFRESH=true'
     Write-Host 'LOCK_TIMEOUT_SECONDS=15'
+    Write-Host ("BASE_PROCESS_TIMEOUT_SECONDS={0}" -f $BaseTimeoutSeconds)
     Write-Host 'ATTRIBUTE_VALUES_OUTPUT=false'
     Write-Host 'SECRET_VALUES_OUTPUT=false'
     Write-Host 'TERRAFORM_SHOW_JSON_EXECUTED=false'
