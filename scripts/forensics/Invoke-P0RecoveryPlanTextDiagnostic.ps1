@@ -26,6 +26,39 @@ function Require-Command {
     return $command.Source
 }
 
+function Remove-DirectoryVerified {
+    param(
+        [string]$Path,
+        [int]$TimeoutSeconds = 60,
+        [int]$RetryMilliseconds = 500
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path)) { return }
+    if ($TimeoutSeconds -lt 1) { $TimeoutSeconds = 1 }
+    if ($RetryMilliseconds -lt 50) { $RetryMilliseconds = 50 }
+
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    do {
+        if (-not (Test-Path -LiteralPath $Path)) { return }
+        try {
+            Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+        }
+        catch {
+            # A killed descendant can transiently retain a handle on Windows.
+            # Retry until the path is actually absent; never treat a suppressed
+            # Remove-Item error as proof that credential-bearing plan data is gone.
+        }
+        if (-not (Test-Path -LiteralPath $Path)) { return }
+        Start-Sleep -Milliseconds $RetryMilliseconds
+    } while ([DateTime]::UtcNow -lt $deadline)
+
+    Stop-Gate 'STOP_SENSITIVE_CLEANUP_UNVERIFIED' (
+        "Sensitive diagnostic work root could not be proven deleted within {0}s: {1}" -f
+        $TimeoutSeconds,
+        $Path
+    )
+}
+
 function Patch-DiagnosticScriptText {
     param([string]$ScriptText)
 
@@ -86,7 +119,8 @@ function Invoke-ProcessTextWithTimeout {
         [string]$FilePath,
         [string[]]$Arguments,
         [int]$TimeoutSeconds,
-        [string]$Label
+        [string]$Label,
+        [string]$CleanupPath
     )
 
     $psi = [System.Diagnostics.ProcessStartInfo]::new()
@@ -101,13 +135,17 @@ function Invoke-ProcessTextWithTimeout {
 
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo = $psi
+    $processStarted = $false
+    $timedOut = $false
     try {
         if (-not $process.Start()) {
             Stop-Gate 'STOP_PROCESS_START_FAILED' ("{0} could not start." -f $Label)
         }
+        $processStarted = $true
         $stdoutTask = $process.StandardOutput.ReadToEndAsync()
         $stderrTask = $process.StandardError.ReadToEndAsync()
         if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+            $timedOut = $true
             try { $process.Kill($true) } catch {}
             try { [void]$process.WaitForExit(30000) } catch {}
             Stop-Gate 'STOP_PROCESS_TIMEOUT' ("{0} exceeded {1} seconds and its process tree was terminated." -f $Label, $TimeoutSeconds)
@@ -119,11 +157,24 @@ function Invoke-ProcessTextWithTimeout {
         }
     }
     finally {
-        if ($null -ne $process -and -not $process.HasExited) {
-            try { $process.Kill($true) } catch {}
-            try { [void]$process.WaitForExit(30000) } catch {}
+        if ($processStarted) {
+            try {
+                if (-not $process.HasExited) {
+                    try { $process.Kill($true) } catch {}
+                    try { [void]$process.WaitForExit(30000) } catch {}
+                }
+            }
+            catch {}
         }
-        if ($null -ne $process) { $process.Dispose() }
+
+        if ($timedOut -and -not [string]::IsNullOrWhiteSpace($CleanupPath)) {
+            # WaitForExit only proves the direct pwsh process has exited. A descendant
+            # can still be winding down. Deletion itself is therefore the security
+            # assertion: retry until the deterministic child root is verifiably absent.
+            Remove-DirectoryVerified -Path $CleanupPath -TimeoutSeconds 60 -RetryMilliseconds 500
+        }
+
+        $process.Dispose()
     }
 }
 
@@ -262,10 +313,35 @@ finally {
         throw 'SELFTEST_PLAN_PATCH_FAILED'
     }
 
+    $pwshSelfTestPath = Require-Command 'pwsh'
+    $timeoutCleanupRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("soaiacore-p0-timeout-cleanup-selftest-{0}" -f ([guid]::NewGuid().ToString('N')))
+    New-Item -ItemType Directory -Path $timeoutCleanupRoot -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $timeoutCleanupRoot 'credential-bearing.tfplan') -Value 'SELFTEST_ONLY' -Encoding utf8
+    $timeoutObserved = $false
+    try {
+        [void](Invoke-ProcessTextWithTimeout `
+            -FilePath $pwshSelfTestPath `
+            -Arguments @('-NoProfile','-Command','Start-Sleep -Seconds 5') `
+            -TimeoutSeconds 1 `
+            -Label 'Self-test timeout cleanup' `
+            -CleanupPath $timeoutCleanupRoot)
+    }
+    catch {
+        if ($_.Exception.Message -like 'STOP_PROCESS_TIMEOUT:*') {
+            $timeoutObserved = $true
+        }
+        else {
+            throw
+        }
+    }
+    if (-not $timeoutObserved) { throw 'SELFTEST_TIMEOUT_NOT_OBSERVED' }
+    if (Test-Path -LiteralPath $timeoutCleanupRoot) { throw 'SELFTEST_TIMEOUT_CLEANUP_NOT_VERIFIED' }
+
     Write-Host 'SELFTEST=PASS'
     Write-Host 'PLAN_TEXT_PARSER=PASS'
     Write-Host 'VALUE_LEAK_TEST=PASS'
     Write-Host 'PROCESS_TIMEOUT_GUARD=CONFIGURED'
+    Write-Host 'TIMEOUT_CLEANUP_VERIFICATION=PASS'
     Write-Host 'NETWORK_CALLED=false'
     Write-Host 'AZURE_CALLED=false'
     Write-Host 'TERRAFORM_CALLED=false'
@@ -304,7 +380,12 @@ try {
     $childWorkRoot = Join-Path $workRoot 'child-recovery-plan'
     $env:SOAIACORE_P0_CHILD_WORK_ROOT = $childWorkRoot
     try {
-        $baseProcess = Invoke-ProcessTextWithTimeout -FilePath $pwshPath -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',$baseScriptPath) -TimeoutSeconds $BaseTimeoutSeconds -Label 'Pinned base diagnostic'
+        $baseProcess = Invoke-ProcessTextWithTimeout `
+            -FilePath $pwshPath `
+            -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',$baseScriptPath) `
+            -TimeoutSeconds $BaseTimeoutSeconds `
+            -Label 'Pinned base diagnostic' `
+            -CleanupPath $childWorkRoot
     }
     finally {
         Remove-Item Env:SOAIACORE_P0_CHILD_WORK_ROOT -ErrorAction SilentlyContinue
@@ -467,11 +548,8 @@ try {
     Write-Host 'DONE=true'
 }
 finally {
-    if (
-        -not [string]::IsNullOrWhiteSpace([string]$basePlanWorkRoot) -and
-        (Test-Path -LiteralPath $basePlanWorkRoot -PathType Container)
-    ) {
-        Remove-Item -LiteralPath $basePlanWorkRoot -Recurse -Force -ErrorAction SilentlyContinue
+    if (-not [string]::IsNullOrWhiteSpace([string]$basePlanWorkRoot)) {
+        Remove-DirectoryVerified -Path $basePlanWorkRoot -TimeoutSeconds 60 -RetryMilliseconds 500
     }
-    Remove-Item -LiteralPath $workRoot -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-DirectoryVerified -Path $workRoot -TimeoutSeconds 60 -RetryMilliseconds 500
 }
