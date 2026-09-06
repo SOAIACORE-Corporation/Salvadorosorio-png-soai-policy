@@ -1,0 +1,65 @@
+name: SOA Intelligence A2 Private Migration Static
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+      - feature/soa-intelligence-a2-postgres-20260906-r2
+    paths:
+      - .github/workflows/soa-intelligence-a2-private-migration-static.yml
+      - infra/azure/soa-intelligence-dev/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: a2-private-migration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: A2 private migration Terraform contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Set up Terraform 1.15.0
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.0
+          terraform_wrapper: false
+
+      - name: Terraform formatting
+        run: terraform fmt -check -recursive infra/azure/soa-intelligence-dev
+
+      - name: Initialize without backend
+        run: terraform -chdir=infra/azure/soa-intelligence-dev init -backend=false -input=false
+
+      - name: Validate Terraform configuration
+        run: terraform -chdir=infra/azure/soa-intelligence-dev validate
+
+      - name: Enforce private migration boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=infra/azure/soa-intelligence-dev/private_migration.tf
+          grep -F 'address_prefixes     = ["10.60.20.0/27"]' "$file"
+          grep -F 'name = "Microsoft.App/environments"' "$file"
+          grep -F 'command = ["python", "-m", "soaiacore_worker", "a2-bootstrap"]' "$file"
+          grep -F 'replica_retry_limit          = 0' "$file"
+          grep -F 'public_network_access_enabled = false' infra/azure/soa-intelligence-dev/postgresql.tf
+          ! grep -R -E 'azurerm_postgresql_flexible_server_firewall_rule|azurerm_role_assignment' "$file"
+          ! grep -R -E 'public_network_access_enabled[[:space:]]*=[[:space:]]*true' infra/azure/soa-intelligence-dev
+
+      - name: Record gate
+        run: |
+          echo "A2_PRIVATE_MIGRATION_STATIC=PASS"
+          echo "EXPECTED_CREATE_COUNT=4"
+          echo "AZURE_MUTATION=false"
+          echo "DATABASE_MUTATION=false"
+          echo "IAM_MUTATION=false"
+          echo "FIREWALL_OPENED=false"
