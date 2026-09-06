@@ -1,0 +1,7 @@
+# Populate from the governed Azure Terraform backend before init/apply.
+# This stack MUST use its own key; do not reuse the P0 state key.
+resource_group_name  = "<STATE_RESOURCE_GROUP>"
+storage_account_name = "<STATE_STORAGE_ACCOUNT>"
+container_name       = "<STATE_CONTAINER>"
+key                  = "soa-intelligence/dev/postgres.tfstate"
+use_azuread_auth     = true
