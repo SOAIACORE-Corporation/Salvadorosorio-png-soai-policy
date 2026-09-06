@@ -82,10 +82,59 @@ resource "azurerm_role_assignment" "operator_key_vault_secrets_officer" {
   principal_type       = "User"
 }
 
-resource "azurerm_role_assignment" "workload_key_vault_secrets_user" {
-  scope                = azurerm_key_vault.pilot.id
+resource "azurerm_role_assignment" "core_postgresql_secret_reader" {
+  scope                = azurerm_key_vault_secret.postgresql.versionless_id
   role_definition_name = "Key Vault Secrets User"
-  principal_id         = azurerm_user_assigned_identity.workload.principal_id
+  principal_id         = azurerm_user_assigned_identity.core_secrets.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+resource "azurerm_role_assignment" "core_internal_auth_secret_reader" {
+  scope                = azurerm_key_vault_secret.internal_auth.versionless_id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.core_secrets.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+resource "azurerm_role_assignment" "core_ghcr_secret_reader" {
+  scope                = azurerm_key_vault_secret.ghcr.versionless_id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.core_secrets.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+resource "azurerm_role_assignment" "web_internal_auth_secret_reader" {
+  scope                = azurerm_key_vault_secret.internal_auth.versionless_id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.web_secrets.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+resource "azurerm_role_assignment" "web_oidc_secret_reader" {
+  scope                = azurerm_key_vault_secret.oidc[0].versionless_id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.web_secrets.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+resource "azurerm_role_assignment" "web_ghcr_secret_reader" {
+  scope                = azurerm_key_vault_secret.ghcr.versionless_id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.web_secrets.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+resource "azurerm_role_assignment" "worker_postgresql_secret_reader" {
+  scope                = azurerm_key_vault_secret.postgresql.versionless_id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.worker_secrets.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+resource "azurerm_role_assignment" "worker_ghcr_secret_reader" {
+  scope                = azurerm_key_vault_secret.ghcr.versionless_id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.worker_secrets.principal_id
   principal_type       = "ServicePrincipal"
 }
 
