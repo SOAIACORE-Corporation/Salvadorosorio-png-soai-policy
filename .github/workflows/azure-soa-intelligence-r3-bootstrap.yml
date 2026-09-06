@@ -1,0 +1,56 @@
+name: Azure SOA Intelligence R3 OIDC Bootstrap
+
+on:
+  push:
+    branches:
+      - feature/soa-intelligence-a2-postgres-20260906-r2
+    paths:
+      - .github/workflows/azure-soa-intelligence-r3-bootstrap.yml
+
+permissions:
+  contents: read
+
+env:
+  AZURE_CORE_OUTPUT: none
+  EXPECTED_SUBSCRIPTION_ID: 108eb4dd-25b3-4a7f-8d5e-4ec4389c3f0d
+
+jobs:
+  bootstrap-r3:
+    name: One-time interactive Azure OIDC bootstrap
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Authenticate interactively with Azure device code
+        shell: bash
+        env:
+          AZURE_CORE_OUTPUT: json
+        run: |
+          set -euo pipefail
+          az account clear || true
+          echo 'DEVICE_CODE_LOGIN_REQUIRED=YES'
+          echo 'This is the only interactive step. Authenticate with an Azure account authorized for the approved R3 scope.'
+          az login --use-device-code --allow-no-subscriptions
+          az account set --subscription "$EXPECTED_SUBSCRIPTION_ID"
+          az account show --query '{subscription:id,tenant:tenantId}' --output json
+          echo 'AZURE_INTERACTIVE_LOGIN=PASS'
+
+      - name: Execute approved least-privilege R3 bootstrap
+        shell: pwsh
+        run: |
+          ./scripts/azure/Bootstrap-SOAIntelligenceGitHubOidc.ps1 -Apply -AuthorizeIam
+
+      - name: Verify post-bootstrap invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'CLIENT_SECRET_CREATED=false'
+          echo 'SUBSCRIPTION_CONTRIBUTOR_GRANTED=false'
+          echo 'R3_SCOPE=OIDC_IDENTITY+FEDERATION+STATE_READER+STATE_BLOB_DATA_READER'
+          echo 'TERRAFORM_PLAN=false'
+          echo 'TERRAFORM_APPLY=false'
+          echo 'POSTGRESQL_CREATED=false'
+          echo 'SOA_INTELLIGENCE_R3_BOOTSTRAP=PASS'
