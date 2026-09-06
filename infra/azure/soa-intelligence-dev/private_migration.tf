@@ -81,7 +81,7 @@ resource "azurerm_container_app_job" "a2_migration" {
       image   = var.migration_worker_image
       cpu     = 0.25
       memory  = "0.5Gi"
-      command = ["python", "-m", "soaiacore_worker", "a2-bootstrap"]
+      command = ["/app/.venv/bin/python", "-m", "soaiacore_worker", "a2-bootstrap"]
 
       env {
         name  = "SOAIACORE_PROVIDER_MODE"
