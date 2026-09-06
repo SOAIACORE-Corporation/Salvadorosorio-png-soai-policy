@@ -9,6 +9,7 @@ on:
     paths:
       - .github/workflows/soa-intelligence-a2-private-migration-static.yml
       - infra/azure/soa-intelligence-dev/**
+      - scripts/azure/Invoke-SOAIntelligenceA2PrivateMigrationPlan.ps1
 
 permissions:
   contents: read
@@ -33,6 +34,19 @@ jobs:
           terraform_version: 1.15.0
           terraform_wrapper: false
 
+      - name: Parse governed PowerShell plan runner
+        shell: pwsh
+        run: |
+          $path = 'scripts/azure/Invoke-SOAIntelligenceA2PrivateMigrationPlan.ps1'
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
+          if ($errors.Count -ne 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host 'A2_PRIVATE_MIGRATION_PLAN_RUNNER_PARSE=PASS'
+
       - name: Terraform formatting
         run: terraform fmt -check -recursive infra/azure/soa-intelligence-dev
 
@@ -55,10 +69,24 @@ jobs:
           ! grep -R -E 'azurerm_postgresql_flexible_server_firewall_rule|azurerm_role_assignment' "$file"
           ! grep -R -E 'public_network_access_enabled[[:space:]]*=[[:space:]]*true' infra/azure/soa-intelligence-dev
 
+      - name: Enforce governed plan safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          script=scripts/azure/Invoke-SOAIntelligenceA2PrivateMigrationPlan.ps1
+          grep -F "'azurerm_subnet.container_apps'" "$script"
+          grep -F "'azurerm_log_analytics_workspace.a2_migration'" "$script"
+          grep -F "'azurerm_container_app_environment.a2_migration'" "$script"
+          grep -F "'azurerm_container_app_job.a2_migration'" "$script"
+          grep -F "plan_json_persisted = \$false" "$script"
+          grep -F "terraform_apply = \$false" "$script"
+          ! grep -E 'terraform .* apply' "$script"
+
       - name: Record gate
         run: |
           echo "A2_PRIVATE_MIGRATION_STATIC=PASS"
           echo "EXPECTED_CREATE_COUNT=4"
+          echo "PLAN_JSON_PERSISTED=false"
           echo "AZURE_MUTATION=false"
           echo "DATABASE_MUTATION=false"
           echo "IAM_MUTATION=false"
