@@ -6,7 +6,7 @@ param(
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
-$TargetConfigCommit = '13f55ffcd61d20efebe2d8c64017a26409991305'
+$TargetConfigCommit = '685ca1d13238949e7254d452b0f11fb23777855c'
 $BaseDiagnosticCommit = 'a62bdb0a28c78610eeecaa0b4005bdbd2b83c7e9'
 $BaseDiagnosticUrl = "https://raw.githubusercontent.com/SOAIACORE-Corporation/Salvadorosorio-png-soai-policy/$BaseDiagnosticCommit/scripts/forensics/Invoke-P0RecoveryDiagnosticPlan.ps1"
 $OriginalConfigCommit = '4b47fe25bb89c5733783920b1f8497c7dfadbb92'
@@ -41,7 +41,29 @@ function Patch-DiagnosticScriptText {
     if ([regex]::Matches($patched, [regex]::Escape($oldPlan)).Count -ne 1) {
         Stop-Gate 'STOP_BASE_SCRIPT_PLAN_MISMATCH' 'Expected exactly one Terraform plan invocation in the base diagnostic script.'
     }
-    return $patched.Replace($oldPlan, $newPlan)
+    $patched = $patched.Replace($oldPlan, $newPlan)
+
+    # Make the pinned child remove its sensitive plan work root on any failure.
+    $oldWorkRootMarker = "$backendPath = Join-Path $workRoot 'backend.production.hcl'`n`ntry {"
+    $newWorkRootMarker = "$backendPath = Join-Path $workRoot 'backend.production.hcl'`n`$diagnosticSucceeded = `$false`n`ntry {"
+    if ([regex]::Matches($patched, [regex]::Escape($oldWorkRootMarker)).Count -ne 1) {
+        Stop-Gate 'STOP_BASE_SCRIPT_WORKROOT_MARKER_MISMATCH' 'Expected one child work-root marker in the base diagnostic script.'
+    }
+    $patched = $patched.Replace($oldWorkRootMarker, $newWorkRootMarker)
+
+    $oldSuccessMarker = "    Write-Host ''`n    Write-Host '=== SOAIACORE #38 RECOVERY DIAGNOSTIC PLAN ==='"
+    $newSuccessMarker = "    `$diagnosticSucceeded = `$true`n    Write-Host ''`n    Write-Host '=== SOAIACORE #38 RECOVERY DIAGNOSTIC PLAN ==='"
+    if ([regex]::Matches($patched, [regex]::Escape($oldSuccessMarker)).Count -ne 1) {
+        Stop-Gate 'STOP_BASE_SCRIPT_SUCCESS_MARKER_MISMATCH' 'Expected one child success marker in the base diagnostic script.'
+    }
+    $patched = $patched.Replace($oldSuccessMarker, $newSuccessMarker)
+
+    $oldFinally = "finally {`n    Remove-Item Env:TF_VAR_ghcr_token -ErrorAction SilentlyContinue`n    Remove-Item Env:TF_VAR_oidc_client_secret -ErrorAction SilentlyContinue`n    `$ghcrToken = `$null`n    `$oidcClientSecret = `$null`n}"
+    $newFinally = "finally {`n    if (-not `$diagnosticSucceeded) {`n        Remove-Item -LiteralPath `$workRoot -Recurse -Force -ErrorAction SilentlyContinue`n    }`n    Remove-Item Env:TF_VAR_ghcr_token -ErrorAction SilentlyContinue`n    Remove-Item Env:TF_VAR_oidc_client_secret -ErrorAction SilentlyContinue`n    `$ghcrToken = `$null`n    `$oidcClientSecret = `$null`n}"
+    if ([regex]::Matches($patched, [regex]::Escape($oldFinally)).Count -ne 1) {
+        Stop-Gate 'STOP_BASE_SCRIPT_CLEANUP_MARKER_MISMATCH' 'Expected one child cleanup finally block in the base diagnostic script.'
+    }
+    return $patched.Replace($oldFinally, $newFinally)
 }
 
 function Invoke-ProcessTextWithTimeout {
@@ -199,10 +221,25 @@ if ($SelfTest) {
 
     $fixtureScript = @'
 $ExpectedConfigCommit = '4b47fe25bb89c5733783920b1f8497c7dfadbb92'
+$backendPath = Join-Path $workRoot 'backend.production.hcl'
+
+try {
 & terraform ("-chdir={0}" -f $terraformDirectory) plan -input=false -detailed-exitcode -no-color ("-out={0}" -f $planPath) *> $planLog
+    Write-Host ''
+    Write-Host '=== SOAIACORE #38 RECOVERY DIAGNOSTIC PLAN ==='
+}
+finally {
+    Remove-Item Env:TF_VAR_ghcr_token -ErrorAction SilentlyContinue
+    Remove-Item Env:TF_VAR_oidc_client_secret -ErrorAction SilentlyContinue
+    $ghcrToken = $null
+    $oidcClientSecret = $null
+}
 '@
     $patched = Patch-DiagnosticScriptText $fixtureScript
-    if ($patched -notmatch [regex]::Escape($TargetConfigCommit) -or $patched -notmatch 'plan -lock-timeout=15s -input=false') {
+    if ($patched -notmatch [regex]::Escape($TargetConfigCommit) -or
+        $patched -notmatch 'plan -lock-timeout=15s -input=false' -or
+        $patched -notmatch 'diagnosticSucceeded' -or
+        $patched -notmatch 'Remove-Item -LiteralPath \$workRoot -Recurse -Force') {
         throw 'SELFTEST_PLAN_PATCH_FAILED'
     }
 
