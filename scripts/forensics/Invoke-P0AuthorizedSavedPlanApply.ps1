@@ -181,8 +181,13 @@ function Invoke-TerraformApplyWithTimeout {
         $timer = [System.Diagnostics.Stopwatch]::StartNew()
 
         while (-not $process.HasExited) {
-            $remaining = [int][Math]::Max(1, (($ProcessTimeoutSeconds * 1000) - $timer.ElapsedMilliseconds))
-            $slice = [int][Math]::Min(30000, $remaining)
+            if ($timer.Elapsed.TotalSeconds -ge $ProcessTimeoutSeconds) {
+                $slice = 30000
+            }
+            else {
+                $remaining = [int][Math]::Max(1, (($ProcessTimeoutSeconds * 1000) - $timer.ElapsedMilliseconds))
+                $slice = [int][Math]::Min(30000, $remaining)
+            }
             if ($process.WaitForExit($slice)) { break }
             Write-Host (
                 'PROCESS_HEARTBEAT=AUTHORIZED_APPLY|ELAPSED_SECONDS={0}|TIMEOUT_SECONDS={1}' -f
@@ -409,7 +414,10 @@ try {
     if (Test-Path -LiteralPath $PlanPath) {
         Stop-Gate 'STOP_SAVED_PLAN_CLEANUP_FAILED' 'Applied saved plan could not be deleted.'
     }
-    Remove-Item -LiteralPath $applyLog -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $applyLog -Force
+    if (Test-Path -LiteralPath $applyLog) {
+        Stop-Gate 'STOP_RAW_APPLY_LOG_CLEANUP_FAILED' 'Raw apply log could not be deleted.'
+    }
 
     $receipt | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $receiptPath -Encoding utf8
     $receiptSha = (Get-FileHash -LiteralPath $receiptPath -Algorithm SHA256).Hash.ToLowerInvariant()
