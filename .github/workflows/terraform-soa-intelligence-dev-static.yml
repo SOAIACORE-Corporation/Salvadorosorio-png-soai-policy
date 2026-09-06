@@ -1,0 +1,87 @@
+name: Terraform SOA Intelligence DEV Static
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/terraform-soa-intelligence-dev-static.yml
+      - infra/azure/soa-intelligence-dev/**
+      - scripts/azure/Bootstrap-SOAIntelligenceGitHubOidc.ps1
+  push:
+    branches:
+      - feature/soa-intelligence-a2-postgres-20260906-r2
+    paths:
+      - .github/workflows/terraform-soa-intelligence-dev-static.yml
+      - infra/azure/soa-intelligence-dev/**
+      - scripts/azure/Bootstrap-SOAIntelligenceGitHubOidc.ps1
+
+permissions:
+  contents: read
+
+jobs:
+  validate-soa-intelligence-dev:
+    name: Validate SOA Intelligence DEV without backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out proposed commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Set up Terraform 1.15.0
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: 1.15.0
+          terraform_wrapper: false
+
+      - name: Parse OIDC bootstrap PowerShell
+        shell: pwsh
+        run: |
+          $path = 'scripts/azure/Bootstrap-SOAIntelligenceGitHubOidc.ps1'
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $path),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error ("{0}:{1}:{2} {3}" -f $path,$_.Extent.StartLineNumber,$_.Extent.StartColumnNumber,$_.Message) }
+            exit 1
+          }
+          Write-Host 'OIDC_BOOTSTRAP_POWERSHELL_PARSE=PASS'
+
+      - name: Check formatting
+        run: terraform fmt -check -diff infra/azure/soa-intelligence-dev
+
+      - name: Build isolated backend-free validation copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -R infra/azure/soa-intelligence-dev "$RUNNER_TEMP/soa-intelligence-dev"
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("${{ runner.temp }}/soa-intelligence-dev/versions.tf")
+          text = path.read_text(encoding="utf-8")
+          needle = '  backend "azurerm" {}\n\n'
+          if text.count(needle) != 1:
+              raise SystemExit("Expected exactly one empty azurerm backend declaration")
+          path.write_text(text.replace(needle, "", 1), encoding="utf-8")
+          PY
+
+      - name: Initialize isolated validation copy
+        run: terraform -chdir="$RUNNER_TEMP/soa-intelligence-dev" init -backend=false -input=false -no-color
+
+      - name: Validate Terraform configuration
+        run: terraform -chdir="$RUNNER_TEMP/soa-intelligence-dev" validate -no-color
+
+      - name: Assert non-mutation boundary
+        shell: bash
+        run: |
+          echo 'AZURE_LOGIN=false'
+          echo 'REMOTE_STATE_READ=false'
+          echo 'PLAN=false'
+          echo 'APPLY=false'
+          echo 'DESTROY=false'
+          echo 'SOA_INTELLIGENCE_DEV_STATIC_GATE=PASS'
