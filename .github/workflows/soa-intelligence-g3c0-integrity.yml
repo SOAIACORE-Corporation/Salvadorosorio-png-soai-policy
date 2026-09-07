@@ -1,0 +1,155 @@
+name: SOA Intelligence G3C0 Measurement Integrity
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feat/g3c0-measurement-integrity-*'
+    paths:
+      - .github/workflows/soa-intelligence-g3a-quality.yml
+      - .github/workflows/soa-intelligence-g3c0-integrity.yml
+      - packages/python-runtime/src/soaiacore_runtime/quality_eval.py
+      - packages/python-runtime/src/soaiacore_runtime/quality_runner.py
+      - packages/python-runtime/tests/test_alpha_g3a_quality.py
+      - packages/python-runtime/tests/test_alpha_g3c0_integrity.py
+      - packages/python-runtime/golden/soa-alpha-golden-v0.2.json
+      - packages/python-runtime/golden/soa-alpha-golden-v0.2.holdout-seal.json
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/soa-intelligence-g3a-quality.yml
+      - .github/workflows/soa-intelligence-g3c0-integrity.yml
+      - packages/python-runtime/src/soaiacore_runtime/quality_eval.py
+      - packages/python-runtime/src/soaiacore_runtime/quality_runner.py
+      - packages/python-runtime/tests/test_alpha_g3a_quality.py
+      - packages/python-runtime/tests/test_alpha_g3c0_integrity.py
+      - packages/python-runtime/golden/soa-alpha-golden-v0.2.json
+      - packages/python-runtime/golden/soa-alpha-golden-v0.2.holdout-seal.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g3c0-integrity-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deterministic-g3c0:
+    name: G3C0 integrity and coverage gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+
+      - name: Enforce authorized G3C0 R1 file boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          changed="$(git diff --name-only origin/main...HEAD)"
+          printf '%s\n' "$changed"
+          test -n "$changed"
+          allowed='^(\.github/workflows/soa-intelligence-g3a-quality\.yml|\.github/workflows/soa-intelligence-g3c0-integrity\.yml|packages/python-runtime/src/soaiacore_runtime/quality_eval\.py|packages/python-runtime/src/soaiacore_runtime/quality_runner\.py|packages/python-runtime/tests/test_alpha_g3a_quality\.py|packages/python-runtime/tests/test_alpha_g3c0_integrity\.py|packages/python-runtime/golden/soa-alpha-golden-v0\.2\.json|packages/python-runtime/golden/soa-alpha-golden-v0\.2\.holdout-seal\.json)$'
+          if printf '%s\n' "$changed" | grep -Ev "$allowed"; then
+            echo 'G3C0_R1_SCOPE_VIOLATION=true'
+            exit 1
+          fi
+          test "$(git rev-parse HEAD:packages/python-runtime/golden/soa-alpha-golden-v0.1.json)" = '14996ad98169cc388312e237b18f00c6e34c83f2'
+          test "$(git rev-parse HEAD:packages/python-runtime/golden/soa-alpha-golden-v0.1.holdout-seal.json)" = '969a2040f52ccc721a50ad455b6f6ce5bc5e8cd8'
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: 3.12.14
+
+      - name: Compile G3C0 deterministic surfaces
+        run: |
+          python -m py_compile \
+            packages/python-runtime/src/soaiacore_runtime/quality_eval.py \
+            packages/python-runtime/src/soaiacore_runtime/quality_runner.py \
+            packages/python-runtime/tests/test_alpha_g3a_quality.py \
+            packages/python-runtime/tests/test_alpha_g3c0_integrity.py
+
+      - name: Run synthetic measurement-integrity tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}/packages/python-runtime/src
+          SOAIACORE_PROVIDER_MODE: MOCK
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir uv==0.12.5
+          uv sync --frozen
+          uv run --frozen pytest -q \
+            packages/python-runtime/tests/test_alpha_g3a_quality.py \
+            packages/python-runtime/tests/test_alpha_g3c0_integrity.py
+
+      - name: Validate v0.2 public commitment only
+        env:
+          PYTHONPATH: ${{ github.workspace }}/packages/python-runtime/src
+        run: |
+          uv run --frozen python - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+          from soaiacore_runtime.quality_eval import GoldenDatasetManifest, HoldoutSeal, verify_holdout_seal
+
+          root = Path("packages/python-runtime/golden")
+          raw = json.loads((root / "soa-alpha-golden-v0.2.json").read_text(encoding="utf-8"))
+          seal_raw = json.loads((root / "soa-alpha-golden-v0.2.holdout-seal.json").read_text(encoding="utf-8"))
+          manifest = GoldenDatasetManifest.model_validate(raw)
+          seal = HoldoutSeal.model_validate(seal_raw)
+
+          assert set(raw) == {"dataset_id", "dataset_version", "cases"}
+          assert all(set(case) == {"golden_case_id", "partition", "content_sha256"} for case in raw["cases"])
+          assert len(manifest.cases) == 27
+          assert Counter(case.partition for case in manifest.cases) == {
+              "development": 9,
+              "validation": 9,
+              "holdout": 9,
+          }
+          by_id = {case.golden_case_id: case for case in manifest.cases}
+          assert by_id["SOC-MEMADM-013"].partition == "development"
+          assert by_id["SOC-MEMADM-014"].partition == "validation"
+          assert by_id["SOC-MEMADM-015"].partition == "holdout"
+          assert verify_holdout_seal(manifest, seal)
+          assert seal.holdout_sha256 == "1f3e42cc6f1c66ce4136c89a208426e02d9456296c31054fe6e43ff0a3f4f98c"
+          PY
+
+      - name: Enforce no-live and no-provider boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          targets=(
+            packages/python-runtime/src/soaiacore_runtime/quality_eval.py
+            packages/python-runtime/src/soaiacore_runtime/quality_runner.py
+            packages/python-runtime/tests/test_alpha_g3a_quality.py
+            packages/python-runtime/tests/test_alpha_g3c0_integrity.py
+            packages/python-runtime/golden/soa-alpha-golden-v0.2.json
+            packages/python-runtime/golden/soa-alpha-golden-v0.2.holdout-seal.json
+          )
+          ! grep -E -i 'postgresql://|client_secret|api[_-]?key|sk-proj-|az[[:space:]]+(group|network|containerapp|postgres)|terraform[[:space:]]+(apply|destroy)|Microsoft\.App/jobs/start' "${targets[@]}"
+          ! grep -E -i 'requests\.(post|put|patch|delete)|httpx\.(post|put|patch|delete)|subprocess\.(run|Popen)|os\.system' "${targets[@]}"
+
+      - name: Record deterministic G3C0 gate
+        run: |
+          echo 'G3C0_MEASUREMENT_INTEGRITY=PASS'
+          echo 'V01_IMMUTABLE_BLOB_GUARD=true'
+          echo 'V02_CASES=27'
+          echo 'V02_PARTITIONS=9/9/9'
+          echo 'MEMORY_ADMISSION_COVERAGE=development,validation,holdout'
+          echo 'EXACT_OBSERVATION_COVERAGE_REQUIRED=true'
+          echo 'OBSERVATION_PARTITION_MATCH_REQUIRED=true'
+          echo 'EXTERNAL_HOLDOUT_SEAL_REQUIRED=true'
+          echo 'UNMEASURED_SIGNALS_FAIL_CLOSED=true'
+          echo 'DETERMINISTIC_TRACE_RUNNER=true'
+          echo 'G3C_EXECUTION=false'
+          echo 'HOLDOUT_REAL_EVALUATION=false'
+          echo 'EXTERNAL_PROVIDER_CALLS=0'
+          echo 'AZURE_MUTATION=false'
+          echo 'TERRAFORM_EXECUTION=false'
+          echo 'LIVE_DATABASE_MUTATION=false'
+          echo 'SCHEMA_MIGRATION=false'
+          echo 'R2_R3_ACTION_EXECUTION=false'

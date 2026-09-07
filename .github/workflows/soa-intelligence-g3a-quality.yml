@@ -42,7 +42,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Enforce authorized G3A R1 file boundary
+      - name: Enforce governed measurement-infrastructure boundary
         shell: bash
         run: |
           set -euo pipefail
@@ -50,9 +50,15 @@ jobs:
           changed="$(git diff --name-only origin/main...HEAD)"
           printf '%s\n' "$changed"
           test -n "$changed"
-          allowed='^(\.github/workflows/soa-intelligence-g3a-quality\.yml|packages/python-runtime/src/soaiacore_runtime/quality_eval\.py|packages/python-runtime/tests/test_alpha_g3a_quality\.py|packages/python-runtime/golden/soa-alpha-g3a-conformance-v0\.1\.json)$'
+
+          branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          if [[ "$branch" == feat/g3c0-measurement-integrity-* ]]; then
+            allowed='^(\.github/workflows/soa-intelligence-g3a-quality\.yml|\.github/workflows/soa-intelligence-g3c0-integrity\.yml|packages/python-runtime/src/soaiacore_runtime/quality_eval\.py|packages/python-runtime/src/soaiacore_runtime/quality_runner\.py|packages/python-runtime/tests/test_alpha_g3a_quality\.py|packages/python-runtime/tests/test_alpha_g3c0_integrity\.py|packages/python-runtime/golden/soa-alpha-golden-v0\.2\.json|packages/python-runtime/golden/soa-alpha-golden-v0\.2\.holdout-seal\.json)$'
+          else
+            allowed='^(\.github/workflows/soa-intelligence-g3a-quality\.yml|packages/python-runtime/src/soaiacore_runtime/quality_eval\.py|packages/python-runtime/tests/test_alpha_g3a_quality\.py|packages/python-runtime/golden/soa-alpha-g3a-conformance-v0\.1\.json)$'
+          fi
           if printf '%s\n' "$changed" | grep -Ev "$allowed"; then
-            echo 'G3A_R1_SCOPE_VIOLATION=true'
+            echo 'MEASUREMENT_INFRASTRUCTURE_SCOPE_VIOLATION=true'
             exit 1
           fi
 
