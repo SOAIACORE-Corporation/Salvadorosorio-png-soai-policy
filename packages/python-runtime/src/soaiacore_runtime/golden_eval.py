@@ -38,6 +38,28 @@ class GoldenCaseResult(BaseModel):
     checks: dict[str, bool]
 
 
+def _context_ref_variants(ref: str) -> tuple[str, ...]:
+    """Normalize Golden refs across the context-ref namespaces used by Alpha.
+
+    Golden fixtures may carry a raw source identifier (for example ``mem-v2``)
+    while runtime traces carry namespaced references (for example
+    ``memory:mem-v2``). A future reference is forbidden regardless of whether the
+    fixture includes the runtime prefix explicitly.
+    """
+
+    normalized = ref.strip()
+    if not normalized:
+        return ()
+    if ":" in normalized:
+        return (normalized,)
+    return (
+        normalized,
+        f"memory:{normalized}",
+        f"evidence:{normalized}",
+        f"session:{normalized}",
+    )
+
+
 def evaluate_golden_case(case: GoldenCase, trace: dict[str, Any]) -> GoldenCaseResult:
     """Run deterministic gates before any semantic/model judge."""
 
@@ -46,7 +68,7 @@ def evaluate_golden_case(case: GoldenCase, trace: dict[str, Any]) -> GoldenCaseR
     policy = trace.get("policy", {})
 
     future_leakage = any(
-        ref in context_refs or f"evidence:{ref}" in context_refs
+        any(candidate in context_refs for candidate in _context_ref_variants(ref))
         for ref in case.forbidden_future_refs
     )
     cross_project = trace.get("project_scope") != case.project_scope
