@@ -121,37 +121,69 @@ def verify_holdout_seal(manifest: GoldenDatasetManifest, seal: HoldoutSeal) -> b
 
 
 class QualityObservation(BaseModel):
-    """Per-case deterministic measurement inputs; no model judge is required."""
+    """Per-case deterministic measurement inputs; None means not objectively measured."""
 
     model_config = ConfigDict(frozen=True)
     golden_case_id: str = Field(min_length=1)
     partition: Partition
 
-    temporal_correct: bool
-    critical_provenance_claimed: int = Field(ge=0)
-    critical_provenance_correct: int = Field(ge=0)
-    contradictions_expected: int = Field(ge=0)
-    contradictions_predicted: int = Field(ge=0)
-    contradictions_true_positive: int = Field(ge=0)
-    memory_admissions_predicted: int = Field(ge=0)
-    memory_admissions_true_positive: int = Field(ge=0)
-    decision_reconstruction_expected: bool
-    decision_reconstruction_correct: bool
-    schema_valid: bool
-    project_scope_correct: bool
-    epistemic_label_correct: bool
+    temporal_correct: bool | None = None
+    critical_provenance_claimed: int | None = Field(default=None, ge=0)
+    critical_provenance_correct: int | None = Field(default=None, ge=0)
+    contradictions_expected: int | None = Field(default=None, ge=0)
+    contradictions_predicted: int | None = Field(default=None, ge=0)
+    contradictions_true_positive: int | None = Field(default=None, ge=0)
+    memory_admissions_predicted: int | None = Field(default=None, ge=0)
+    memory_admissions_true_positive: int | None = Field(default=None, ge=0)
+    decision_reconstruction_expected: bool | None = None
+    decision_reconstruction_correct: bool | None = None
+    schema_valid: bool | None = None
+    project_scope_correct: bool | None = None
+    epistemic_label_correct: bool | None = None
 
     @model_validator(mode="after")
     def validate_counts(self) -> "QualityObservation":
-        if self.critical_provenance_correct > self.critical_provenance_claimed:
-            raise ValueError("critical provenance correct exceeds claimed")
-        if self.contradictions_true_positive > self.contradictions_expected:
-            raise ValueError("contradiction true positives exceed expected")
-        if self.contradictions_true_positive > self.contradictions_predicted:
-            raise ValueError("contradiction true positives exceed predicted")
-        if self.memory_admissions_true_positive > self.memory_admissions_predicted:
-            raise ValueError("memory admission true positives exceed predicted")
-        if not self.decision_reconstruction_expected and self.decision_reconstruction_correct:
+        provenance = (self.critical_provenance_claimed, self.critical_provenance_correct)
+        if any(value is None for value in provenance) and any(value is not None for value in provenance):
+            raise ValueError("critical provenance measurement must be complete or absent")
+        if self.critical_provenance_claimed is not None:
+            assert self.critical_provenance_correct is not None
+            if self.critical_provenance_correct > self.critical_provenance_claimed:
+                raise ValueError("critical provenance correct exceeds claimed")
+
+        contradiction = (
+            self.contradictions_expected,
+            self.contradictions_predicted,
+            self.contradictions_true_positive,
+        )
+        if any(value is None for value in contradiction) and any(value is not None for value in contradiction):
+            raise ValueError("contradiction measurement must be complete or absent")
+        if self.contradictions_expected is not None:
+            assert self.contradictions_predicted is not None
+            assert self.contradictions_true_positive is not None
+            if self.contradictions_true_positive > self.contradictions_expected:
+                raise ValueError("contradiction true positives exceed expected")
+            if self.contradictions_true_positive > self.contradictions_predicted:
+                raise ValueError("contradiction true positives exceed predicted")
+
+        memory = (self.memory_admissions_predicted, self.memory_admissions_true_positive)
+        if any(value is None for value in memory) and any(value is not None for value in memory):
+            raise ValueError("memory admission measurement must be complete or absent")
+        if self.memory_admissions_predicted is not None:
+            assert self.memory_admissions_true_positive is not None
+            if self.memory_admissions_true_positive > self.memory_admissions_predicted:
+                raise ValueError("memory admission true positives exceed predicted")
+
+        decision = (
+            self.decision_reconstruction_expected,
+            self.decision_reconstruction_correct,
+        )
+        if any(value is None for value in decision) and any(value is not None for value in decision):
+            raise ValueError("decision reconstruction measurement must be complete or absent")
+        if (
+            self.decision_reconstruction_expected is False
+            and self.decision_reconstruction_correct is True
+        ):
             raise ValueError("decision reconstruction cannot be correct when not expected")
         return self
 
@@ -197,59 +229,84 @@ def _measurement(metric: MetricName, numerator: int, denominator: int) -> Metric
     )
 
 
+def _bool_measurement(
+    metric: MetricName,
+    values: tuple[bool | None, ...],
+) -> MetricMeasurement:
+    measured = tuple(value for value in values if value is not None)
+    return _measurement(metric, sum(bool(value) for value in measured), len(measured))
+
+
 def aggregate_quality(observations: tuple[QualityObservation, ...]) -> QualityAggregation:
-    """Aggregate all normative Alpha G3 rates with explicit denominators."""
+    """Aggregate all normative Alpha G3 rates with explicit measured denominators."""
 
     case_count = len(observations)
+    provenance = tuple(
+        obs
+        for obs in observations
+        if obs.critical_provenance_claimed is not None
+    )
+    contradictions = tuple(
+        obs
+        for obs in observations
+        if obs.contradictions_expected is not None
+    )
+    memory = tuple(
+        obs
+        for obs in observations
+        if obs.memory_admissions_predicted is not None
+    )
+    decisions = tuple(
+        obs
+        for obs in observations
+        if obs.decision_reconstruction_expected is not None
+    )
+
     measurements = (
-        _measurement(
+        _bool_measurement(
             MetricName.TEMPORAL_ACCURACY,
-            sum(obs.temporal_correct for obs in observations),
-            case_count,
+            tuple(obs.temporal_correct for obs in observations),
         ),
         _measurement(
             MetricName.PROVENANCE_PRECISION_CRITICAL,
-            sum(obs.critical_provenance_correct for obs in observations),
-            sum(obs.critical_provenance_claimed for obs in observations),
+            sum(int(obs.critical_provenance_correct or 0) for obs in provenance),
+            sum(int(obs.critical_provenance_claimed or 0) for obs in provenance),
         ),
         _measurement(
             MetricName.CONTRADICTION_RECALL,
-            sum(obs.contradictions_true_positive for obs in observations),
-            sum(obs.contradictions_expected for obs in observations),
+            sum(int(obs.contradictions_true_positive or 0) for obs in contradictions),
+            sum(int(obs.contradictions_expected or 0) for obs in contradictions),
         ),
         _measurement(
             MetricName.CONTRADICTION_PRECISION,
-            sum(obs.contradictions_true_positive for obs in observations),
-            sum(obs.contradictions_predicted for obs in observations),
+            sum(int(obs.contradictions_true_positive or 0) for obs in contradictions),
+            sum(int(obs.contradictions_predicted or 0) for obs in contradictions),
         ),
         _measurement(
             MetricName.MEMORY_ADMISSION_PRECISION,
-            sum(obs.memory_admissions_true_positive for obs in observations),
-            sum(obs.memory_admissions_predicted for obs in observations),
+            sum(int(obs.memory_admissions_true_positive or 0) for obs in memory),
+            sum(int(obs.memory_admissions_predicted or 0) for obs in memory),
         ),
         _measurement(
             MetricName.DECISION_RECONSTRUCTION,
             sum(
-                obs.decision_reconstruction_correct
-                for obs in observations
+                bool(obs.decision_reconstruction_correct)
+                for obs in decisions
                 if obs.decision_reconstruction_expected
             ),
-            sum(obs.decision_reconstruction_expected for obs in observations),
+            sum(bool(obs.decision_reconstruction_expected) for obs in decisions),
         ),
-        _measurement(
+        _bool_measurement(
             MetricName.SCHEMA_VALIDITY,
-            sum(obs.schema_valid for obs in observations),
-            case_count,
+            tuple(obs.schema_valid for obs in observations),
         ),
-        _measurement(
+        _bool_measurement(
             MetricName.PROJECT_SCOPE_ACCURACY,
-            sum(obs.project_scope_correct for obs in observations),
-            case_count,
+            tuple(obs.project_scope_correct for obs in observations),
         ),
-        _measurement(
+        _bool_measurement(
             MetricName.EPISTEMIC_LABEL_ACCURACY,
-            sum(obs.epistemic_label_correct for obs in observations),
-            case_count,
+            tuple(obs.epistemic_label_correct for obs in observations),
         ),
     )
     failures = tuple(
@@ -272,25 +329,44 @@ def aggregate_quality(observations: tuple[QualityObservation, ...]) -> QualityAg
 def quality_receipt(
     *,
     manifest: GoldenDatasetManifest,
+    expected_holdout_seal: HoldoutSeal,
     observations: tuple[QualityObservation, ...],
 ) -> dict[str, Any]:
-    """Produce a deterministic receipt. G3 PASS is impossible with missing denominators."""
+    """Produce a deterministic fail-closed receipt over the complete sealed dataset."""
 
-    manifest_ids = {case.golden_case_id for case in manifest.cases}
+    manifest_index = {case.golden_case_id: case for case in manifest.cases}
+    manifest_ids = set(manifest_index)
     observation_ids = [obs.golden_case_id for obs in observations]
     if len(observation_ids) != len(set(observation_ids)):
         raise ValueError("duplicate quality observation")
-    unknown = sorted(set(observation_ids) - manifest_ids)
-    if unknown:
-        raise ValueError(f"observations not present in manifest: {unknown}")
+
+    observed_ids = set(observation_ids)
+    missing = sorted(manifest_ids - observed_ids)
+    extra = sorted(observed_ids - manifest_ids)
+    if missing or extra:
+        raise ValueError(
+            f"observation coverage mismatch; missing={missing}, extra={extra}"
+        )
+
+    partition_mismatches = sorted(
+        obs.golden_case_id
+        for obs in observations
+        if obs.partition != manifest_index[obs.golden_case_id].partition
+    )
+    if partition_mismatches:
+        raise ValueError(
+            f"observation partition mismatch: {partition_mismatches}"
+        )
+
+    if not verify_holdout_seal(manifest, expected_holdout_seal):
+        raise ValueError("external holdout seal mismatch")
 
     aggregation = aggregate_quality(observations)
-    seal = seal_holdout(manifest)
     body = {
         "dataset_id": manifest.dataset_id,
         "dataset_version": manifest.dataset_version,
         "manifest_sha256": sha256_json(manifest.model_dump(mode="json")),
-        "holdout_seal": seal.model_dump(mode="json"),
+        "holdout_seal": expected_holdout_seal.model_dump(mode="json"),
         "thresholds": {metric.value: value for metric, value in ALPHA_THRESHOLDS.items()},
         "aggregation": aggregation.model_dump(mode="json"),
         "observation_partitions": {
