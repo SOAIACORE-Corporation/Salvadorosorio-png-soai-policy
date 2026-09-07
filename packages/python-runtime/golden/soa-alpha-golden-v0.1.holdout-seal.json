@@ -1,0 +1,6 @@
+{
+  "dataset_id": "soa-alpha-golden-v0.1",
+  "dataset_version": "0.1",
+  "holdout_case_count": 8,
+  "holdout_sha256": "1e5485846757f4af754eb37b2569c281628a512b7d822fa6a78d1d4ac6368742"
+}
