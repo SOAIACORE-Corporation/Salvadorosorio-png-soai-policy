@@ -1,0 +1,24 @@
+{
+  "dataset_id": "soa-alpha-g3a-conformance-v0.1",
+  "dataset_version": "0.1",
+  "cases": [
+    {
+      "golden_case_id": "G3A-SYN-DEV-001",
+      "partition": "development",
+      "content_sha256": "0d4f4bd12fc20bdc056677cd29756f515262aa59fe49e2177acf88ed8d445e5c"
+    },
+    {
+      "golden_case_id": "G3A-SYN-VAL-001",
+      "partition": "validation",
+      "content_sha256": "ba8c2d63efd35c753546b5662f7b6a6c19786bed554d3c2cdbc92d21b887110f"
+    },
+    {
+      "golden_case_id": "G3A-SYN-HOLD-001",
+      "partition": "holdout",
+      "content_sha256": "3b7b4615c00889460a2793647d17c127a7d7c4b4e22e91d559f288c940d9951a"
+    }
+  ],
+  "synthetic_only": true,
+  "contains_real_personal_payload": false,
+  "contains_secrets": false
+}
