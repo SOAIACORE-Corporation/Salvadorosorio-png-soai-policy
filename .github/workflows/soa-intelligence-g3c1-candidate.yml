@@ -1,0 +1,133 @@
+name: SOA Intelligence G3C1 Candidate Trace Bridge
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feat/g3c1-candidate-trace-*'
+    paths:
+      - .github/workflows/soa-intelligence-g3c1-candidate.yml
+      - packages/python-runtime/src/soaiacore_runtime/candidate_eval.py
+      - packages/python-runtime/tests/test_alpha_g3c1_candidate_bridge.py
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/soa-intelligence-g3c1-candidate.yml
+      - packages/python-runtime/src/soaiacore_runtime/candidate_eval.py
+      - packages/python-runtime/tests/test_alpha_g3c1_candidate_bridge.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g3c1-candidate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deterministic-g3c1:
+    name: G3C1 candidate/oracle separation gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+
+      - name: Enforce exact G3C1 R1 file boundary and immutable datasets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          changed="$(git diff --name-only origin/main...HEAD)"
+          printf '%s\n' "$changed"
+          test -n "$changed"
+          allowed='^(\.github/workflows/soa-intelligence-g3c1-candidate\.yml|packages/python-runtime/src/soaiacore_runtime/candidate_eval\.py|packages/python-runtime/tests/test_alpha_g3c1_candidate_bridge\.py)$'
+          if printf '%s\n' "$changed" | grep -Ev "$allowed"; then
+            echo 'G3C1_R1_SCOPE_VIOLATION=true'
+            exit 1
+          fi
+          test "$(git rev-parse HEAD:packages/python-runtime/golden/soa-alpha-golden-v0.1.json)" = '14996ad98169cc388312e237b18f00c6e34c83f2'
+          test "$(git rev-parse HEAD:packages/python-runtime/golden/soa-alpha-golden-v0.1.holdout-seal.json)" = '969a2040f52ccc721a50ad455b6f6ce5bc5e8cd8'
+          test "$(git rev-parse HEAD:packages/python-runtime/golden/soa-alpha-golden-v0.2.json)" = '76783ecb77cf19b69617c6d5c9b5ca879856634b'
+          test "$(git rev-parse HEAD:packages/python-runtime/golden/soa-alpha-golden-v0.2.holdout-seal.json)" = '6b7b3f9f9b24caaa0ed5961308707f53b457d264'
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: 3.12.14
+
+      - name: Compile G3C1 bridge surfaces
+        run: |
+          python -m py_compile \
+            packages/python-runtime/src/soaiacore_runtime/candidate_eval.py \
+            packages/python-runtime/tests/test_alpha_g3c1_candidate_bridge.py
+
+      - name: Run G3C1 and measurement regression tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}/packages/python-runtime/src
+          SOAIACORE_PROVIDER_MODE: MOCK
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir uv==0.12.5
+          uv sync --frozen
+          uv run --frozen pytest -q \
+            packages/python-runtime/tests/test_alpha_g3a_quality.py \
+            packages/python-runtime/tests/test_alpha_g3c0_integrity.py \
+            packages/python-runtime/tests/test_alpha_g3c1_candidate_bridge.py \
+            packages/python-runtime/tests/test_alpha_cognitive_loop_contract.py
+
+      - name: Validate public v0.2 commitment without Holdout payload
+        env:
+          PYTHONPATH: ${{ github.workspace }}/packages/python-runtime/src
+        run: |
+          uv run --frozen python - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+          from soaiacore_runtime.quality_eval import GoldenDatasetManifest, HoldoutSeal, verify_holdout_seal
+
+          root = Path('packages/python-runtime/golden')
+          manifest = GoldenDatasetManifest.model_validate(
+              json.loads((root / 'soa-alpha-golden-v0.2.json').read_text(encoding='utf-8'))
+          )
+          seal = HoldoutSeal.model_validate(
+              json.loads((root / 'soa-alpha-golden-v0.2.holdout-seal.json').read_text(encoding='utf-8'))
+          )
+          assert Counter(case.partition for case in manifest.cases) == {
+              'development': 9,
+              'validation': 9,
+              'holdout': 9,
+          }
+          assert verify_holdout_seal(manifest, seal)
+          assert seal.holdout_sha256 == '1f3e42cc6f1c66ce4136c89a208426e02d9456296c31054fe6e43ff0a3f4f98c'
+          PY
+
+      - name: Enforce no-provider no-live execution boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          targets=(
+            packages/python-runtime/src/soaiacore_runtime/candidate_eval.py
+            packages/python-runtime/tests/test_alpha_g3c1_candidate_bridge.py
+          )
+          ! grep -E -i 'postgresql://|client_secret|api[_-]?key|sk-proj-|az[[:space:]]+(group|network|containerapp|postgres)|terraform[[:space:]]+(apply|destroy)|Microsoft\.App/jobs/start' "${targets[@]}"
+          ! grep -E -i 'requests\.(get|post|put|patch|delete)|httpx\.(get|post|put|patch|delete)|subprocess\.(run|Popen)|os\.system|urllib\.request' "${targets[@]}"
+
+      - name: Record deterministic G3C1 gate
+        run: |
+          echo 'G3C1_CANDIDATE_TRACE_BRIDGE=PASS'
+          echo 'CANDIDATE_ORACLE_SEPARATION=true'
+          echo 'EXPECTED_FIELDS_EXPOSED=false'
+          echo 'G3C1_ALLOWED_PARTITIONS=development,validation'
+          echo 'HOLDOUT_EXECUTION=false'
+          echo 'STRUCTURED_QUALITY_SIGNALS=true'
+          echo 'CANDIDATE_IDENTITY_RECEIPT=true'
+          echo 'EXTERNAL_PROVIDER_CALLS=0'
+          echo 'G3_QUALITY_PASS_CLAIMED=false'
+          echo 'AZURE_MUTATION=false'
+          echo 'TERRAFORM_EXECUTION=false'
+          echo 'LIVE_DATABASE_MUTATION=false'
+          echo 'SCHEMA_MIGRATION=false'
+          echo 'R2_R3_ACTION_EXECUTION=false'
