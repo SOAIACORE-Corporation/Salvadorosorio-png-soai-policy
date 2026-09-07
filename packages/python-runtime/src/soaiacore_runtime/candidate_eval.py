@@ -210,12 +210,29 @@ def execute_g3c1_candidate_dataset(
     )
 
 
+def _validated_trace_ref(trace: dict[str, Any]) -> dict[str, str]:
+    trace_sha = trace.get("trace_sha256")
+    if not isinstance(trace_sha, str) or len(trace_sha) != 64:
+        raise ValueError("candidate trace digest is missing or malformed")
+    trace_body = {key: value for key, value in trace.items() if key != "trace_sha256"}
+    if sha256_json(trace_body) != trace_sha:
+        raise ValueError("candidate trace digest mismatch")
+    if trace.get("candidate_call_count") != 1:
+        raise ValueError("candidate trace must represent exactly one invocation")
+    if trace.get("holdout_executed") is not False:
+        raise ValueError("candidate trace indicates Holdout execution")
+    return {
+        "golden_case_id": str(trace.get("golden_case_id", "")),
+        "trace_sha256": trace_sha,
+    }
+
+
 def candidate_trace_receipt(
     *,
     traces: tuple[dict[str, Any], ...],
     expected_identity: CandidateIdentity,
 ) -> dict[str, Any]:
-    """Create a deterministic pre-Holdout receipt bound to one candidate identity."""
+    """Create a deterministic pre-Holdout receipt bound to identity and trace digests."""
 
     if not traces:
         raise ValueError("candidate trace receipt requires at least one trace")
@@ -229,7 +246,13 @@ def candidate_trace_receipt(
     if any(trace.get("oracle_fields_exposed") is not False for trace in traces):
         raise ValueError("candidate/oracle separation not proven")
 
-    case_ids = [str(trace.get("golden_case_id", "")) for trace in traces]
+    trace_refs = tuple(
+        sorted(
+            (_validated_trace_ref(trace) for trace in traces),
+            key=lambda item: item["golden_case_id"],
+        )
+    )
+    case_ids = [item["golden_case_id"] for item in trace_refs]
     if not all(case_ids) or len(case_ids) != len(set(case_ids)):
         raise ValueError("candidate trace IDs must be unique and non-empty")
 
@@ -242,11 +265,12 @@ def candidate_trace_receipt(
             "validation": counts["validation"],
             "holdout": 0,
         },
-        "candidate_call_count": sum(int(trace.get("candidate_call_count", 0)) for trace in traces),
+        "candidate_call_count": len(traces),
         "external_provider_calls": 0,
         "oracle_fields_exposed": False,
         "holdout_executed": False,
         "structured_quality_signals": True,
         "g3_quality_pass_claimed": False,
+        "trace_refs": trace_refs,
     }
     return {**body, "receipt_sha256": sha256_json(body)}
