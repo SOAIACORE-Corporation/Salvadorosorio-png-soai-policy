@@ -1,0 +1,111 @@
+name: SOA Intelligence G3A Quality Measurement
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feat/g3a-measurement-infrastructure-*'
+    paths:
+      - .github/workflows/soa-intelligence-g3a-quality.yml
+      - packages/python-runtime/src/soaiacore_runtime/quality_eval.py
+      - packages/python-runtime/tests/test_alpha_g3a_quality.py
+      - packages/python-runtime/golden/soa-alpha-g3a-conformance-v0.1.json
+      - pyproject.toml
+      - uv.lock
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/soa-intelligence-g3a-quality.yml
+      - packages/python-runtime/src/soaiacore_runtime/quality_eval.py
+      - packages/python-runtime/tests/test_alpha_g3a_quality.py
+      - packages/python-runtime/golden/soa-alpha-g3a-conformance-v0.1.json
+      - pyproject.toml
+      - uv.lock
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g3a-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deterministic-g3a:
+    name: G3A measurement infrastructure gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+
+      - name: Enforce authorized G3A R1 file boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          changed="$(git diff --name-only origin/main...HEAD)"
+          printf '%s\n' "$changed"
+          test -n "$changed"
+          allowed='^(\.github/workflows/soa-intelligence-g3a-quality\.yml|packages/python-runtime/src/soaiacore_runtime/quality_eval\.py|packages/python-runtime/tests/test_alpha_g3a_quality\.py|packages/python-runtime/golden/soa-alpha-g3a-conformance-v0\.1\.json)$'
+          if printf '%s\n' "$changed" | grep -Ev "$allowed"; then
+            echo 'G3A_R1_SCOPE_VIOLATION=true'
+            exit 1
+          fi
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: 3.12.14
+
+      - name: Compile deterministic G3A surfaces
+        run: |
+          python -m py_compile \
+            packages/python-runtime/src/soaiacore_runtime/quality_eval.py \
+            packages/python-runtime/tests/test_alpha_g3a_quality.py
+
+      - name: Run G3A synthetic conformance tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}/packages/python-runtime/src
+          SOAIACORE_PROVIDER_MODE: MOCK
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir uv==0.12.5
+          uv sync --frozen
+          uv run --frozen pytest -q packages/python-runtime/tests/test_alpha_g3a_quality.py
+
+      - name: Enforce synthetic-only and no-live boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          targets=(
+            packages/python-runtime/src/soaiacore_runtime/quality_eval.py
+            packages/python-runtime/tests/test_alpha_g3a_quality.py
+            packages/python-runtime/golden/soa-alpha-g3a-conformance-v0.1.json
+          )
+          ! grep -E -i 'postgresql://|client_secret|api[_-]?key|sk-proj-|az[[:space:]]+(group|network|containerapp|postgres)|terraform[[:space:]]+(apply|destroy)|Microsoft\.App/jobs/start' "${targets[@]}"
+          ! grep -E -i 'requests\.(post|put|patch|delete)|httpx\.(post|put|patch|delete)|subprocess\.(run|Popen)|os\.system' "${targets[@]}"
+          grep -q '"synthetic_only": true' packages/python-runtime/golden/soa-alpha-g3a-conformance-v0.1.json
+          grep -q '"contains_real_personal_payload": false' packages/python-runtime/golden/soa-alpha-g3a-conformance-v0.1.json
+          grep -q '"contains_secrets": false' packages/python-runtime/golden/soa-alpha-g3a-conformance-v0.1.json
+
+      - name: Record deterministic G3A gate
+        run: |
+          echo 'G3A_MEASUREMENT_INFRASTRUCTURE=PASS'
+          echo 'NORMATIVE_METRICS=9'
+          echo 'EXPLICIT_DENOMINATORS=true'
+          echo 'ZERO_DENOMINATOR_FAIL_CLOSED=true'
+          echo 'PARTITION_MANIFEST_VALIDATION=true'
+          echo 'HOLDOUT_SEAL_DIGEST=true'
+          echo 'FAILURE_TAXONOMY=true'
+          echo 'REPRODUCIBLE_QUALITY_RECEIPT=true'
+          echo 'SYNTHETIC_CONFORMANCE_ONLY=true'
+          echo 'REAL_PERSONAL_PAYLOAD=false'
+          echo 'EXTERNAL_PROVIDER_CALLS=0'
+          echo 'AZURE_MUTATION=false'
+          echo 'TERRAFORM_EXECUTION=false'
+          echo 'LIVE_DATABASE_MUTATION=false'
+          echo 'SCHEMA_MIGRATION=false'
+          echo 'R2_R3_ACTION_EXECUTION=false'
