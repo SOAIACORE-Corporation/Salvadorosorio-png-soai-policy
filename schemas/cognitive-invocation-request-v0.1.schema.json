@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.soaiacore.com/intelligence/cognitive-invocation-request-v0.1.schema.json",
+  "title": "SOA Intelligence Cognitive Invocation Request v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["invocation_id","task_class","messages","context_refs","tool_contracts","output_schema","reasoning_budget","latency_class","privacy_class","max_cost","model_constraints","trace_context"],
+  "properties": {
+    "invocation_id": {"type":"string","minLength":1},
+    "task_class": {"type":"string","minLength":1},
+    "messages": {"type":"array","minItems":1,"items":{"type":"object","additionalProperties":false,"required":["role","content"],"properties":{"role":{"type":"string","minLength":1},"content":{"type":"string","minLength":1}}}},
+    "context_refs": {"type":"array","items":{"type":"string"},"uniqueItems":true},
+    "tool_contracts": {"type":"array","items":{"type":"string"},"uniqueItems":true},
+    "output_schema": {"type":"string","minLength":1},
+    "reasoning_budget": {"type":"string","minLength":1},
+    "latency_class": {"type":"string","minLength":1},
+    "privacy_class": {"enum":["STANDARD","HIGH","RESTRICTED"]},
+    "max_cost": {"type":"number","minimum":0},
+    "model_constraints": {"type":"object","not":{"anyOf":[{"required":["provider"]},{"required":["provider_id"]},{"required":["model_id"]},{"required":["vendor"]},{"required":["api_key"]}]}},
+    "trace_context": {"type":"object","additionalProperties":{"type":"string"}}
+  }
+}

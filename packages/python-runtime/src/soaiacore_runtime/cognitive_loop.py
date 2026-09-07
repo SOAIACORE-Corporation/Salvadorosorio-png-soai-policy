@@ -61,6 +61,15 @@ class CognitiveInvocationRequest(BaseModel):
     model_constraints: dict[str, Any] = Field(default_factory=dict)
     trace_context: dict[str, str] = Field(default_factory=dict)
 
+    @field_validator("model_constraints")
+    @classmethod
+    def provider_neutral_constraints(cls, value: dict[str, Any]) -> dict[str, Any]:
+        forbidden = {"provider", "provider_id", "model_id", "vendor", "api_key"}
+        found = sorted(forbidden.intersection(value))
+        if found:
+            raise ValueError(f"provider-specific model_constraints are forbidden: {found}")
+        return value
+
     @field_validator("messages")
     @classmethod
     def require_messages(cls, value: tuple[CognitiveMessage, ...]) -> tuple[CognitiveMessage, ...]:

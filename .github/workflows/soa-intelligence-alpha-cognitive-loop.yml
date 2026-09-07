@@ -9,7 +9,10 @@ on:
       - .github/workflows/soa-intelligence-alpha-cognitive-loop.yml
       - packages/python-runtime/src/soaiacore_runtime/cognitive_loop.py
       - packages/python-runtime/src/soaiacore_runtime/golden_eval.py
-      - packages/python-runtime/tests/test_alpha_cognitive_loop_contract.py
+      - packages/python-runtime/tests/test_alpha_cognitive_*.py
+      - schemas/cognitive-invocation-request-v0.1.schema.json
+      - schemas/cognitive-output-v0.1.schema.json
+      - schemas/golden-case-v0.1.schema.json
       - contracts/SOA_INTELLIGENCE_COGNITIVE_INVOCATION_v0.1.md
       - pyproject.toml
       - uv.lock
@@ -20,7 +23,10 @@ on:
       - .github/workflows/soa-intelligence-alpha-cognitive-loop.yml
       - packages/python-runtime/src/soaiacore_runtime/cognitive_loop.py
       - packages/python-runtime/src/soaiacore_runtime/golden_eval.py
-      - packages/python-runtime/tests/test_alpha_cognitive_loop_contract.py
+      - packages/python-runtime/tests/test_alpha_cognitive_*.py
+      - schemas/cognitive-invocation-request-v0.1.schema.json
+      - schemas/cognitive-output-v0.1.schema.json
+      - schemas/golden-case-v0.1.schema.json
       - contracts/SOA_INTELLIGENCE_COGNITIVE_INVOCATION_v0.1.md
       - pyproject.toml
       - uv.lock
@@ -59,7 +65,7 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check --no-cache-dir uv==0.12.5
           uv sync --frozen
-          uv run --frozen pytest -q packages/python-runtime/tests/test_alpha_cognitive_loop_contract.py
+          uv run --frozen pytest -q packages/python-runtime/tests/test_alpha_cognitive_*.py
 
       - name: Enforce non-material R1 boundary
         shell: bash
@@ -68,15 +74,16 @@ jobs:
           ! grep -R -E "az (group|network|containerapp|postgres).* (create|update|delete|start)" \
             packages/python-runtime/src/soaiacore_runtime/cognitive_loop.py \
             packages/python-runtime/src/soaiacore_runtime/golden_eval.py \
-            packages/python-runtime/tests/test_alpha_cognitive_loop_contract.py
+            packages/python-runtime/tests
           ! grep -R -E "terraform (apply|destroy)|Microsoft\.App/jobs/start|public_network_access_enabled[[:space:]]*=[[:space:]]*true" \
             packages/python-runtime/src/soaiacore_runtime/cognitive_loop.py \
             packages/python-runtime/src/soaiacore_runtime/golden_eval.py \
-            packages/python-runtime/tests/test_alpha_cognitive_loop_contract.py
+            packages/python-runtime/tests
 
       - name: Record gate
         run: |
           echo "ALPHA_COGNITIVE_LOOP_R1_STATIC=PASS"
+          echo "G0_VERSIONED_SCHEMAS=true"
           echo "EXTERNAL_PROVIDER_CALLS=0"
           echo "AZURE_MUTATION=false"
           echo "LIVE_DATABASE_MUTATION=false"
