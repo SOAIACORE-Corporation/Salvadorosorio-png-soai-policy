@@ -147,8 +147,17 @@ def test_quality_receipt_is_reproducible_and_contains_no_payload():
         _observation("G3A-SYN-VAL-001", "validation"),
         _observation("G3A-SYN-HOLD-001", "holdout"),
     )
-    first = quality_receipt(manifest=manifest, observations=observations)
-    second = quality_receipt(manifest=manifest, observations=observations)
+    expected_seal = seal_holdout(manifest)
+    first = quality_receipt(
+        manifest=manifest,
+        expected_holdout_seal=expected_seal,
+        observations=observations,
+    )
+    second = quality_receipt(
+        manifest=manifest,
+        expected_holdout_seal=expected_seal,
+        observations=observations,
+    )
     assert first == second
     assert len(first["receipt_sha256"]) == 64
     assert first["aggregation"]["g3_quality_pass"] is True
@@ -162,8 +171,9 @@ def test_quality_receipt_is_reproducible_and_contains_no_payload():
 
 def test_quality_receipt_rejects_observation_outside_manifest():
     manifest = _manifest()
-    with pytest.raises(ValueError, match="observations not present in manifest"):
+    with pytest.raises(ValueError, match="observation coverage mismatch"):
         quality_receipt(
             manifest=manifest,
+            expected_holdout_seal=seal_holdout(manifest),
             observations=(_observation("UNKNOWN", "development"),),
         )
