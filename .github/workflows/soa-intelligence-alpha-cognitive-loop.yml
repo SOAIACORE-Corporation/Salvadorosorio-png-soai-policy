@@ -1,0 +1,30 @@
+name: SOA Intelligence Alpha Cognitive Loop
+
+on:
+  pull_request:
+    paths:
+      - "packages/python-runtime/src/soaiacore_runtime/cognitive_loop.py"
+      - "packages/python-runtime/src/soaiacore_runtime/golden_eval.py"
+      - "tests/test_alpha_cognitive_loop_contract.py"
+      - "contracts/SOA_INTELLIGENCE_COGNITIVE_INVOCATION_v0.1.md"
+      - ".github/workflows/soa-intelligence-alpha-cognitive-loop.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  alpha-cognitive-loop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.18"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Sync locked workspace
+        run: uv sync --frozen --group dev
+      - name: Contract and safety tests
+        run: uv run pytest -q tests/test_alpha_cognitive_loop_contract.py
