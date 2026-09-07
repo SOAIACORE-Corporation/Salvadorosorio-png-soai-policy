@@ -63,11 +63,12 @@ def test_manifest_is_partition_complete_and_holdout_seal_is_deterministic():
 
 def test_manifest_rejects_missing_partition_and_duplicate_case_id():
     valid = _manifest()
+    extra_dev = valid.cases[0].model_copy(update={"golden_case_id": "G3A-SYN-DEV-002"})
     with pytest.raises(ValidationError, match="partition coverage invalid"):
         GoldenDatasetManifest(
             dataset_id="bad",
             dataset_version="0.1",
-            cases=tuple(case for case in valid.cases if case.partition != "holdout"),
+            cases=(valid.cases[0], valid.cases[1], extra_dev),
         )
     duplicate = valid.cases[0]
     with pytest.raises(ValidationError, match="duplicate golden_case_id"):
