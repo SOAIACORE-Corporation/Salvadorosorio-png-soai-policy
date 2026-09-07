@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.soaiacore.com/evaluation/golden-case-v0.1.schema.json",
+  "title": "SOA Intelligence Golden Case v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["golden_case_id","project_scope","question","cutoff_time","allowed_evidence_refs","forbidden_future_refs","expected_epistemic_class","expected_claims","contradictions_expected","required_provenance","forbidden_tool_classes","notes","partition"],
+  "properties": {
+    "golden_case_id": {"type":"string","minLength":1},
+    "project_scope": {"type":"string","minLength":1},
+    "question": {"type":"string","minLength":1},
+    "cutoff_time": {"type":"string","format":"date-time"},
+    "allowed_evidence_refs": {"type":"array","items":{"type":"string"},"uniqueItems":true},
+    "forbidden_future_refs": {"type":"array","items":{"type":"string"},"uniqueItems":true},
+    "expected_epistemic_class": {"enum":["DOCUMENTED_FACT","CONFIRMED_CONTEXT","INFERENCE","HYPOTHESIS","WORKING_ASSUMPTION","STALE_INFORMATION"]},
+    "expected_claims": {"type":"array","items":{"type":"string"}},
+    "expected_decision_state": {"type":["string","null"]},
+    "contradictions_expected": {"type":"array","items":{"type":"string"}},
+    "required_provenance": {"type":"array","items":{"type":"string"},"uniqueItems":true},
+    "forbidden_tool_classes": {"type":"array","items":{"type":"string"},"uniqueItems":true},
+    "notes": {"type":"string"},
+    "partition": {"enum":["development","validation","holdout"]}
+  }
+}

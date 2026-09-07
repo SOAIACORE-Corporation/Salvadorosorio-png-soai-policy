@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.soaiacore.com/intelligence/cognitive-output-v0.1.schema.json",
+  "title": "SOA Intelligence Cognitive Output v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["output_id","content","epistemic_class","disposition","evidence_refs","provenance_refs","material_effect"],
+  "properties": {
+    "output_id": {"type":"string","minLength":1},
+    "content": {"type":"string","minLength":1},
+    "epistemic_class": {"enum":["DOCUMENTED_FACT","CONFIRMED_CONTEXT","INFERENCE","HYPOTHESIS","WORKING_ASSUMPTION","STALE_INFORMATION"]},
+    "disposition": {"enum":["EPHEMERAL_INFERENCE","CLAIM_PROPOSAL","DECISION_PROPOSAL","TOOL_REQUEST"]},
+    "evidence_refs": {"type":"array","items":{"type":"string"},"uniqueItems":true},
+    "provenance_refs": {"type":"array","items":{"type":"string"},"uniqueItems":true},
+    "tool_name": {"type":["string","null"]},
+    "material_effect": {"type":"boolean"}
+  }
+}
