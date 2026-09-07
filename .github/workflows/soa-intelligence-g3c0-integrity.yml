@@ -90,7 +90,7 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}/packages/python-runtime/src
         run: |
-          python - <<'PY'
+          uv run --frozen python - <<'PY'
           import json
           from collections import Counter
           from pathlib import Path
