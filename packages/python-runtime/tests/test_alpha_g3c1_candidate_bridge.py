@@ -195,7 +195,7 @@ def test_candidate_trace_maps_structured_signals_after_candidate_returns():
     assert observation.epistemic_label_correct is True
 
 
-def test_dataset_execution_is_exact_dev_validation_only_and_receipt_binds_identity():
+def test_dataset_execution_is_exact_dev_validation_only_and_receipt_binds_identity_and_traces():
     cases = (
         _case("DEV-1", "development"),
         _case("VAL-1", "validation"),
@@ -223,7 +223,25 @@ def test_dataset_execution_is_exact_dev_validation_only_and_receipt_binds_identi
     assert receipt["holdout_executed"] is False
     assert receipt["structured_quality_signals"] is True
     assert receipt["g3_quality_pass_claimed"] is False
+    assert receipt["trace_refs"] == (
+        {"golden_case_id": "DEV-1", "trace_sha256": traces[0]["trace_sha256"]},
+        {"golden_case_id": "VAL-1", "trace_sha256": traces[1]["trace_sha256"]},
+    )
     assert len(receipt["receipt_sha256"]) == 64
+
+
+def test_candidate_receipt_rejects_trace_tampering():
+    adapter = RecordingAdapter()
+    trace = execute_g3c1_candidate_case(
+        case=_case("DEV-TAMPER", "development"),
+        context=_context(),
+        adapter=adapter,
+    )
+    tampered = dict(trace)
+    tampered["output"] = {**trace["output"], "content": "tampered after execution"}
+
+    with pytest.raises(ValueError, match="trace digest mismatch"):
+        candidate_trace_receipt(traces=(tampered,), expected_identity=adapter.identity)
 
 
 def test_dataset_execution_rejects_incomplete_context_coverage():
