@@ -1,0 +1,137 @@
+name: SOA Intelligence G3C2A Provider Boundary
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feat/g3c2a-provider-execution-boundary-*'
+    paths:
+      - .github/workflows/soa-intelligence-g3c2a-provider.yml
+      - packages/python-runtime/src/soaiacore_runtime/provider_eval.py
+      - packages/python-runtime/tests/test_alpha_g3c2a_provider_boundary.py
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/soa-intelligence-g3c2a-provider.yml
+      - packages/python-runtime/src/soaiacore_runtime/provider_eval.py
+      - packages/python-runtime/tests/test_alpha_g3c2a_provider_boundary.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g3c2a-provider-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  provider-boundary:
+    name: G3C2A Provider A no-outbound gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+
+      - name: Enforce exact G3C2A R1 file boundary and immutable datasets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          changed="$(git diff --name-only origin/main...HEAD)"
+          printf '%s\n' "$changed"
+          test -n "$changed"
+          allowed='^(\.github/workflows/soa-intelligence-g3c2a-provider\.yml|packages/python-runtime/src/soaiacore_runtime/provider_eval\.py|packages/python-runtime/tests/test_alpha_g3c2a_provider_boundary\.py)$'
+          if printf '%s\n' "$changed" | grep -Ev "$allowed"; then
+            echo 'G3C2A_R1_SCOPE_VIOLATION=true'
+            exit 1
+          fi
+          test "$(git rev-parse HEAD:packages/python-runtime/golden/soa-alpha-golden-v0.1.json)" = '14996ad98169cc388312e237b18f00c6e34c83f2'
+          test "$(git rev-parse HEAD:packages/python-runtime/golden/soa-alpha-golden-v0.1.holdout-seal.json)" = '969a2040f52ccc721a50ad455b6f6ce5bc5e8cd8'
+          test "$(git rev-parse HEAD:packages/python-runtime/golden/soa-alpha-golden-v0.2.json)" = '76783ecb77cf19b69617c6d5c9b5ca879856634b'
+          test "$(git rev-parse HEAD:packages/python-runtime/golden/soa-alpha-golden-v0.2.holdout-seal.json)" = '6b7b3f9f9b24caaa0ed5961308707f53b457d264'
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: 3.12.14
+
+      - name: Compile G3C2A boundary
+        run: |
+          python -m py_compile \
+            packages/python-runtime/src/soaiacore_runtime/provider_eval.py \
+            packages/python-runtime/tests/test_alpha_g3c2a_provider_boundary.py
+
+      - name: Install frozen runtime
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir uv==0.12.5
+          uv sync --frozen
+
+      - name: Run G3C2A and Alpha regression tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}/packages/python-runtime/src
+          OPENAI_API_KEY: runtime-ci-placeholder-not-a-real-key
+        run: |
+          uv run --frozen pytest -q \
+            packages/python-runtime/tests/test_alpha_g3a_quality.py \
+            packages/python-runtime/tests/test_alpha_g3c0_integrity.py \
+            packages/python-runtime/tests/test_alpha_g3c1_candidate_bridge.py \
+            packages/python-runtime/tests/test_alpha_g3c2a_provider_boundary.py \
+            packages/python-runtime/tests/test_alpha_cognitive_loop_contract.py
+
+      - name: Prove Holdout and outbound transport remain unreachable
+        shell: bash
+        run: |
+          set -euo pipefail
+          targets=(
+            packages/python-runtime/src/soaiacore_runtime/provider_eval.py
+            packages/python-runtime/tests/test_alpha_g3c2a_provider_boundary.py
+          )
+          ! grep -E -i 'requests\.(get|post|put|patch|delete)|httpx\.(get|post|put|patch|delete)|urllib\.request|socket\.|subprocess\.(run|Popen)|os\.system' "${targets[@]}"
+          ! grep -E -i 'sk-proj-|sk-[A-Za-z0-9_-]{20,}' "${targets[@]}"
+          ! grep -E -i 'terraform[[:space:]]+(apply|destroy)|az[[:space:]]+(group|network|containerapp|postgres)|Microsoft\.App/jobs/start|postgresql://' "${targets[@]}"
+          grep -q '_G3C2A_ALLOWED_PARTITIONS = frozenset({"development", "validation"})' packages/python-runtime/src/soaiacore_runtime/provider_eval.py
+          grep -q 'G3C2A Holdout execution is forbidden' packages/python-runtime/src/soaiacore_runtime/provider_eval.py
+          grep -q 'G3C2A forbids external provider transport' packages/python-runtime/src/soaiacore_runtime/provider_eval.py
+
+      - name: Validate Provider A boundary invariants
+        env:
+          PYTHONPATH: ${{ github.workspace }}/packages/python-runtime/src
+          OPENAI_API_KEY: runtime-ci-placeholder-not-a-real-key
+        run: |
+          uv run --frozen python - <<'PY'
+          from soaiacore_runtime.provider_eval import ProviderAConfig
+
+          config = ProviderAConfig(
+              model_id='provider-a-fixture-model',
+              profile_version='g3c2a-profile/0.1',
+              adapter_version='provider-a-boundary/0.1',
+          )
+          identity = config.identity()
+          assert identity.provider == 'openai'
+          assert identity.execution_mode == 'REPLAY'
+          assert config.credential_env == 'OPENAI_API_KEY'
+          assert config.max_attempts <= 3
+          PY
+
+      - name: Record deterministic G3C2A gate
+        run: |
+          echo 'G3C2A_PROVIDER_BOUNDARY=PASS'
+          echo 'PROVIDER_A=openai'
+          echo 'EXECUTION_MODE=REPLAY'
+          echo 'CREDENTIAL_SOURCE=runtime_env_only'
+          echo 'CANDIDATE_ORACLE_SEPARATION=true'
+          echo 'ALLOWED_PARTITIONS=development,validation'
+          echo 'HOLDOUT_EXECUTION=false'
+          echo 'TOOLS_ENABLED=false'
+          echo 'EXTERNAL_PROVIDER_CALLS=0'
+          echo 'PRIVATE_PAYLOAD_COMMITTED_TO_GITHUB=false'
+          echo 'G3_QUALITY_PASS_CLAIMED=false'
+          echo 'AZURE_MUTATION=false'
+          echo 'TERRAFORM_EXECUTION=false'
+          echo 'LIVE_DATABASE_MUTATION=false'
+          echo 'SCHEMA_MIGRATION=false'
+          echo 'R2_R3_ACTION_EXECUTION=false'
