@@ -1,0 +1,198 @@
+name: SOA Intelligence G3C2B0 LIVE Provider Boundary
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feat/g3c2b0-live-provider-boundary-*'
+    paths:
+      - .github/workflows/soa-intelligence-g3c2b0-live-provider.yml
+      - packages/python-runtime/src/soaiacore_runtime/provider_live.py
+      - packages/python-runtime/tests/test_alpha_g3c2b0_live_boundary.py
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/soa-intelligence-g3c2b0-live-provider.yml
+      - packages/python-runtime/src/soaiacore_runtime/provider_live.py
+      - packages/python-runtime/tests/test_alpha_g3c2b0_live_boundary.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g3c2b0-live-provider-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live-boundary:
+    name: G3C2B0 LIVE Provider A no-outbound gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      SOAIACORE_G3C2B0_NO_OUTBOUND: '1'
+      OPENAI_API_KEY: runtime-ci-placeholder-not-a-real-key
+
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+
+      - name: Enforce exact G3C2B0 R1 file boundary and immutable datasets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          changed="$(git diff --name-only origin/main...HEAD)"
+          printf '%s\n' "$changed"
+          test -n "$changed"
+          allowed='^(\.github/workflows/soa-intelligence-g3c2b0-live-provider\.yml|packages/python-runtime/src/soaiacore_runtime/provider_live\.py|packages/python-runtime/tests/test_alpha_g3c2b0_live_boundary\.py)$'
+          if printf '%s\n' "$changed" | grep -Ev "$allowed"; then
+            echo 'G3C2B0_R1_SCOPE_VIOLATION=true'
+            exit 1
+          fi
+          test "$(git rev-parse HEAD:packages/python-runtime/golden/soa-alpha-golden-v0.1.json)" = '14996ad98169cc388312e237b18f00c6e34c83f2'
+          test "$(git rev-parse HEAD:packages/python-runtime/golden/soa-alpha-golden-v0.1.holdout-seal.json)" = '969a2040f52ccc721a50ad455b6f6ce5bc5e8cd8'
+          test "$(git rev-parse HEAD:packages/python-runtime/golden/soa-alpha-golden-v0.2.json)" = '76783ecb77cf19b69617c6d5c9b5ca879856634b'
+          test "$(git rev-parse HEAD:packages/python-runtime/golden/soa-alpha-golden-v0.2.holdout-seal.json)" = '6b7b3f9f9b24caaa0ed5961308707f53b457d264'
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: 3.12.14
+
+      - name: Compile G3C2B0 LIVE boundary
+        run: |
+          python -m py_compile \
+            packages/python-runtime/src/soaiacore_runtime/provider_live.py \
+            packages/python-runtime/tests/test_alpha_g3c2b0_live_boundary.py
+
+      - name: Install frozen runtime
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir uv==0.12.5
+          uv sync --frozen
+
+      - name: Run G3C2B0 and Alpha regression tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}/packages/python-runtime/src
+        run: |
+          uv run --frozen pytest -q \
+            packages/python-runtime/tests/test_alpha_g3a_quality.py \
+            packages/python-runtime/tests/test_alpha_g3c0_integrity.py \
+            packages/python-runtime/tests/test_alpha_g3c1_candidate_bridge.py \
+            packages/python-runtime/tests/test_alpha_g3c2a_provider_boundary.py \
+            packages/python-runtime/tests/test_alpha_g3c2b0_live_boundary.py \
+            packages/python-runtime/tests/test_alpha_cognitive_loop_contract.py
+
+      - name: Prove LIVE contract is present but outbound is disabled in CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          target=packages/python-runtime/src/soaiacore_runtime/provider_live.py
+          grep -q 'https://api.openai.com/v1/responses' "$target"
+          grep -q 'Literal\["gpt-5.6-sol"\]' "$target"
+          grep -q 'Literal\["OPENAI_API_KEY"\]' "$target"
+          grep -q 'G3C2B0 Holdout execution is forbidden' "$target"
+          grep -q 'SOAIACORE_G3C2B0_NO_OUTBOUND' "$target"
+          grep -q '"store": False' "$target"
+          grep -q '"background": False' "$target"
+          grep -q '"tools": \[\]' "$target"
+          grep -q '"tool_choice": "none"' "$target"
+          grep -q '"strict": True' "$target"
+          ! grep -E -i 'sk-proj-|sk-[A-Za-z0-9_-]{20,}' \
+            packages/python-runtime/src/soaiacore_runtime/provider_live.py \
+            packages/python-runtime/tests/test_alpha_g3c2b0_live_boundary.py
+          ! grep -E -i 'terraform[[:space:]]+(apply|destroy)|az[[:space:]]+(group|network|containerapp|postgres)|Microsoft\.App/jobs/start|postgresql://' \
+            packages/python-runtime/src/soaiacore_runtime/provider_live.py \
+            packages/python-runtime/tests/test_alpha_g3c2b0_live_boundary.py
+
+      - name: Validate OpenAI Responses request invariants without network
+        env:
+          PYTHONPATH: ${{ github.workspace }}/packages/python-runtime/src
+        run: |
+          uv run --frozen python - <<'PY'
+          from datetime import datetime, timezone
+
+          from soaiacore_runtime.cognitive_loop import ContextBundle, EpistemicClass
+          from soaiacore_runtime.golden_eval import GoldenCase
+          from soaiacore_runtime.provider_live import (
+              OutboundDataPolicy,
+              ProviderALiveConfig,
+              prepare_g3c2b0_live_request,
+          )
+
+          now = datetime(2026, 9, 8, 21, 0, tzinfo=timezone.utc)
+          case = GoldenCase(
+              golden_case_id="G3C2B0-CI",
+              project_scope="SOAiaCore",
+              question="Evaluate the supplied synthetic governed context.",
+              cutoff_time=now,
+              allowed_evidence_refs=("synthetic:ci",),
+              expected_epistemic_class=EpistemicClass.CONFIRMED_CONTEXT,
+              partition="development",
+          )
+          context = ContextBundle(
+              project_scope="SOAiaCore",
+              valid_at=now,
+              recorded_at=now,
+              memory=({
+                  "memory_id": "M-CI",
+                  "project_scope": "SOAiaCore",
+                  "claim": "synthetic CI context",
+                  "sensitivity": "INTERNAL",
+              },),
+              evidence_refs=("synthetic:ci",),
+              session_items=(),
+          )
+          config = ProviderALiveConfig(
+              profile_version="g3c2b0-live-profile/0.1",
+              adapter_version="provider-a-live-boundary/0.1",
+          )
+          prepared = prepare_g3c2b0_live_request(
+              case=case,
+              context=context,
+              config=config,
+              data_policy=OutboundDataPolicy(),
+          )
+          wire = prepared.wire_payload
+          assert wire["model"] == "gpt-5.6-sol"
+          assert wire["reasoning"] == {"effort": "high"}
+          assert wire["store"] is False
+          assert wire["background"] is False
+          assert wire["tools"] == []
+          assert wire["tool_choice"] == "none"
+          assert wire["text"]["format"]["type"] == "json_schema"
+          assert wire["text"]["format"]["strict"] is True
+          assert len(prepared.payload_sha256) == 64
+          PY
+
+      - name: Record deterministic G3C2B0 gate
+        run: |
+          echo 'G3C2B0_LIVE_PROVIDER_BOUNDARY=PASS'
+          echo 'PROVIDER_A=openai'
+          echo 'MODEL_ID=gpt-5.6-sol'
+          echo 'RESPONSES_ENDPOINT=https://api.openai.com/v1/responses'
+          echo 'REASONING_EFFORT=high'
+          echo 'CREDENTIAL_SOURCE=OPENAI_API_KEY_runtime_env_only'
+          echo 'STORE=false'
+          echo 'BACKGROUND=false'
+          echo 'TOOLS_ENABLED=false'
+          echo 'STRUCTURED_OUTPUT_JSON_SCHEMA_STRICT=true'
+          echo 'OUTBOUND_ALLOWLIST_ENFORCED=true'
+          echo 'PAYLOAD_MINIMIZATION=true'
+          echo 'SENSITIVITY_GATE_BEFORE_SOCKET=true'
+          echo 'ALLOWED_PARTITIONS=development,validation'
+          echo 'HOLDOUT_EXECUTION=false'
+          echo 'CLIENT_REQUEST_ID=true'
+          echo 'PROVIDER_REQUEST_ID_CAPTURE=true'
+          echo 'PAYLOAD_DIGEST_BOUND_RECEIPT=true'
+          echo 'CI_NO_OUTBOUND_GUARD=true'
+          echo 'EXTERNAL_PROVIDER_CALLS=0'
+          echo 'PRIVATE_PAYLOAD_SENT_TO_THIRD_PARTY=false'
+          echo 'G3_QUALITY_PASS_CLAIMED=false'
+          echo 'AZURE_MUTATION=false'
+          echo 'TERRAFORM_EXECUTION=false'
+          echo 'LIVE_DATABASE_MUTATION=false'
+          echo 'SCHEMA_MIGRATION=false'
+          echo 'R2_R3_ACTION_EXECUTION=false'
