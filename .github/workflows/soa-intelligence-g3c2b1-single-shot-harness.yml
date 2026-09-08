@@ -1,0 +1,158 @@
+name: SOA Intelligence G3C2B1 Single-Shot Harness
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feat/g3c2b1-single-shot-harness-*'
+    paths:
+      - .github/workflows/soa-intelligence-g3c2b1-single-shot-harness.yml
+      - packages/python-runtime/src/soaiacore_runtime/provider_live_smoke.py
+      - packages/python-runtime/tests/test_alpha_g3c2b1_single_shot_harness.py
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/soa-intelligence-g3c2b1-single-shot-harness.yml
+      - packages/python-runtime/src/soaiacore_runtime/provider_live_smoke.py
+      - packages/python-runtime/tests/test_alpha_g3c2b1_single_shot_harness.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g3c2b1-single-shot-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  single-shot-harness:
+    name: G3C2B1 governed single-shot no-outbound gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      SOAIACORE_G3C2B0_NO_OUTBOUND: '1'
+      SOAIACORE_G3C2B1_ALLOW_OUTBOUND: '0'
+
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+
+      - name: Enforce exact G3C2B1 R1 file boundary and immutable datasets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          changed="$(git diff --name-only origin/main...HEAD)"
+          printf '%s\n' "$changed"
+          test -n "$changed"
+          allowed='^(\.github/workflows/soa-intelligence-g3c2b1-single-shot-harness\.yml|packages/python-runtime/src/soaiacore_runtime/provider_live_smoke\.py|packages/python-runtime/tests/test_alpha_g3c2b1_single_shot_harness\.py)$'
+          if printf '%s\n' "$changed" | grep -Ev "$allowed"; then
+            echo 'G3C2B1_R1_SCOPE_VIOLATION=true'
+            exit 1
+          fi
+          test "$(git rev-parse HEAD:packages/python-runtime/golden/soa-alpha-golden-v0.1.json)" = '14996ad98169cc388312e237b18f00c6e34c83f2'
+          test "$(git rev-parse HEAD:packages/python-runtime/golden/soa-alpha-golden-v0.1.holdout-seal.json)" = '969a2040f52ccc721a50ad455b6f6ce5bc5e8cd8'
+          test "$(git rev-parse HEAD:packages/python-runtime/golden/soa-alpha-golden-v0.2.json)" = '76783ecb77cf19b69617c6d5c9b5ca879856634b'
+          test "$(git rev-parse HEAD:packages/python-runtime/golden/soa-alpha-golden-v0.2.holdout-seal.json)" = '6b7b3f9f9b24caaa0ed5961308707f53b457d264'
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: 3.12.14
+
+      - name: Compile G3C2B1 harness
+        run: |
+          python -m py_compile \
+            packages/python-runtime/src/soaiacore_runtime/provider_live_smoke.py \
+            packages/python-runtime/tests/test_alpha_g3c2b1_single_shot_harness.py
+
+      - name: Install frozen runtime
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir uv==0.12.5
+          uv sync --frozen
+
+      - name: Run G3C2B1 and Alpha regression tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}/packages/python-runtime/src
+        run: |
+          uv run --frozen pytest -q \
+            packages/python-runtime/tests/test_alpha_g3a_quality.py \
+            packages/python-runtime/tests/test_alpha_g3c0_integrity.py \
+            packages/python-runtime/tests/test_alpha_g3c1_candidate_bridge.py \
+            packages/python-runtime/tests/test_alpha_g3c2a_provider_boundary.py \
+            packages/python-runtime/tests/test_alpha_g3c2b0_live_boundary.py \
+            packages/python-runtime/tests/test_alpha_g3c2b1_single_shot_harness.py \
+            packages/python-runtime/tests/test_alpha_cognitive_loop_contract.py
+
+      - name: Prove fixed-input single-shot contract and zero real credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          target=packages/python-runtime/src/soaiacore_runtime/provider_live_smoke.py
+          grep -q 'G3C2B1-SYNTHETIC-LIVE-SMOKE-001' "$target"
+          grep -q 'SMOKE_PARTITION = "development"' "$target"
+          grep -q 'SMOKE_MAX_ATTEMPTS = 1' "$target"
+          grep -q 'max_sensitivity="PUBLIC"' "$target"
+          grep -q 'SOAIACORE_G3C2B1_ALLOW_OUTBOUND' "$target"
+          grep -q 'full_dataset_evaluation' "$target"
+          grep -q 'holdout_allowed' "$target"
+          grep -q 'g3_quality_pass_claimed' "$target"
+          ! grep -E -- '--case|--partition|--model|--max-attempts|--data-policy|--context' "$target"
+          ! grep -E -i 'sk-proj-|sk-[A-Za-z0-9_-]{20,}' \
+            "$target" \
+            packages/python-runtime/tests/test_alpha_g3c2b1_single_shot_harness.py
+          ! env | grep '^OPENAI_API_KEY=' || true
+
+      - name: Execute no-credential no-outbound preflight only
+        env:
+          PYTHONPATH: ${{ github.workspace }}/packages/python-runtime/src
+        run: |
+          set -euo pipefail
+          unset OPENAI_API_KEY || true
+          out="$(uv run --frozen python -m soaiacore_runtime.provider_live_smoke preflight)"
+          printf '%s\n' "$out"
+          OUT="$out" uv run --frozen python - <<'PY'
+          import json, os
+          data = json.loads(os.environ['OUT'])
+          assert data['golden_case_id'] == 'G3C2B1-SYNTHETIC-LIVE-SMOKE-001'
+          assert data['partition'] == 'development'
+          assert data['synthetic_only'] is True
+          assert data['sensitivity'] == 'PUBLIC'
+          assert data['single_shot'] is True
+          assert data['max_attempts'] == 1
+          assert data['external_provider_calls'] == 0
+          assert data['credential_read'] is False
+          assert data['outbound_executed'] is False
+          assert data['holdout_allowed'] is False
+          assert data['g3_quality_pass_claimed'] is False
+          PY
+
+      - name: Record deterministic G3C2B1 gate
+        run: |
+          echo 'G3C2B1_SINGLE_SHOT_HARNESS=PASS'
+          echo 'CASE_ID=G3C2B1-SYNTHETIC-LIVE-SMOKE-001'
+          echo 'PARTITION=development'
+          echo 'SYNTHETIC_ONLY=true'
+          echo 'SENSITIVITY=PUBLIC'
+          echo 'SINGLE_SHOT=true'
+          echo 'MAX_ATTEMPTS=1'
+          echo 'MAX_OUTPUT_TOKENS=512'
+          echo 'PROVIDER_A=openai'
+          echo 'MODEL_ID=gpt-5.6-sol'
+          echo 'R2_AUTHORITY_REQUIRED=true'
+          echo 'SECOND_OUTBOUND_PERMIT_REQUIRED=true'
+          echo 'OPENAI_API_KEY_PRESENT_IN_CI=false'
+          echo 'CI_NO_OUTBOUND_GUARD=true'
+          echo 'EXTERNAL_PROVIDER_CALLS=0'
+          echo 'PRIVATE_PAYLOAD_SENT_TO_THIRD_PARTY=false'
+          echo 'FULL_DATASET_EVALUATION=false'
+          echo 'HOLDOUT_EXECUTION=false'
+          echo 'G3_QUALITY_PASS_CLAIMED=false'
+          echo 'READY_MERGE_AUTHORIZED=false'
+          echo 'AZURE_MUTATION=false'
+          echo 'TERRAFORM_EXECUTION=false'
+          echo 'LIVE_DATABASE_MUTATION=false'
+          echo 'SCHEMA_MIGRATION=false'
+          echo 'R2_R3_ACTION_EXECUTION=false'
