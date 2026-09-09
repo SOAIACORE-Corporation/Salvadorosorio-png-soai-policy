@@ -1,0 +1,109 @@
+name: SOA Intelligence G3C2D R1 Validation
+
+on:
+  push:
+    branches:
+      - feat/g3c2d-governed-internal-batch-execution-20260909
+    paths:
+      - .github/workflows/soa-intelligence-g3c2d-governed-internal-batch.yml
+      - .github/workflows/soa-intelligence-g3c2d-r1-validation.yml
+      - packages/python-runtime/tests/test_alpha_g3c2d_internal_execution_path.py
+  pull_request:
+    paths:
+      - .github/workflows/soa-intelligence-g3c2d-governed-internal-batch.yml
+      - .github/workflows/soa-intelligence-g3c2d-r1-validation.yml
+      - packages/python-runtime/tests/test_alpha_g3c2d_internal_execution_path.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g3c2d-r1-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-r1-no-outbound:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SOAIACORE_G3C2B0_NO_OUTBOUND: '1'
+      PYTHONPATH: ${{ github.workspace }}/packages/python-runtime/src
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+
+      - name: Enforce exact G3C2D R1 scope and immutable private payload boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          base="$(git rev-parse origin/main)"
+          changed="$(git diff --name-only "$base"...HEAD)"
+          test -n "$changed"
+          allowed='^(\.github/workflows/soa-intelligence-g3c2d-governed-internal-batch\.yml|\.github/workflows/soa-intelligence-g3c2d-r1-validation\.yml|packages/python-runtime/tests/test_alpha_g3c2d_internal_execution_path\.py)$'
+          if printf '%s\n' "$changed" | grep -Ev "$allowed"; then
+            echo 'G3C2D R1 scope violation'
+            exit 1
+          fi
+          git diff --exit-code "$base"...HEAD -- \
+            packages/python-runtime/golden/soa-alpha-golden-v0.2.json \
+            packages/python-runtime/golden/soa-alpha-golden-v0.2.holdout-seal.json \
+            packages/python-runtime/golden/soa-alpha-golden-v0.2.preholdout-sensitivity.json \
+            packages/python-runtime/src/soaiacore_runtime/preholdout_live.py
+          if find . -type f \( -iname '*private*bundle*' -o -iname '*.env' -o -iname '.env*' \) \
+              ! -path './.git/*' -print | grep -q .; then
+            echo 'Private bundle or env payload must never be committed'
+            exit 1
+          fi
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: 3.12.14
+
+      - name: Install frozen runtime
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir uv==0.12.5
+          uv sync --frozen
+
+      - name: Prove no credentials and no outbound in R1 validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset OPENAI_API_KEY || true
+          unset SOAIACORE_G3C2D_INTERNAL_BUNDLE_B64 || true
+          test "$SOAIACORE_G3C2B0_NO_OUTBOUND" = 1
+
+      - name: Run G3C2D execution-path and Provider A regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --frozen pytest -q \
+            packages/python-runtime/tests/test_alpha_g3c2d_internal_execution_path.py \
+            packages/python-runtime/tests/test_alpha_g3c2c_preholdout_live.py \
+            packages/python-runtime/tests/test_alpha_g3c2b0_live_boundary.py \
+            packages/python-runtime/tests/test_alpha_g3c2b1_single_shot_harness.py
+
+      - name: R1 validation summary
+        shell: bash
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## G3C2D R1 validation
+          - execution workflow: workflow_dispatch-only
+          - INTERNAL private bundle in repository: false
+          - private bundle workflow input: false
+          - private bundle secret handle: SOAIACORE_G3C2D_INTERNAL_BUNDLE_B64
+          - expected INTERNAL bundle canonical SHA256: d814a6090fda02ad0f87b95a3e860017372c31219007775a4751850c2075d69b
+          - exact case scope: 9 INTERNAL
+          - Holdout executable: false
+          - CONFIDENTIAL executable: false
+          - provider/model drift allowed: false
+          - max attempts per case: 1
+          - replay claim: Issue #67 persistent intent claim
+          - external provider calls: 0
+          - credential read: false
+          - G3 Quality PASS claimed: false
+          EOF

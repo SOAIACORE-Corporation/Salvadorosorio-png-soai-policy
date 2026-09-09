@@ -1,0 +1,334 @@
+name: SOA Intelligence G3C2D Governed INTERNAL Batch
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_main_sha:
+        description: Exact protected main commit SHA authorized for this INTERNAL batch
+        required: true
+        type: string
+      r2_authority_ref:
+        description: Non-empty exact R2 authority reference for one nine-case INTERNAL batch
+        required: true
+        type: string
+      one_batch_confirmation:
+        description: Type I_UNDERSTAND_NINE_INTERNAL_PREHOLDOUT_CALLS_ONLY exactly
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: g3c2d-governed-internal-batch
+  cancel-in-progress: false
+
+jobs:
+  governed-internal-batch:
+    name: G3C2D nine-case INTERNAL Provider A batch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      EXPECTED_MAIN_SHA: ${{ inputs.expected_main_sha }}
+      R2_AUTHORITY_REF: ${{ inputs.r2_authority_ref }}
+      ONE_BATCH_CONFIRMATION: ${{ inputs.one_batch_confirmation }}
+      EXPECTED_INTERNAL_BUNDLE_SHA256: d814a6090fda02ad0f87b95a3e860017372c31219007775a4751850c2075d69b
+      EXPECTED_BINDING_SHA256: 3c839b730981556510ac67bbac58e8afcf4e1432f7fd63a6f6cb244639705bf2
+      EXPECTED_INTERNAL_CASE_COUNT: '9'
+      PYTHONPATH: ${{ github.workspace }}/packages/python-runtime/src
+      BINDING_PATH: packages/python-runtime/golden/soa-alpha-golden-v0.2.preholdout-sensitivity.json
+      MANIFEST_PATH: packages/python-runtime/golden/soa-alpha-golden-v0.2.json
+
+    steps:
+      - name: Check out authoritative main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Fail closed on authority and fixed INTERNAL scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF_NAME" = main
+          test -n "$R2_AUTHORITY_REF"
+          test "$ONE_BATCH_CONFIRMATION" = I_UNDERSTAND_NINE_INTERNAL_PREHOLDOUT_CALLS_ONLY
+          printf '%s' "$EXPECTED_MAIN_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          git fetch origin main --depth=1
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN_SHA"
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: 3.12.14
+
+      - name: Install frozen runtime
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir uv==0.12.5
+          uv sync --frozen
+
+      - name: Verify required opaque secret handles exist
+        env:
+          PRIVATE_BUNDLE_B64: ${{ secrets.SOAIACORE_G3C2D_INTERNAL_BUNDLE_B64 }}
+          OPENAI_API_KEY_HANDLE: ${{ secrets.OPENAI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$PRIVATE_BUNDLE_B64"
+          test -n "$OPENAI_API_KEY_HANDLE"
+          echo 'Required secret handles are present; values were not inspected or printed.'
+
+      - name: Materialize exact INTERNAL bundle to ephemeral runner storage
+        env:
+          PRIVATE_BUNDLE_B64: ${{ secrets.SOAIACORE_G3C2D_INTERNAL_BUNDLE_B64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          bundle_path="$RUNNER_TEMP/g3c2d-internal-private-bundle.json"
+          export PRIVATE_BUNDLE_PATH="$bundle_path"
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          from pathlib import Path
+          from soaiacore_runtime.hashing import sha256_json
+
+          encoded = os.environ.get("PRIVATE_BUNDLE_B64", "")
+          if not encoded:
+              raise SystemExit("private bundle secret is missing")
+          try:
+              raw = base64.b64decode(encoded, validate=True)
+          except Exception as exc:
+              raise SystemExit("private bundle secret is not valid base64") from exc
+          try:
+              bundle = json.loads(raw.decode("utf-8"))
+          except Exception as exc:
+              raise SystemExit("private bundle secret is not valid UTF-8 JSON") from exc
+
+          expected_ids = {
+              "FRT-SCOPE-012",
+              "FRT-UNKNOWN-009",
+              "SOC-DECISION-007",
+              "SOC-DECISION-008",
+              "SOC-MEMADM-013",
+              "SOC-MEMADM-014",
+              "SOC-SUPERSEDE-009",
+              "SOC-TCUT-001",
+              "SOC-TCUT-005",
+          }
+          if bundle.get("dataset_id") != "soa-alpha-golden-v0.2":
+              raise SystemExit("private bundle dataset_id drift")
+          if bundle.get("dataset_version") != "0.2":
+              raise SystemExit("private bundle dataset_version drift")
+          if bundle.get("sensitivity_scope") != "INTERNAL":
+              raise SystemExit("private bundle sensitivity scope is not INTERNAL")
+          cases = bundle.get("cases")
+          if not isinstance(cases, list) or len(cases) != 9:
+              raise SystemExit("private bundle must contain exactly nine cases")
+          observed_ids = {item["case"]["golden_case_id"] for item in cases}
+          if observed_ids != expected_ids:
+              raise SystemExit("private bundle case-set drift")
+          if any(item.get("sensitivity") != "INTERNAL" for item in cases):
+              raise SystemExit("private bundle contains non-INTERNAL case")
+          if any(item["case"].get("partition") == "holdout" for item in cases):
+              raise SystemExit("Holdout case present in INTERNAL private bundle")
+
+          digest = sha256_json(bundle)
+          if digest != os.environ["EXPECTED_INTERNAL_BUNDLE_SHA256"]:
+              raise SystemExit("private bundle canonical digest mismatch")
+
+          path = Path(os.environ["PRIVATE_BUNDLE_PATH"])
+          path.write_text(
+              json.dumps(bundle, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+              encoding="utf-8",
+          )
+          path.chmod(0o600)
+          PY
+          echo "PRIVATE_BUNDLE_PATH=$bundle_path" >> "$GITHUB_ENV"
+          echo 'Private bundle materialized ephemerally and canonical digest verified.'
+
+      - name: Validate bundle against sealed manifest and sensitivity binding with zero outbound
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SOAIACORE_G3C2B0_NO_OUTBOUND=1
+          unset OPENAI_API_KEY || true
+          uv run --frozen python -m soaiacore_runtime.preholdout_live validate \
+            --binding "$BINDING_PATH" \
+            --manifest "$MANIFEST_PATH" \
+            --bundle "$PRIVATE_BUNDLE_PATH" \
+            > "$RUNNER_TEMP/g3c2d-bundle-validation.json"
+          OUT="$RUNNER_TEMP/g3c2d-bundle-validation.json" uv run --frozen python - <<'PY'
+          import json
+          import os
+          data = json.load(open(os.environ["OUT"], encoding="utf-8"))
+          assert data["dataset_id"] == "soa-alpha-golden-v0.2"
+          assert data["dataset_version"] == "0.2"
+          assert data["sensitivity_scope"] == "INTERNAL"
+          assert data["case_count"] == 9
+          assert data["binding_sha256"] == os.environ["EXPECTED_BINDING_SHA256"]
+          assert data["private_payload_committed"] is False
+          assert data["holdout_executed"] is False
+          PY
+
+      - name: Prepare exact batch intent with zero credential read and zero provider I/O
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SOAIACORE_G3C2B0_NO_OUTBOUND=1
+          unset OPENAI_API_KEY || true
+          uv run --frozen python -m soaiacore_runtime.preholdout_live preflight \
+            --binding "$BINDING_PATH" \
+            --manifest "$MANIFEST_PATH" \
+            --bundle "$PRIVATE_BUNDLE_PATH" \
+            --expected-main-sha "$EXPECTED_MAIN_SHA" \
+            --r2-authority-ref "$R2_AUTHORITY_REF" \
+            --one-batch-confirmation "$ONE_BATCH_CONFIRMATION" \
+            --intent-out "$RUNNER_TEMP/g3c2d-preflight-intent.json" \
+            > "$RUNNER_TEMP/g3c2d-preflight-safe.json"
+          PREFLIGHT="$RUNNER_TEMP/g3c2d-preflight-safe.json" GOVERNED="$RUNNER_TEMP/g3c2d-governed-intent.json" uv run --frozen python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from soaiacore_runtime.hashing import sha256_json
+
+          data = json.load(open(os.environ["PREFLIGHT"], encoding="utf-8"))
+          plan = data["plan"]
+          assert data["credential_read"] is False
+          assert data["outbound_executed"] is False
+          assert plan["dataset_id"] == "soa-alpha-golden-v0.2"
+          assert plan["dataset_version"] == "0.2"
+          assert plan["sensitivity_scope"] == "INTERNAL"
+          assert plan["case_count"] == 9
+          assert plan["binding_sha256"] == os.environ["EXPECTED_BINDING_SHA256"]
+          assert plan["expected_main_sha"] == os.environ["EXPECTED_MAIN_SHA"]
+          assert plan["provider"] == "openai"
+          assert plan["model"] == "gpt-5.6-sol"
+          assert plan["reasoning"] == "high"
+          assert plan["max_attempts"] == 1
+          assert plan["holdout"] is False
+          assert plan["tools_enabled"] is False
+          assert plan["full_dataset"] is False
+          assert plan["g3_quality_pass_claimed"] is False
+
+          body = {
+              "preflight_execution_intent_sha256": data["execution_intent_sha256"],
+              "bundle_sha256": os.environ["EXPECTED_INTERNAL_BUNDLE_SHA256"],
+              "binding_sha256": os.environ["EXPECTED_BINDING_SHA256"],
+              "expected_main_sha": os.environ["EXPECTED_MAIN_SHA"],
+              "r2_authority_ref": os.environ["R2_AUTHORITY_REF"],
+              "sensitivity_scope": "INTERNAL",
+              "case_count": 9,
+              "provider": "openai",
+              "model": "gpt-5.6-sol",
+              "max_attempts": 1,
+              "holdout": False,
+              "tools_enabled": False,
+          }
+          governed = {**body, "governed_intent_sha256": sha256_json(body)}
+          Path(os.environ["GOVERNED"]).write_text(
+              json.dumps(governed, sort_keys=True, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Claim non-replay INTERNAL batch intent in Issue 67
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          governed_intent_sha="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["governed_intent_sha256"])' "$RUNNER_TEMP/g3c2d-governed-intent.json")"
+          bodies="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/67/comments?per_page=100" --jq '.[].body')"
+          if printf '%s\n' "$bodies" | grep -Fq "G3C2D_INTENT_SHA256=$governed_intent_sha"; then
+            echo 'G3C2D replay detected for governed execution intent'
+            exit 1
+          fi
+          if printf '%s\n' "$bodies" | grep -Fq "G3C2D_R2_AUTHORITY_REF=$R2_AUTHORITY_REF"; then
+            echo 'G3C2D R2 authority reference has already been claimed'
+            exit 1
+          fi
+          claim_body="G3C2D_INTERNAL_EXECUTION_INTENT_CLAIMED\n\nG3C2D_INTENT_SHA256=$governed_intent_sha\nG3C2D_R2_AUTHORITY_REF=$R2_AUTHORITY_REF\nEXPECTED_MAIN_SHA=$EXPECTED_MAIN_SHA\nINTERNAL_BUNDLE_SHA256=$EXPECTED_INTERNAL_BUNDLE_SHA256\nCASE_COUNT=9\nSENSITIVITY=INTERNAL\nWORKFLOW_RUN_ID=$GITHUB_RUN_ID\nEXTERNAL_PROVIDER_CALLS=0_BEFORE_EXECUTION"
+          gh api "repos/$GITHUB_REPOSITORY/issues/67/comments" --method POST -f body="$claim_body" > /dev/null
+
+      - name: Execute bounded nine-case INTERNAL Provider A batch
+        id: execute
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SOAIACORE_G3C2B0_NO_OUTBOUND: '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --frozen python -m soaiacore_runtime.preholdout_live execute \
+            --binding "$BINDING_PATH" \
+            --manifest "$MANIFEST_PATH" \
+            --bundle "$PRIVATE_BUNDLE_PATH" \
+            --expected-main-sha "$EXPECTED_MAIN_SHA" \
+            --r2-authority-ref "$R2_AUTHORITY_REF" \
+            --one-batch-confirmation "$ONE_BATCH_CONFIRMATION" \
+            --intent-file "$RUNNER_TEMP/g3c2d-preflight-intent.json" \
+            --intent-lock "$RUNNER_TEMP/g3c2d-local-intent.lock" \
+            --receipt-out "$RUNNER_TEMP/g3c2d-internal-receipt.json"
+
+      - name: Validate and publish safe batch receipt when available
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt="$RUNNER_TEMP/g3c2d-internal-receipt.json"
+          if test -f "$receipt"; then
+            RECEIPT="$receipt" uv run --frozen python - <<'PY'
+            import json
+            import os
+            data = json.load(open(os.environ["RECEIPT"], encoding="utf-8"))
+            assert data["dataset_id"] == "soa-alpha-golden-v0.2"
+            assert data["dataset_version"] == "0.2"
+            assert data["binding_sha256"] == os.environ["EXPECTED_BINDING_SHA256"]
+            assert data["main_sha"] == os.environ["EXPECTED_MAIN_SHA"]
+            assert data["r2_authority_ref"] == os.environ["R2_AUTHORITY_REF"]
+            assert data["sensitivity_scope"] == "INTERNAL"
+            assert data["planned_case_count"] == 9
+            assert 0 <= data["completed_trace_count"] <= 9
+            assert 0 <= data["external_provider_calls"] <= 9
+            assert 0 <= data["transport_attempt_count"] <= 9
+            assert data["holdout"] is False
+            assert data["full_dataset"] is False
+            assert data["tools_enabled"] is False
+            assert data["g3_quality_pass_claimed"] is False
+            assert isinstance(data["receipt_sha256"], str) and len(data["receipt_sha256"]) == 64
+            PY
+            receipt_json="$(python -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1], encoding="utf-8")), sort_keys=True, indent=2))' "$receipt")"
+            body="G3C2D-INTERNAL-BATCH-CANONICAL-RECEIPT\n\n\`\`\`json\n$receipt_json\n\`\`\`"
+            gh api "repos/$GITHUB_REPOSITORY/issues/67/comments" --method POST -f body="$body" > /dev/null
+          else
+            body="G3C2D_INTERNAL_EXECUTION_FAILED_NO_RECEIPT\n\nR2_AUTHORITY_REF=$R2_AUTHORITY_REF\nEXPECTED_MAIN_SHA=$EXPECTED_MAIN_SHA\nINTERNAL_BUNDLE_SHA256=$EXPECTED_INTERNAL_BUNDLE_SHA256\nWORKFLOW_RUN_ID=$GITHUB_RUN_ID\nNo receipt file was produced; do not infer provider-call count. Fresh adjudication is required before any retry."
+            gh api "repos/$GITHUB_REPOSITORY/issues/67/comments" --method POST -f body="$body" > /dev/null
+          fi
+
+      - name: Remove private bundle from runner storage
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -n "${PRIVATE_BUNDLE_PATH:-}"; then
+            rm -f "$PRIVATE_BUNDLE_PATH"
+          fi
+          rm -f "$RUNNER_TEMP/g3c2d-preflight-intent.json" \
+                "$RUNNER_TEMP/g3c2d-governed-intent.json" \
+                "$RUNNER_TEMP/g3c2d-local-intent.lock" \
+                "$RUNNER_TEMP/g3c2d-bundle-validation.json" \
+                "$RUNNER_TEMP/g3c2d-preflight-safe.json" || true
+
+      - name: Fail workflow if bounded execution failed
+        if: always() && steps.execute.outcome != 'success'
+        shell: bash
+        run: |
+          echo 'G3C2D bounded INTERNAL execution did not complete successfully; no retry is authorized.'
+          exit 1
