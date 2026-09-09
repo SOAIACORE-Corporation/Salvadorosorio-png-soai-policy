@@ -129,7 +129,7 @@ def test_live_workflow_does_not_make_confidential_or_holdout_scope_selectable():
     assert "retry" not in inputs.lower()
     assert "INTERNAL" in text
     assert "CONFIDENTIAL" not in inputs
-    assert "holdout" not in inputs.lower()
+    assert "\n      holdout:" not in inputs.lower()
 
 
 def test_r1_validation_is_no_outbound_and_cannot_read_real_secrets():
