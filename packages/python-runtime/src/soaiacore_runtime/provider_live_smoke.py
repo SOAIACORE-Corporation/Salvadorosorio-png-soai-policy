@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,6 +35,8 @@ SMOKE_OUTBOUND_PERMIT_ENV = "SOAIACORE_G3C2B1_ALLOW_OUTBOUND"
 SMOKE_MAX_OUTPUT_TOKENS = 512
 SMOKE_MAX_ATTEMPTS = 1
 SMOKE_TIMEOUT_SECONDS = 30.0
+SMOKE_REQUIRED_CONFIRMATION = "I_UNDERSTAND_ONE_PUBLIC_SYNTHETIC_CALL_ONLY"
+_MAIN_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 
 
 class SingleShotSmokeError(RuntimeError):
@@ -128,7 +131,75 @@ def _smoke_spec() -> dict[str, Any]:
     }
 
 
-def preflight_single_shot_smoke() -> dict[str, Any]:
+def _execution_intent(
+    *,
+    expected_main_sha: str,
+    r2_authority_ref: str,
+    workflow_run_id: str,
+    one_call_confirmation: str,
+    payload_sha256: str,
+    config: ProviderALiveConfig,
+) -> dict[str, Any]:
+    main_sha = expected_main_sha.strip().lower()
+    authority = r2_authority_ref.strip()
+    run_id = workflow_run_id.strip()
+    if not _MAIN_SHA_PATTERN.fullmatch(main_sha):
+        raise SingleShotSmokeError("expected main SHA is not a 40-character lowercase commit SHA")
+    if not authority:
+        raise SingleShotSmokeError("execution intent requires a non-empty R2 authority ref")
+    if not run_id:
+        raise SingleShotSmokeError("execution intent requires a non-empty workflow run identity")
+    if one_call_confirmation.strip() != SMOKE_REQUIRED_CONFIRMATION:
+        raise SingleShotSmokeError("one-call confirmation literal is invalid")
+    body = {
+        "r2_authority_ref": authority,
+        "expected_main_sha": main_sha,
+        "case_id": SMOKE_CASE_ID,
+        "provider": config.provider,
+        "model": config.model_id,
+        "profile_version": config.profile_version,
+        "payload_sha256": payload_sha256,
+        "workflow_run_id": run_id,
+        "one_call_confirmation": SMOKE_REQUIRED_CONFIRMATION,
+    }
+    return {**body, "intent_sha256": sha256_json(body)}
+
+
+def _load_execution_intent(path: str) -> dict[str, Any]:
+    try:
+        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SingleShotSmokeError("execution intent file is missing or malformed") from exc
+    if not isinstance(raw, dict) or not isinstance(raw.get("execution_intent"), dict):
+        raise SingleShotSmokeError("execution intent file does not contain an execution_intent object")
+    return raw["execution_intent"]
+
+
+def _claim_execution_intent(intent: dict[str, Any], lock_path: str | None) -> None:
+    if not lock_path:
+        return
+    target = Path(lock_path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError as exc:
+        raise SingleShotSmokeError("execution intent replay detected; lock already exists") from exc
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps({"intent_sha256": intent["intent_sha256"]}, sort_keys=True))
+            handle.write("\n")
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise
+
+
+def preflight_single_shot_smoke(
+    *,
+    expected_main_sha: str | None = None,
+    r2_authority_ref: str | None = None,
+    workflow_run_id: str | None = None,
+    one_call_confirmation: str | None = None,
+) -> dict[str, Any]:
     """Prepare the fixed synthetic request without reading credentials or opening a socket."""
 
     case = _synthetic_case()
@@ -149,6 +220,18 @@ def preflight_single_shot_smoke() -> dict[str, Any]:
         "credential_read": False,
         "outbound_executed": False,
     }
+    intent_values = (expected_main_sha, r2_authority_ref, workflow_run_id, one_call_confirmation)
+    if any(value is not None for value in intent_values):
+        if not all(value is not None for value in intent_values):
+            raise SingleShotSmokeError("execution intent requires expected SHA, authority ref, and workflow run ID")
+        body["execution_intent"] = _execution_intent(
+            expected_main_sha=expected_main_sha or "",
+            r2_authority_ref=r2_authority_ref or "",
+            workflow_run_id=workflow_run_id or "",
+            one_call_confirmation=one_call_confirmation or "",
+            payload_sha256=prepared.payload_sha256,
+            config=config,
+        )
     return {**body, "preflight_sha256": sha256_json(body)}
 
 
@@ -162,8 +245,13 @@ def _require_outbound_permit(environment: Mapping[str, str]) -> None:
 def run_single_shot_smoke(
     *,
     r2_authority_ref: str,
+    expected_main_sha: str,
+    workflow_run_id: str,
+    one_call_confirmation: str,
     http_client: ProviderAHTTPClient | None = None,
     environment: Mapping[str, str] | None = None,
+    expected_intent: dict[str, Any] | None = None,
+    intent_lock_path: str | None = None,
 ) -> dict[str, Any]:
     """Execute exactly one fixed PUBLIC synthetic Provider A call after explicit R2 gating.
 
@@ -180,6 +268,24 @@ def run_single_shot_smoke(
     _require_outbound_permit(env)
 
     config = _config()
+    prepared = prepare_g3c2b0_live_request(
+        case=_synthetic_case(),
+        context=_synthetic_context(),
+        config=config,
+        data_policy=_data_policy(),
+    )
+    intent = _execution_intent(
+        expected_main_sha=expected_main_sha,
+        r2_authority_ref=authority,
+        workflow_run_id=workflow_run_id,
+        one_call_confirmation=one_call_confirmation,
+        payload_sha256=prepared.payload_sha256,
+        config=config,
+    )
+    if expected_intent is not None and expected_intent != intent:
+        raise SingleShotSmokeError("execution intent drift or replay mismatch")
+    _claim_execution_intent(intent, intent_lock_path)
+
     client = http_client if http_client is not None else UrllibProviderAHTTPClient()
     adapter = ProviderALiveAdapter(
         config=config,
@@ -202,6 +308,9 @@ def run_single_shot_smoke(
     if trace.get("transport_attempt_count") != 1:
         raise SingleShotSmokeError("single-shot harness forbids transport retries")
 
+    if trace["payload_sha256"] != intent["payload_sha256"]:
+        raise SingleShotSmokeError("provider payload digest drift")
+
     boundary_receipt = live_provider_trace_receipt(
         traces=(trace,),
         expected_identity=config.identity(),
@@ -219,10 +328,22 @@ def run_single_shot_smoke(
     body = {
         **_smoke_spec(),
         "candidate": config.identity().model_dump(mode="json"),
+        "main_sha": intent["expected_main_sha"],
         "r2_authority_ref": authority,
+        "case_id": SMOKE_CASE_ID,
+        "provider": config.provider,
+        "model": config.model_id,
+        "profile_version": config.profile_version,
+        "workflow_run_id": intent["workflow_run_id"],
+        "execution_intent_sha256": intent["intent_sha256"],
         "external_provider_calls": 1,
         "transport_attempt_count": 1,
+        "Holdout": False,
+        "full_dataset": False,
+        "G3_quality_pass": False,
         "trace_ref": trace_ref,
+        "trace_sha256": trace["trace_sha256"],
+        "payload_sha256": trace["payload_sha256"],
         "provider_trace_sha256": trace["trace_sha256"],
         "provider_payload_sha256": trace["payload_sha256"],
         "boundary_receipt_sha256": boundary_receipt["receipt_sha256"],
@@ -259,21 +380,50 @@ def main(argv: list[str] | None = None) -> int:
         "preflight",
         help="prepare and hash the fixed synthetic request without credential or network access",
     )
+    preflight = subparsers.choices["preflight"]
+    preflight.add_argument("--expected-main-sha")
+    preflight.add_argument("--r2-authority-ref")
+    preflight.add_argument("--workflow-run-id")
+    preflight.add_argument("--one-call-confirmation")
+    preflight.add_argument("--intent-out")
 
     execute = subparsers.add_parser(
         "execute",
         help="execute exactly one fixed PUBLIC synthetic provider call after an R2 permit",
     )
     execute.add_argument("--r2-authority-ref", required=True)
+    execute.add_argument("--expected-main-sha", required=True)
+    execute.add_argument("--workflow-run-id", required=True)
+    execute.add_argument("--one-call-confirmation", required=True)
+    execute.add_argument("--intent-file", required=True)
+    execute.add_argument("--intent-lock", required=True)
     execute.add_argument("--receipt-out", required=True)
 
     args = parser.parse_args(argv)
     if args.command == "preflight":
-        print(json.dumps(preflight_single_shot_smoke(), sort_keys=True))
+        intent_args = {
+            "expected_main_sha": getattr(args, "expected_main_sha", None),
+            "r2_authority_ref": getattr(args, "r2_authority_ref", None),
+            "workflow_run_id": getattr(args, "workflow_run_id", None),
+            "one_call_confirmation": getattr(args, "one_call_confirmation", None),
+        }
+        result = preflight_single_shot_smoke(**intent_args)
+        intent_out = getattr(args, "intent_out", None)
+        if intent_out:
+            _write_json(intent_out, result)
+        print(json.dumps(result, sort_keys=True))
         return 0
 
     if args.command == "execute":
-        result = run_single_shot_smoke(r2_authority_ref=args.r2_authority_ref)
+        intent_file = _load_execution_intent(args.intent_file)
+        result = run_single_shot_smoke(
+            r2_authority_ref=args.r2_authority_ref,
+            expected_main_sha=args.expected_main_sha,
+            workflow_run_id=args.workflow_run_id,
+            one_call_confirmation=args.one_call_confirmation,
+            expected_intent=intent_file,
+            intent_lock_path=args.intent_lock,
+        )
         _write_json(args.receipt_out, result)
         print(
             json.dumps(

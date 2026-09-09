@@ -10,6 +10,8 @@ from soaiacore_runtime.provider_live import (
     ProviderLiveTransportError,
 )
 from soaiacore_runtime.provider_live_smoke import (
+    SMOKE_PROFILE_VERSION,
+    SMOKE_REQUIRED_CONFIRMATION,
     SMOKE_CASE_ID,
     SMOKE_MAX_ATTEMPTS,
     SMOKE_OUTBOUND_PERMIT_ENV,
@@ -25,6 +27,9 @@ from soaiacore_runtime.provider_live_smoke import (
 
 
 API_KEY = "runtime-placeholder-not-a-real-key"
+MAIN_SHA = "eda14a940f56e2e4929c7ae108e37cceacf9a0a5"
+WORKFLOW_RUN_ID = "34299999999"
+CONFIRMATION = SMOKE_REQUIRED_CONFIRMATION
 
 
 class RecordingHTTPClient:
@@ -145,6 +150,9 @@ def test_execute_requires_exact_r2_authority_before_any_http_call():
     with pytest.raises(SingleShotSmokeError, match="exact R2 authority ref"):
         run_single_shot_smoke(
             r2_authority_ref="",
+            expected_main_sha=MAIN_SHA,
+            workflow_run_id=WORKFLOW_RUN_ID,
+            one_call_confirmation=CONFIRMATION,
             http_client=client,
             environment=_environment(),
         )
@@ -156,6 +164,9 @@ def test_execute_requires_separate_outbound_permit_before_any_http_call():
     with pytest.raises(SingleShotSmokeError, match=SMOKE_OUTBOUND_PERMIT_ENV):
         run_single_shot_smoke(
             r2_authority_ref="R2-FUTURE-SMOKE",
+            expected_main_sha=MAIN_SHA,
+            workflow_run_id=WORKFLOW_RUN_ID,
+            one_call_confirmation=CONFIRMATION,
             http_client=client,
             environment={"OPENAI_API_KEY": API_KEY},
         )
@@ -165,10 +176,16 @@ def test_execute_requires_separate_outbound_permit_before_any_http_call():
 def test_single_shot_mock_executes_exactly_once_and_receipts_are_bound():
     preflight = preflight_single_shot_smoke()
     client = RecordingHTTPClient(
-        responses=[_response(client_request_id=preflight["client_request_id"])]
+        responses=[
+            _response(client_request_id=preflight["client_request_id"]),
+            _response(client_request_id=preflight["client_request_id"]),
+        ]
     )
     result = run_single_shot_smoke(
         r2_authority_ref="R2-FUTURE-SMOKE",
+        expected_main_sha=MAIN_SHA,
+        workflow_run_id=WORKFLOW_RUN_ID,
+        one_call_confirmation=CONFIRMATION,
         http_client=client,
         environment=_environment(),
     )
@@ -219,6 +236,9 @@ def test_single_shot_forbids_retry_after_transport_failure():
     with pytest.raises(Exception, match="exhausted 1 attempt"):
         run_single_shot_smoke(
             r2_authority_ref="R2-FUTURE-SMOKE",
+            expected_main_sha=MAIN_SHA,
+            workflow_run_id=WORKFLOW_RUN_ID,
+            one_call_confirmation=CONFIRMATION,
             http_client=client,
             environment=_environment(),
         )
@@ -240,14 +260,237 @@ def test_cli_execute_cannot_start_without_outbound_permit(monkeypatch, tmp_path)
     monkeypatch.setenv("OPENAI_API_KEY", API_KEY)
     monkeypatch.setenv(SMOKE_OUTBOUND_PERMIT_ENV, "0")
     monkeypatch.setenv("SOAIACORE_G3C2B0_NO_OUTBOUND", "1")
+    intent_file = tmp_path / "intent.json"
+    intent_file.write_text(
+        json.dumps(
+            preflight_single_shot_smoke(
+                expected_main_sha=MAIN_SHA,
+                r2_authority_ref="R2-FUTURE-SMOKE",
+                workflow_run_id=WORKFLOW_RUN_ID,
+                one_call_confirmation=CONFIRMATION,
+            )
+        ),
+        encoding="utf-8",
+    )
     with pytest.raises(SingleShotSmokeError, match=SMOKE_OUTBOUND_PERMIT_ENV):
         main(
             [
                 "execute",
                 "--r2-authority-ref",
                 "R2-FUTURE-SMOKE",
+                "--expected-main-sha",
+                MAIN_SHA,
+                "--workflow-run-id",
+                WORKFLOW_RUN_ID,
+                "--one-call-confirmation",
+                CONFIRMATION,
+                "--intent-file",
+                str(intent_file),
+                "--intent-lock",
+                str(tmp_path / "intent.lock"),
                 "--receipt-out",
                 str(tmp_path / "should-not-exist.json"),
             ]
         )
     assert not (tmp_path / "should-not-exist.json").exists()
+
+
+def test_preflight_execution_intent_binds_authority_identity_payload_and_run():
+    preflight = preflight_single_shot_smoke(
+        expected_main_sha=MAIN_SHA,
+        r2_authority_ref="R2-FUTURE-SMOKE",
+        workflow_run_id=WORKFLOW_RUN_ID,
+        one_call_confirmation=CONFIRMATION,
+    )
+    intent = preflight["execution_intent"]
+
+    assert intent == {
+        "r2_authority_ref": "R2-FUTURE-SMOKE",
+        "expected_main_sha": MAIN_SHA,
+        "case_id": SMOKE_CASE_ID,
+        "provider": "openai",
+        "model": "gpt-5.6-sol",
+        "profile_version": SMOKE_PROFILE_VERSION,
+        "payload_sha256": preflight["payload_sha256"],
+        "workflow_run_id": WORKFLOW_RUN_ID,
+        "one_call_confirmation": CONFIRMATION,
+        "intent_sha256": intent["intent_sha256"],
+    }
+    assert len(intent["intent_sha256"]) == 64
+
+
+def test_preflight_rejects_wrong_main_sha_and_confirmation():
+    with pytest.raises(SingleShotSmokeError, match="40-character"):
+        preflight_single_shot_smoke(
+            expected_main_sha="not-a-main-sha",
+            r2_authority_ref="R2-FUTURE-SMOKE",
+            workflow_run_id=WORKFLOW_RUN_ID,
+            one_call_confirmation=CONFIRMATION,
+        )
+    with pytest.raises(SingleShotSmokeError, match="confirmation literal"):
+        preflight_single_shot_smoke(
+            expected_main_sha=MAIN_SHA,
+            r2_authority_ref="R2-FUTURE-SMOKE",
+            workflow_run_id=WORKFLOW_RUN_ID,
+            one_call_confirmation="I_CONFIRM_TWO_CALLS",
+        )
+
+
+def test_execute_rejects_wrong_authority_bound_to_preflight_before_http_call():
+    preflight = preflight_single_shot_smoke(
+        expected_main_sha=MAIN_SHA,
+        r2_authority_ref="R2-FUTURE-SMOKE",
+        workflow_run_id=WORKFLOW_RUN_ID,
+        one_call_confirmation=CONFIRMATION,
+    )
+    client = RecordingHTTPClient(
+        responses=[_response(client_request_id=preflight["client_request_id"])]
+    )
+    with pytest.raises(SingleShotSmokeError, match="intent drift"):
+        run_single_shot_smoke(
+            r2_authority_ref="R2-WRONG-AUTHORITY",
+            expected_main_sha=MAIN_SHA,
+            workflow_run_id=WORKFLOW_RUN_ID,
+            one_call_confirmation=CONFIRMATION,
+            http_client=client,
+            environment=_environment(),
+            expected_intent=preflight["execution_intent"],
+        )
+    assert client.calls == []
+
+
+def test_execute_rejects_replayed_intent_before_second_http_call(tmp_path):
+    preflight = preflight_single_shot_smoke(
+        expected_main_sha=MAIN_SHA,
+        r2_authority_ref="R2-FUTURE-SMOKE",
+        workflow_run_id=WORKFLOW_RUN_ID,
+        one_call_confirmation=CONFIRMATION,
+    )
+    lock = str(tmp_path / "intent.lock")
+    first_client = RecordingHTTPClient(
+        responses=[_response(client_request_id=preflight["client_request_id"])]
+    )
+    run_single_shot_smoke(
+        r2_authority_ref="R2-FUTURE-SMOKE",
+        expected_main_sha=MAIN_SHA,
+        workflow_run_id=WORKFLOW_RUN_ID,
+        one_call_confirmation=CONFIRMATION,
+        http_client=first_client,
+        environment=_environment(),
+        expected_intent=preflight["execution_intent"],
+        intent_lock_path=lock,
+    )
+
+    second_client = RecordingHTTPClient(
+        responses=[_response(client_request_id=preflight["client_request_id"])]
+    )
+    with pytest.raises(SingleShotSmokeError, match="replay"):
+        run_single_shot_smoke(
+            r2_authority_ref="R2-FUTURE-SMOKE",
+            expected_main_sha=MAIN_SHA,
+            workflow_run_id=WORKFLOW_RUN_ID,
+            one_call_confirmation=CONFIRMATION,
+            http_client=second_client,
+            environment=_environment(),
+            expected_intent=preflight["execution_intent"],
+            intent_lock_path=lock,
+        )
+    assert second_client.calls == []
+
+
+def test_execute_rejects_missing_secret_before_http_call():
+    client = RecordingHTTPClient()
+    with pytest.raises(Exception, match="credential missing"):
+        run_single_shot_smoke(
+            r2_authority_ref="R2-FUTURE-SMOKE",
+            expected_main_sha=MAIN_SHA,
+            workflow_run_id=WORKFLOW_RUN_ID,
+            one_call_confirmation=CONFIRMATION,
+            http_client=client,
+            environment={SMOKE_OUTBOUND_PERMIT_ENV: "1"},
+        )
+    assert client.calls == []
+
+
+def test_execute_rejects_model_drift_case_drift_holdout_malformed_and_tool_effect(monkeypatch):
+    preflight = preflight_single_shot_smoke()
+
+    drifted_model = _response(client_request_id=preflight["client_request_id"])
+    drifted_model.response_json["model"] = "gpt-5.5"
+    with pytest.raises(Exception, match="model identity drift"):
+        run_single_shot_smoke(
+            r2_authority_ref="R2-FUTURE-SMOKE",
+            expected_main_sha=MAIN_SHA,
+            workflow_run_id=WORKFLOW_RUN_ID,
+            one_call_confirmation=CONFIRMATION,
+            http_client=RecordingHTTPClient([drifted_model]),
+            environment=_environment(),
+        )
+
+    original_case = _synthetic_case
+    monkeypatch.setattr(
+        "soaiacore_runtime.provider_live_smoke._synthetic_case",
+        lambda: original_case().model_copy(update={"golden_case_id": "DRIFTED-CASE"}),
+    )
+    with pytest.raises(Exception, match="case identity drift"):
+        run_single_shot_smoke(
+            r2_authority_ref="R2-FUTURE-SMOKE",
+            expected_main_sha=MAIN_SHA,
+            workflow_run_id=WORKFLOW_RUN_ID,
+            one_call_confirmation=CONFIRMATION,
+            http_client=RecordingHTTPClient([_response(client_request_id=preflight["client_request_id"])]),
+            environment=_environment(),
+        )
+    monkeypatch.setattr("soaiacore_runtime.provider_live_smoke._synthetic_case", original_case)
+
+    holdout_case = original_case().model_copy(update={"partition": "holdout"})
+    monkeypatch.setattr("soaiacore_runtime.provider_live_smoke._synthetic_case", lambda: holdout_case)
+    with pytest.raises(Exception, match="Holdout"):
+        run_single_shot_smoke(
+            r2_authority_ref="R2-FUTURE-SMOKE",
+            expected_main_sha=MAIN_SHA,
+            workflow_run_id=WORKFLOW_RUN_ID,
+            one_call_confirmation=CONFIRMATION,
+            http_client=RecordingHTTPClient(),
+            environment=_environment(),
+        )
+    monkeypatch.setattr("soaiacore_runtime.provider_live_smoke._synthetic_case", original_case)
+
+    malformed = _response(client_request_id=preflight["client_request_id"])
+    malformed.response_json["output"][0]["content"][0]["text"] = "not-json"
+    with pytest.raises(Exception, match="valid JSON"):
+        run_single_shot_smoke(
+            r2_authority_ref="R2-FUTURE-SMOKE",
+            expected_main_sha=MAIN_SHA,
+            workflow_run_id=WORKFLOW_RUN_ID,
+            one_call_confirmation=CONFIRMATION,
+            http_client=RecordingHTTPClient([malformed]),
+            environment=_environment(),
+        )
+
+    tool_effect = _response(client_request_id=preflight["client_request_id"])
+    tool_effect.response_json["output"][0]["content"][0]["text"] = json.dumps(
+        {
+            "content": "Synthetic ALPHA_SMOKE state is READY.",
+            "epistemic_class": "CONFIRMED_CONTEXT",
+            "disposition": "TOOL_REQUEST",
+            "claims": [],
+            "evidence_refs": [],
+            "provenance_refs": [],
+            "contradictions_predicted": [],
+            "memory_admission_decision": "REJECT",
+            "decision_state": "READY",
+            "tool_name": "forbidden_tool",
+            "material_effect": True,
+        },
+        sort_keys=True,
+    )
+    with pytest.raises(Exception, match="tool/material effect"):
+        run_single_shot_smoke(
+            r2_authority_ref="R2-FUTURE-SMOKE",
+            expected_main_sha=MAIN_SHA,
+            workflow_run_id=WORKFLOW_RUN_ID,
+            one_call_confirmation=CONFIRMATION,
+            http_client=RecordingHTTPClient([tool_effect]),
+            environment=_environment(),
+        )

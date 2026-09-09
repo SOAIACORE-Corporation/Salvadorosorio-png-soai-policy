@@ -1,0 +1,189 @@
+name: SOA Intelligence G3C2B2 Governed Live Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_main_sha:
+        description: Exact protected main commit SHA authorized for this one-shot execution
+        required: true
+        type: string
+      r2_authority_ref:
+        description: Non-empty exact R2 authority reference
+        required: true
+        type: string
+      one_call_confirmation:
+        description: Type I_UNDERSTAND_ONE_PUBLIC_SYNTHETIC_CALL_ONLY exactly
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: g3c2b2-governed-live-smoke
+  cancel-in-progress: false
+
+jobs:
+  governed-live-smoke:
+    name: G3C2B2 one PUBLIC synthetic Provider A call
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      EXPECTED_MAIN_SHA: ${{ inputs.expected_main_sha }}
+      R2_AUTHORITY_REF: ${{ inputs.r2_authority_ref }}
+      ONE_CALL_CONFIRMATION: ${{ inputs.one_call_confirmation }}
+      PYTHONPATH: ${{ github.workspace }}/packages/python-runtime/src
+
+    steps:
+      - name: Check out authoritative main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Fail closed on authority, identity, and fixed-case drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF_NAME" = main
+          test -n "$R2_AUTHORITY_REF"
+          test "$ONE_CALL_CONFIRMATION" = I_UNDERSTAND_ONE_PUBLIC_SYNTHETIC_CALL_ONLY
+          printf '%s' "$EXPECTED_MAIN_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          git fetch origin main --depth=1
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN_SHA"
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: 3.12.14
+
+      - name: Install frozen runtime
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir uv==0.12.5
+          uv sync --frozen
+
+      - name: Prepare fixed execution intent without credentials or provider I/O
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --frozen python -m soaiacore_runtime.provider_live_smoke preflight \
+            --expected-main-sha "$EXPECTED_MAIN_SHA" \
+            --r2-authority-ref "$R2_AUTHORITY_REF" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --one-call-confirmation "$ONE_CALL_CONFIRMATION" \
+            --intent-out "$RUNNER_TEMP/g3c2b2-intent.json" \
+            > "$RUNNER_TEMP/g3c2b2-preflight.json"
+          OUT="$RUNNER_TEMP/g3c2b2-preflight.json" uv run --frozen python - <<'PY'
+          import json
+          import os
+          from soaiacore_runtime.provider_live_smoke import (
+              SMOKE_CASE_ID,
+              SMOKE_PROFILE_VERSION,
+          )
+
+          data = json.load(open(os.environ["OUT"], encoding="utf-8"))
+          assert data["golden_case_id"] == SMOKE_CASE_ID
+          assert data["partition"] == "development"
+          assert data["synthetic_only"] is True
+          assert data["sensitivity"] == "PUBLIC"
+          assert data["single_shot"] is True
+          assert data["max_attempts"] == 1
+          assert data["holdout_allowed"] is False
+          assert data["full_dataset_evaluation"] is False
+          assert data["g3_quality_pass_claimed"] is False
+          assert data["external_provider_calls"] == 0
+          assert data["credential_read"] is False
+          assert data["outbound_executed"] is False
+          candidate = data["candidate"]
+          assert candidate == {
+              "provider": "openai",
+              "model_id": "gpt-5.6-sol",
+              "profile_version": SMOKE_PROFILE_VERSION,
+              "adapter_version": "provider-a-live-boundary/0.1",
+              "execution_mode": "LIVE",
+          }
+          intent = data["execution_intent"]
+          assert intent["expected_main_sha"] == os.environ["EXPECTED_MAIN_SHA"]
+          assert intent["r2_authority_ref"] == os.environ["R2_AUTHORITY_REF"]
+          assert intent["case_id"] == SMOKE_CASE_ID
+          assert intent["provider"] == "openai"
+          assert intent["model"] == "gpt-5.6-sol"
+          assert intent["profile_version"] == SMOKE_PROFILE_VERSION
+          assert intent["workflow_run_id"] == os.environ["GITHUB_RUN_ID"]
+          assert len(intent["payload_sha256"]) == 64
+          assert len(intent["intent_sha256"]) == 64
+          PY
+
+      - name: Claim non-replay execution intent in Issue 67
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          intent_sha="$(python -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["execution_intent"]["intent_sha256"])' "$RUNNER_TEMP/g3c2b2-intent.json")"
+          if gh api --paginate "repos/$GITHUB_REPOSITORY/issues/67/comments?per_page=100" --jq '.[].body' | grep -Fq "G3C2B2_INTENT_SHA256=$intent_sha"; then
+            echo 'G3C2B2 replay detected for execution intent'
+            exit 1
+          fi
+          claim_body="G3C2B2_EXECUTION_INTENT_CLAIMED\n\nG3C2B2_INTENT_SHA256=$intent_sha\nR2_AUTHORITY_REF=$R2_AUTHORITY_REF\nEXPECTED_MAIN_SHA=$EXPECTED_MAIN_SHA\nWORKFLOW_RUN_ID=$GITHUB_RUN_ID\nCASE_ID=G3C2B1-SYNTHETIC-LIVE-SMOKE-001\nEXTERNAL_PROVIDER_CALLS=0_BEFORE_EXECUTION"
+          gh api "repos/$GITHUB_REPOSITORY/issues/67/comments" --method POST -f body="$claim_body" > /dev/null
+
+      - name: Execute exactly one fixed synthetic Provider A call
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SOAIACORE_G3C2B0_NO_OUTBOUND: '0'
+          SOAIACORE_G3C2B1_ALLOW_OUTBOUND: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --frozen python -m soaiacore_runtime.provider_live_smoke execute \
+            --r2-authority-ref "$R2_AUTHORITY_REF" \
+            --expected-main-sha "$EXPECTED_MAIN_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --one-call-confirmation "$ONE_CALL_CONFIRMATION" \
+            --intent-file "$RUNNER_TEMP/g3c2b2-intent.json" \
+            --intent-lock "$RUNNER_TEMP/g3c2b2-intent.lock" \
+            --receipt-out "$RUNNER_TEMP/g3c2b2-receipt.json"
+
+      - name: Validate and publish the safe canonical receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          RECEIPT="$RUNNER_TEMP/g3c2b2-receipt.json" uv run --frozen python - <<'PY'
+          import json
+          import os
+
+          data = json.load(open(os.environ["RECEIPT"], encoding="utf-8"))
+          receipt = data["single_shot_receipt"]
+          assert receipt["main_sha"] == os.environ["EXPECTED_MAIN_SHA"]
+          assert receipt["r2_authority_ref"] == os.environ["R2_AUTHORITY_REF"]
+          assert receipt["case_id"] == "G3C2B1-SYNTHETIC-LIVE-SMOKE-001"
+          assert receipt["provider"] == "openai"
+          assert receipt["model"] == "gpt-5.6-sol"
+          assert receipt["external_provider_calls"] == 1
+          assert receipt["transport_attempt_count"] == 1
+          assert receipt["Holdout"] is False
+          assert receipt["full_dataset"] is False
+          assert receipt["G3_quality_pass"] is False
+          for key in (
+              "provider_request_id",
+              "client_request_id",
+              "provider_response_id",
+              "payload_sha256",
+              "trace_sha256",
+              "receipt_sha256",
+              "execution_intent_sha256",
+          ):
+              assert isinstance(receipt[key], str) and receipt[key]
+          assert len(receipt["payload_sha256"]) == 64
+          assert len(receipt["trace_sha256"]) == 64
+          assert len(receipt["receipt_sha256"]) == 64
+          PY
+          receipt_json="$(python -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1], encoding="utf-8"))["single_shot_receipt"], sort_keys=True, indent=2))' "$RUNNER_TEMP/g3c2b2-receipt.json")"
+          body="G3C2B2-LIVE-SMOKE-CANONICAL-RECEIPT\n\n\`\`\`json\n$receipt_json\n\`\`\`"
+          gh api "repos/$GITHUB_REPOSITORY/issues/67/comments" --method POST -f body="$body" > /dev/null
