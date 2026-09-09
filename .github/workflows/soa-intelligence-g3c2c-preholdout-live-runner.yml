@@ -1,0 +1,117 @@
+name: SOA Intelligence G3C2C Pre-Holdout Live Runner
+
+on:
+  push:
+    branches:
+      - feat/g3c2c-preholdout-live-runner-20260909
+    paths:
+      - .github/workflows/soa-intelligence-g3c2c-preholdout-live-runner.yml
+      - packages/python-runtime/src/soaiacore_runtime/preholdout_live.py
+      - packages/python-runtime/tests/test_alpha_g3c2c_preholdout_live.py
+      - packages/python-runtime/golden/soa-alpha-golden-v0.2.preholdout-sensitivity.json
+  pull_request:
+    paths:
+      - .github/workflows/soa-intelligence-g3c2c-preholdout-live-runner.yml
+      - packages/python-runtime/src/soaiacore_runtime/preholdout_live.py
+      - packages/python-runtime/tests/test_alpha_g3c2c_preholdout_live.py
+      - packages/python-runtime/golden/soa-alpha-golden-v0.2.preholdout-sensitivity.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g3c2c-preholdout-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-r1-no-outbound:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SOAIACORE_G3C2B0_NO_OUTBOUND: '1'
+      PYTHONPATH: ${{ github.workspace }}/packages/python-runtime/src
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+
+      - name: Enforce exact R1 file boundary and immutable sealed dataset
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          base="$(git rev-parse origin/main)"
+          changed="$(git diff --name-only "$base"...HEAD)"
+          test -n "$changed"
+          allowed='^(\.github/workflows/soa-intelligence-g3c2c-preholdout-live-runner\.yml|packages/python-runtime/src/soaiacore_runtime/preholdout_live\.py|packages/python-runtime/tests/test_alpha_g3c2c_preholdout_live\.py|packages/python-runtime/golden/soa-alpha-golden-v0\.2\.preholdout-sensitivity\.json)$'
+          if printf '%s\n' "$changed" | grep -Ev "$allowed"; then
+            echo 'G3C2C R1 scope violation'
+            exit 1
+          fi
+          git diff --exit-code "$base"...HEAD -- \
+            packages/python-runtime/golden/soa-alpha-golden-v0.2.json \
+            packages/python-runtime/golden/soa-alpha-golden-v0.2.holdout-seal.json
+          if find packages/python-runtime -type f \( -iname '*private*bundle*' -o -iname '*.env' -o -iname '.env*' \) -print | grep -q .; then
+            echo 'Private execution bundle or env file must never be committed'
+            exit 1
+          fi
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: 3.12.14
+
+      - name: Install frozen runtime
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir uv==0.12.5
+          uv sync --frozen
+
+      - name: Prove static sensitivity binding and sealed Holdout
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --frozen python - <<'PY'
+          import json
+          from pathlib import Path
+          from soaiacore_runtime.preholdout_live import load_sensitivity_binding, verify_preholdout_binding
+          from soaiacore_runtime.quality_eval import GoldenDatasetManifest, HoldoutSeal, verify_holdout_seal
+
+          root = Path('packages/python-runtime/golden')
+          binding = load_sensitivity_binding(root / 'soa-alpha-golden-v0.2.preholdout-sensitivity.json')
+          manifest = GoldenDatasetManifest.model_validate(json.loads((root / 'soa-alpha-golden-v0.2.json').read_text()))
+          seal = HoldoutSeal.model_validate(json.loads((root / 'soa-alpha-golden-v0.2.holdout-seal.json').read_text()))
+          receipt = verify_preholdout_binding(binding=binding, manifest=manifest)
+          assert receipt['case_count'] == 18
+          assert receipt['partition_counts'] == {'development': 9, 'validation': 9, 'holdout': 0}
+          assert receipt['sensitivity_counts'] == {'CONFIDENTIAL': 9, 'INTERNAL': 9}
+          assert verify_holdout_seal(manifest, seal) is True
+          assert seal.holdout_sha256 == '1f3e42cc6f1c66ce4136c89a208426e02d9456296c31054fe6e43ff0a3f4f98c'
+          PY
+
+      - name: Run G3C2C and Provider A regression tests with zero outbound
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset OPENAI_API_KEY || true
+          uv run --frozen pytest -q \
+            packages/python-runtime/tests/test_alpha_g3c2c_preholdout_live.py \
+            packages/python-runtime/tests/test_alpha_g3c2b0_live_boundary.py \
+            packages/python-runtime/tests/test_alpha_g3c2b1_single_shot_harness.py \
+            packages/python-runtime/tests/test_alpha_g3c0_integrity.py
+
+      - name: R1 boundary summary
+        shell: bash
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## G3C2C R1 validation
+          - private payload committed: false
+          - external provider calls: 0
+          - credential read: false
+          - pre-Holdout binding: 18 cases = 9 INTERNAL + 9 CONFIDENTIAL
+          - Holdout: sealed / unchanged / not executable
+          - quality failures: continue-as-evidence semantics covered by tests
+          - governance/safety failures: fail-closed STOP semantics covered by tests
+          - G3 Quality PASS claimed: false
+          EOF
