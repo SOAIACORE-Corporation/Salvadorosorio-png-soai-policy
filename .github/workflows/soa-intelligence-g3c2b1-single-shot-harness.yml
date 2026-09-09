@@ -47,7 +47,7 @@ jobs:
           changed="$(git diff --name-only origin/main...HEAD)"
           printf '%s\n' "$changed"
           test -n "$changed"
-          allowed='^(\.github/workflows/soa-intelligence-g3c2b1-single-shot-harness\.yml|packages/python-runtime/src/soaiacore_runtime/provider_live_smoke\.py|packages/python-runtime/tests/test_alpha_g3c2b1_single_shot_harness\.py)$'
+          allowed='^(\.github/workflows/soa-intelligence-g3c2b1-single-shot-harness\.yml|\.github/workflows/soa-intelligence-g3c2b2-governed-live-smoke\.yml|packages/python-runtime/src/soaiacore_runtime/provider_live_smoke\.py|packages/python-runtime/tests/test_alpha_g3c2b1_single_shot_harness\.py)$'
           if printf '%s\n' "$changed" | grep -Ev "$allowed"; then
             echo 'G3C2B1_R1_SCOPE_VIOLATION=true'
             exit 1
