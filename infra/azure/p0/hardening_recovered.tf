@@ -296,6 +296,24 @@ resource "azurerm_monitor_metric_alert" "worker_failed" {
   }
 }
 
+resource "azurerm_monitor_activity_log_alert" "service_health" {
+  name                = "alrt-${local.name_prefix}-servicehealth"
+  location            = "global"
+  resource_group_name = azurerm_resource_group.pilot.name
+  scopes              = ["/subscriptions/${data.azurerm_client_config.current.subscription_id}"]
+  description         = "SOAiaCore P0 Azure Service Health alert."
+  enabled             = true
+  tags                = local.required_tags
+
+  criteria {
+    category = "ServiceHealth"
+  }
+
+  action {
+    action_group_id = data.azurerm_monitor_action_group.operations.id
+  }
+}
+
 resource "azurerm_consumption_budget_resource_group" "pilot" {
   name              = "budget-${local.name_prefix}"
   resource_group_id = azurerm_resource_group.pilot.id
