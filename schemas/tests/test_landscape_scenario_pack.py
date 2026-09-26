@@ -15,6 +15,10 @@ def test_simple_missing_owner_remains_visible():
         "observed_at":"2026-09-26T03:00:00Z"
     })
     assert asset["payload"]["owner"] is None
+    result = analyze([asset])
+    assert result["finding_count"] == 1
+    assert result["findings"][0]["payload"]["type"] == "governance"
+    assert result["findings"][0]["payload"]["adjudication"] == "VISIBILITY_GAP"
 
 
 def test_zero_cost_is_distinct_from_unknown_cost():
