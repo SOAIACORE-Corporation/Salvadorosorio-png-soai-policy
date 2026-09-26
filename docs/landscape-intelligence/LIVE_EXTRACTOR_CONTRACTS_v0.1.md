@@ -107,3 +107,26 @@ Extractor failure must never be replaced with an empty "healthy" result.
 8. only then consider persistence scale-up
 
 No step grants execution authority.
+
+
+## Triple reconciliation contract
+
+For infrastructure configuration, the read-only control plane distinguishes three authorities:
+
+- Azure physical configuration = observed physical reality.
+- Terraform state = managed reality.
+- GitHub IaC = declarative intent.
+
+The triple reconciler never mutates any source and never converts a difference into a FIX. It produces only PENDING drift classifications or explicit visibility gaps.
+
+Canonical classifications:
+- `PHYSICAL_DRIFT`: Terraform state and GitHub intent agree; Azure physical configuration differs.
+- `MANAGED_DRIFT`: Azure physical configuration and GitHub intent agree; Terraform managed state differs.
+- `DECLARATIVE_DRIFT`: Azure physical configuration and Terraform state agree; GitHub declarative intent differs.
+- `MULTI_SOURCE_DIVERGENCE`: the compared attributes produce incompatible or mixed disagreement patterns.
+- `PAIRWISE_DRIFT`: only two comparable authorities are available and they disagree.
+- `SOURCE_VISIBILITY_GAP`: at least two authorities are present but one required authority is missing.
+
+A visibility gap is not healthy alignment. A single available authority is insufficient to infer drift and therefore does not manufacture a contradiction.
+
+The Azure physical configuration adapter is read-only and emits a canonical `observation/config` record. Physical reads do not grant execution authority.
