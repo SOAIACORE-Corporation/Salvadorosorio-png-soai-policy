@@ -58,3 +58,42 @@ Expected result:
 - recoverable gaps are PARTIAL rather than falsely BLOCKED;
 - critical evidence/authority gaps block canonicalization;
 - human, recovery and methodology efficiency semantics remain deterministic.
+
+
+## Pilot scorecard
+
+| Measure | Result | Interpretation |
+|---|---:|---|
+| Requirement completion | 100% | Pilot fixture contains all required durable evidence classes |
+| Context Integrity | 100% claimable | Verbatim dialogue may be unrecovered without implying state loss |
+| Canonicalization | ELIGIBLE | No critical authority or material-primary-evidence gate is open |
+| Human Interaction Efficiency | 100% | The only modeled human action is the explicit GO; no avoidable handoff was required |
+| Avoidable Human Interaction Rate | 0% | No operator troubleshooting was requested during the pilot |
+| Recovery Efficiency | 100% | 3 recoverable issues were resolved without human intervention |
+| Control Yield | 100% | The three pilot controls changed or protected the outcome |
+| Methodological Overhead | 0% | No pilot control was retained merely for procedural ceremony |
+
+## Methodology result
+
+**PILOT_PASS**
+
+Observed behavior matched the intended adaptive method:
+
+OBSERVE → UNDERSTAND → RESOLVE → DEMONSTRATE
+
+The execution was not perfectly linear. It contained:
+- a source-discovery miss;
+- a metric-semantics correction;
+- a failed CI iteration caused by partial patch integration.
+
+None required operator intervention. All remained traceable, were corrected, and were revalidated.
+
+This supports the working thesis:
+
+> A mature methodology does not require error-free execution; it requires that recoverable errors do not destroy direction, authority, evidence or closure.
+
+## Next logical increment
+
+Use durable repository/receipt/CI evidence to **generate the recovery manifest automatically**, rather than requiring the manifest itself to be authored manually.
+
+That is the next product step because the scoring/orchestration layer is now proven; source-to-manifest automation is the remaining manual boundary.
