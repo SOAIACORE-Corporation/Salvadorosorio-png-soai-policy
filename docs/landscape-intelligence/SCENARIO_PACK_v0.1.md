@@ -197,6 +197,17 @@ Expected:
 - Do not infer motive or rationale from the resulting state.
 - Keep execution authority separate.
 
+#### SCN-023 · Azure and GitHub visible, Terraform State blocked by network
+Azure physical configuration and GitHub declarative intent are readable, but Terraform managed state cannot be read because the backend data-plane is blocked by network policy.
+
+Expected:
+- Preserve Azure and GitHub as valid observations.
+- Represent Terraform as a source visibility gap, not as an empty or healthy source.
+- Emit `SOURCE_VISIBILITY_GAP` / `VISIBILITY_GAP` for the asset.
+- Do not infer `PHYSICAL_DRIFT`, `MANAGED_DRIFT`, `DECLARATIVE_DRIFT`, or healthy alignment from two agreeing sources while the third required authority is unavailable.
+- Preserve `HOLD_NETWORK` as execution evidence for the unavailable source path.
+- Continue analysis that does not require Terraform State; do not widen operational authority to bypass the network control.
+
 ## Acceptance philosophy
 
 The pack is successful when the system can:
