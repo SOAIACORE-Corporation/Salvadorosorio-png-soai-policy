@@ -1,0 +1,174 @@
+{
+  "manifest_id": "RM-SOAIACORE-MOCATRIZ-20260926-001",
+  "manifest_version": "1.0.0",
+  "schema_version": "1.0",
+  "created_at": "2026-09-26T12:30:00Z",
+  "status": "FROZEN",
+  "target_snapshot": {
+    "snapshot_id": "TMS-SOAIACORE-MOCATRIZ-20260926-001",
+    "snapshot_version": "1.0.0",
+    "expected_hash": "FDED32B3C4991A04667B284E296F167A65B3ED547B424FF013794FD84D14DB56"
+  },
+  "policy": {
+    "fail_closed_on": [
+      "missing_authority",
+      "missing_material_primary_evidence",
+      "snapshot_hash_mismatch",
+      "objective_mismatch",
+      "closure_contract_mismatch",
+      "checkpoint_head_mismatch"
+    ],
+    "allow_partial_on": [
+      "missing_optional_context",
+      "missing_historical_narrative",
+      "unavailable_non_material_attachment"
+    ]
+  },
+  "requirements": [
+    {
+      "requirement_id": "REQ-001",
+      "name": "Objetivo superior",
+      "category": "objective",
+      "criticality": "critical",
+      "expected_value": "Validar continuidad, recuperación, errores, controles y cierre",
+      "authoritative_source": "closure_receipt",
+      "status": "CONFIRMED",
+      "evidence_ids": [
+        "EV-001"
+      ]
+    },
+    {
+      "requirement_id": "REQ-002",
+      "name": "Contrato de cierre",
+      "category": "closure",
+      "criticality": "critical",
+      "authoritative_source": "pilot_02_receipt",
+      "expected_result": "COMPLETED_WITH_EXCEPTIONS",
+      "status": "CONFIRMED",
+      "evidence_ids": [
+        "EV-001"
+      ]
+    },
+    {
+      "requirement_id": "REQ-003",
+      "name": "Checkpoint de código",
+      "category": "checkpoint",
+      "criticality": "critical",
+      "authoritative_source": "git",
+      "expected_head": "814aae7c548247ab9b0c79c42bf586e939a7c064",
+      "status": "CONFIRMED",
+      "evidence_ids": [
+        "EV-002"
+      ]
+    },
+    {
+      "requirement_id": "REQ-004",
+      "name": "Prueba 02 de continuidad",
+      "category": "continuity",
+      "criticality": "critical",
+      "expected_score": 30,
+      "expected_invalidating_conditions": 0,
+      "status": "CONFIRMED",
+      "evidence_ids": [
+        "EV-003"
+      ]
+    },
+    {
+      "requirement_id": "REQ-005",
+      "name": "Matriz lógica de errores",
+      "category": "error_control",
+      "criticality": "critical",
+      "expected_total": 27,
+      "expected_controlled": 25,
+      "expected_accepted_gaps": 2,
+      "expected_open": 0,
+      "status": "CONFIRMED",
+      "evidence_ids": [
+        "EV-004"
+      ]
+    },
+    {
+      "requirement_id": "REQ-006",
+      "name": "Validaciones sobre HEAD congelado",
+      "category": "ci_evidence",
+      "criticality": "critical",
+      "expected_successful_runs": 6,
+      "status": "CONFIRMED",
+      "evidence_ids": [
+        "EV-005",
+        "EV-006",
+        "EV-007",
+        "EV-008",
+        "EV-009",
+        "EV-010"
+      ]
+    },
+    {
+      "requirement_id": "REQ-007",
+      "name": "Métricas MOCATRIZ",
+      "category": "metrics",
+      "criticality": "necessary",
+      "status": "CONFIRMED",
+      "evidence_ids": [
+        "EV-001"
+      ]
+    },
+    {
+      "requirement_id": "REQ-008",
+      "name": "Reglas canónicas",
+      "category": "rules",
+      "criticality": "critical",
+      "status": "CONFIRMED",
+      "evidence_ids": [
+        "EV-011"
+      ]
+    },
+    {
+      "requirement_id": "REQ-009",
+      "name": "Pendientes y excepciones",
+      "category": "open_state",
+      "criticality": "critical",
+      "status": "CONFIRMED",
+      "evidence_ids": [
+        "EV-001",
+        "EV-004"
+      ]
+    },
+    {
+      "requirement_id": "REQ-010",
+      "name": "Funcionalidad durable del endpoint",
+      "category": "functional_evidence",
+      "criticality": "necessary",
+      "status": "MISSING",
+      "blocking_effect": "No bloquea el cierre de Prueba 02; bloquea afirmación de éxito funcional",
+      "evidence_ids": [
+        "EV-012"
+      ]
+    },
+    {
+      "requirement_id": "REQ-011",
+      "name": "Ledger histórico completo de decisiones humanas",
+      "category": "human_decision_ledger",
+      "criticality": "complementary",
+      "status": "MISSING",
+      "evidence_ids": [
+        "EV-013"
+      ]
+    },
+    {
+      "requirement_id": "REQ-012",
+      "name": "Telemetría temporal de overhead",
+      "category": "method_overhead",
+      "criticality": "complementary",
+      "status": "MISSING",
+      "evidence_ids": [
+        "EV-014"
+      ]
+    }
+  ],
+  "recovery_decision": {
+    "expected_status": "RECOVERABLE_WITH_EXCEPTIONS",
+    "current_status": "PENDING_FIDELITY_TEST"
+  },
+  "content_sha256": "5FB3ECB630834BCF95CB50BA2485DF2EE5D10B98A001681F925424C28721866F"
+}
