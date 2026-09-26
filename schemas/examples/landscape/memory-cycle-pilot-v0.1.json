@@ -1,0 +1,66 @@
+{
+  "memory_cycle_fixture_version": "0.1",
+  "objective": "Recover and assess a memory state without unnecessary human handoffs.",
+  "manifest": {
+    "recovery_manifest_version": "0.1",
+    "verbatim_dialogue_unrecovered": true,
+    "requirements": [
+      {
+        "requirement_id": "primary-state",
+        "dimension": "evidence_coverage",
+        "status": "CONFIRMED",
+        "required": true,
+        "material_primary": true
+      },
+      {
+        "requirement_id": "causal-link",
+        "dimension": "causal_continuity",
+        "status": "CONFIRMED",
+        "required": true
+      },
+      {
+        "requirement_id": "decision-authority",
+        "dimension": "authority_integrity",
+        "status": "CONFIRMED",
+        "required": true,
+        "required_authority": true
+      },
+      {
+        "requirement_id": "source-freshness",
+        "dimension": "freshness",
+        "status": "CONFIRMED",
+        "required": true
+      },
+      {
+        "requirement_id": "validation-receipt",
+        "dimension": "receipt_integrity",
+        "status": "CONFIRMED",
+        "required": true
+      }
+    ]
+  },
+  "human_interactions": [
+    {
+      "action_id": "pilot-go",
+      "required": true,
+      "reason": "Explicit authority to run the approved pilot"
+    }
+  ],
+  "controls": [
+    {
+      "control_id": "source-inventory",
+      "executed": true,
+      "changed_outcome": true
+    },
+    {
+      "control_id": "authority-gate",
+      "executed": true,
+      "changed_outcome": true
+    },
+    {
+      "control_id": "duplicate-score-check",
+      "executed": true,
+      "changed_outcome": true
+    }
+  ]
+}

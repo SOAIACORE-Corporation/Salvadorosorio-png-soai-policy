@@ -324,6 +324,28 @@
       ],
       "control_status": "ACCEPTED_GAP",
       "regression_test": "OCI_BUILD_SCAN_PUBLISH_SECURITY_GATE"
+    },
+    {
+      "error_id": "ERR-20260926-016",
+      "detected_at": "2026-09-26",
+      "class": "METRIC_SEMANTICS_DEFECT",
+      "phase": "methodology-design",
+      "symptom": "The proposed 'Methodological Overhead Ratio' was defined as useful controls divided by executed controls, which semantically measures yield rather than overhead.",
+      "root_cause": "Metric naming and formula semantics were not reconciled before presentation.",
+      "early_signals": [
+        "A higher value in the proposed formula represented better methodology performance",
+        "The term overhead conventionally represents non-value-adding cost"
+      ],
+      "human_cost": "Potential ambiguity when interpreting whether a higher metric is desirable",
+      "avoidable": true,
+      "prevention_rule": "Name metrics according to monotonic meaning: Control Yield increases with useful controls; Methodological Overhead increases with non-value-adding controls.",
+      "automated_detection": "Memory cycle exposes both control_yield_pct and methodological_overhead_pct and asserts they sum to 100 when controls execute.",
+      "evidence_refs": [
+        "docs/landscape-intelligence/MEMORY_INTEGRITY_CYCLE_v0.1.md",
+        "SCN-025"
+      ],
+      "control_status": "CONTROLLED",
+      "regression_test": "test_control_yield_and_overhead_have_consistent_semantics"
     }
   ]
 }

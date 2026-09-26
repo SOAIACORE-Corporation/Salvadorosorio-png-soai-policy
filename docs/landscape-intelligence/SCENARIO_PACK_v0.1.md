@@ -219,7 +219,19 @@ Expected:
 - Validate the objective outcome, not merely individual command success.
 - Excessive operator handoffs are a quality defect even when every command succeeds.
 
-## Acceptance philosophy
+
+#### SCN-025 · Recoverable memory-cycle friction
+A memory-recovery objective encounters incomplete evidence, a redundant control, and one avoidable human handoff while the required authority and material primary evidence remain available.
+
+Expected:
+- Continue the objective without treating recoverable friction as a showstopper.
+- Preserve Context Integrity as the evidentiary continuity metric rather than inventing a competing confidence score.
+- Report canonicalization eligibility separately from confidence.
+- Measure necessary versus avoidable human intervention.
+- Measure useful-control yield and methodological overhead separately.
+- Stop canonicalization only when a critical gate such as missing required authority or missing material primary evidence is present.
+- Produce one integrated result for OBSERVE → UNDERSTAND → RESOLVE → DEMONSTRATE.
+
 
 The pack is successful when the system can:
 1. detect complex contradictions,
