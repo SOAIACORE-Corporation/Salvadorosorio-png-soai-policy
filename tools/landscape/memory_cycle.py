@@ -12,6 +12,7 @@ from typing import Any
 
 from recovery_manifest import assess_recovery_manifest
 from recovery_manifest_builder import build_recovery_manifest
+from durable_evidence_adapters import adapt_sources
 
 
 CRITICAL_GATES = {
@@ -198,4 +199,28 @@ def run_memory_cycle_from_evidence(
         controls=controls,
     )
     result["generated_manifest"] = manifest
+    return result
+
+
+def run_memory_cycle_from_sources(
+    sources: list[dict[str, Any]],
+    *,
+    as_of: str | None = None,
+    requirements: list[dict[str, Any]] | None = None,
+    verbatim_dialogue_unrecovered: bool = False,
+    human_interactions: list[dict[str, Any]] | None = None,
+    recovery_events: list[dict[str, Any]] | None = None,
+    controls: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Adapt heterogeneous durable sources, build the manifest, and run the cycle."""
+    evidence = adapt_sources(sources, as_of=as_of)
+    result = run_memory_cycle_from_evidence(
+        evidence,
+        requirements=requirements,
+        verbatim_dialogue_unrecovered=verbatim_dialogue_unrecovered,
+        human_interactions=human_interactions,
+        recovery_events=recovery_events,
+        controls=controls,
+    )
+    result["adapted_evidence"] = evidence
     return result
