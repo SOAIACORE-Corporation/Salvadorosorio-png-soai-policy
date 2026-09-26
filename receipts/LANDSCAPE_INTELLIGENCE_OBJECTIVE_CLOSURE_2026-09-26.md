@@ -60,9 +60,9 @@ Canonical target:
 
 ## Integrated validation
 
-Latest verified before this receipt:
-- Landscape Intelligence Schema #103: SUCCESS.
-- Terraform SOA Intelligence DEV Static #47: SUCCESS.
+Final verified head evidence:
+- Landscape Intelligence Schema #107: SUCCESS.
+- Terraform SOA Intelligence DEV Static #51: SUCCESS.
 - Earlier SCN-023 validation run #101: SUCCESS.
 - OIDC live preflight: login, subscription context, resource group read, storage account read and network posture read PASS.
 - tfstate container data-plane: HOLD_NETWORK.
@@ -71,7 +71,7 @@ A new Landscape Schema run is expected from the objective-oriented execution pol
 
 ## Known condition outside current objective
 
-OCI Build, Scan, and Publish is failing its fixable HIGH/CRITICAL Trivy security gate.
+OCI Build, Scan, and Publish #163 is failing its fixable HIGH/CRITICAL Trivy security gate.
 
 Evidence shows:
 - Core/Worker runtime tests passed.
@@ -113,5 +113,7 @@ The objective is considered closed when:
 3. source visibility gaps are explicit;
 4. no unresolved issue is falsely represented as healthy;
 5. unrelated remediation streams are documented rather than allowed to displace the objective.
+
+**Closure status:** TODAY_OBJECTIVE_COMPLETE_WITH_ACCEPTED_EXTERNAL_GAPS
 
 **Principle:** capability to act is not itself a reason to act. Execution judgment is part of intelligence.
