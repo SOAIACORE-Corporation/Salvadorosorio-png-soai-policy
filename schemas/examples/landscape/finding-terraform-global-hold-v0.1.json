@@ -1,0 +1,28 @@
+{
+  "schema_version": "0.1",
+  "record_id": "finding:R-006",
+  "record_type": "finding",
+  "source": {
+    "source_id": "terraform-baseline-20260925-175623",
+    "system": "terraform",
+    "source_type": "plan",
+    "location": "LANDSCAPE_BASELINE_20260925-175623.txt",
+    "collected_at": "2026-09-25T22:29:14Z",
+    "hash": null,
+    "freshness": "current",
+    "trust_level": "authoritative"
+  },
+  "observed_at": "2026-09-25T22:29:14Z",
+  "payload": {
+    "finding_id": "R-006",
+    "asset_id": null,
+    "type": "drift",
+    "adjudication": "HOLD",
+    "severity": "WARNING",
+    "status": "HOLD",
+    "evidence_refs": [
+      "terraform-plan:11-add-6-change-1-destroy"
+    ],
+    "confidence": 1
+  }
+}
