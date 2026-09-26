@@ -95,6 +95,45 @@ def normalize_azure_resource(raw: dict[str, Any], *, source: dict[str, Any]) -> 
     return record
 
 
+
+def normalize_azure_config(raw: dict[str, Any], *, source: dict[str, Any]) -> dict[str, Any]:
+    required = ("observation_id", "asset_id", "resource_type", "native_id")
+    missing = [key for key in required if not raw.get(key)]
+    if missing:
+        raise ValueError(f"azure config observation missing required fields: {', '.join(missing)}")
+
+    value = {
+        "resource_type": raw["resource_type"],
+        "native_id": raw["native_id"],
+    }
+    for key in ("location", "sku", "public_network_access", "identity", "image"):
+        if raw.get(key) is not None:
+            value[key] = raw[key]
+    attributes = raw.get("attributes") or {}
+    for key in ("location", "sku", "public_network_access", "identity", "image"):
+        if key in attributes and key not in value:
+            value[key] = attributes[key]
+
+    record = {
+        "schema_version": "0.1",
+        "record_id": raw["observation_id"],
+        "record_type": "observation",
+        "source": source,
+        "observed_at": raw.get("observed_at") or source["collected_at"],
+        "payload": {
+            "observation_id": raw["observation_id"],
+            "asset_id": raw["asset_id"],
+            "fact_type": "config",
+            "value": value,
+            "unit": None,
+            "evidence_refs": raw.get("evidence_refs", []),
+            "confidence": float(raw.get("confidence", 1.0)),
+        },
+    }
+    _validator().validate(record)
+    return record
+
+
 def normalize_cost(raw: dict[str, Any], *, source: dict[str, Any]) -> dict[str, Any]:
     cost_type = raw.get("cost_type", "observed")
     amount = raw.get("amount")
@@ -410,6 +449,7 @@ def normalize(kind: str, raw: dict[str, Any]) -> dict[str, Any]:
     collected_at = raw.get("collected_at") or raw.get("observed_at") or _utc()
     system_map = {
         "azure-resource": ("azure", "api"),
+        "azure-config": ("azure", "api"),
         "cost": ("cost", "api"),
         "terraform-plan-summary": ("terraform", "plan"),
         "terraform-state": ("terraform", "state"),
@@ -437,6 +477,8 @@ def normalize(kind: str, raw: dict[str, Any]) -> dict[str, Any]:
     )
     if kind == "azure-resource":
         return normalize_azure_resource(raw, source=source)
+    if kind == "azure-config":
+        return normalize_azure_config(raw, source=source)
     if kind == "cost":
         return normalize_cost(raw, source=source)
     if kind == "terraform-plan-summary":
@@ -462,7 +504,7 @@ def main() -> int:
     import argparse
 
     parser = argparse.ArgumentParser(description="Normalize collected Landscape evidence")
-    parser.add_argument("--kind", required=True, choices=["azure-resource", "cost", "terraform-plan-summary", "terraform-state", "github-iac", "monitoring", "security-rbac", "runtime", "github-pr", "github-branch", "committee-decision"])
+    parser.add_argument("--kind", required=True, choices=["azure-resource", "azure-config", "cost", "terraform-plan-summary", "terraform-state", "github-iac", "monitoring", "security-rbac", "runtime", "github-pr", "github-branch", "committee-decision"])
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
