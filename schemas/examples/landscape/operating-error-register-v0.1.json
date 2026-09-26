@@ -1,0 +1,306 @@
+{
+  "schema_version": "0.1",
+  "register_id": "soaia:operating-error-register:2026-09-26",
+  "policy": "docs/landscape-intelligence/PROACTIVE_ERROR_LEARNING_POLICY_v0.1.md",
+  "entries": [
+    {
+      "error_id": "ERR-20260926-001",
+      "detected_at": "2026-09-26",
+      "class": "CONTEXT_PATH_ERROR",
+      "phase": "bootstrap-local",
+      "symptom": "PowerShell could not resolve scripts/azure/Invoke-SOAIntelligenceBootstrapPreflight.ps1.",
+      "root_cause": "Command was executed from C:\\Users\\soa09 instead of the repository root.",
+      "early_signals": [
+        "Prompt path did not equal repository root",
+        "Relative script path depended on current directory"
+      ],
+      "human_cost": "Repeated command cycle and operator interruption",
+      "avoidable": true,
+      "prevention_rule": "Resolve repository root before issuing any relative execution command.",
+      "automated_detection": "Preflight reports CURRENT_DIRECTORY and REPO_ROOT; future orchestration should validate them before human action.",
+      "evidence_refs": [
+        "POWERSHELL_EXECUTION_RUNBOOK_v1",
+        "session:CommandNotFound"
+      ],
+      "control_status": "CONTROLLED",
+      "regression_test": "test_powershell_preflight_checks_shell_path_az_and_auth"
+    },
+    {
+      "error_id": "ERR-20260926-002",
+      "detected_at": "2026-09-26",
+      "class": "SOURCE_DISCOVERY_MISS",
+      "phase": "git-discovery",
+      "symptom": "git fetch origin did not expose the Landscape branch in git branch -r.",
+      "root_cause": "remote.origin.fetch was restricted to refs/heads/main.",
+      "early_signals": [
+        "git branch -r showed only main and rebuild branch",
+        "remote.origin.fetch could be inspected before branch-switch guidance"
+      ],
+      "human_cost": "Multiple Git commands to discover a known remote branch",
+      "avoidable": true,
+      "prevention_rule": "Inspect refspec before relying on remote branch enumeration.",
+      "automated_detection": "Git precheck must inspect remote.origin.fetch and remote branch existence before switch instructions.",
+      "evidence_refs": [
+        "session:remote.origin.fetch=main"
+      ],
+      "control_status": "MITIGATED",
+      "regression_test": "PENDING_GIT_PREFLIGHT_AUTOMATION"
+    },
+    {
+      "error_id": "ERR-20260926-003",
+      "detected_at": "2026-09-26",
+      "class": "WORKSPACE_COLLISION",
+      "phase": "git-worktree",
+      "symptom": "Current branch contained a large staged set spanning web, worker, infrastructure, workflows and Landscape Intelligence.",
+      "root_cause": "Multiple development lines coexist in one working tree/index.",
+      "early_signals": [
+        "git status --short --branch showed many A/M records",
+        "User indicated multiple projects developing concurrently"
+      ],
+      "human_cost": "Branch switching became unsafe and required forensic interpretation",
+      "avoidable": true,
+      "prevention_rule": "Detect dirty/staged multi-domain workspace before branch operations; prefer isolated worktrees for materially independent streams.",
+      "automated_detection": "Classify cross-domain staged changes and block destructive branch/reset guidance.",
+      "evidence_refs": [
+        "session:git-status-large-staged-index"
+      ],
+      "control_status": "MITIGATED",
+      "regression_test": "PENDING_WORKTREE_COLLISION_TEST"
+    },
+    {
+      "error_id": "ERR-20260926-004",
+      "detected_at": "2026-09-26",
+      "class": "RUNTIME_POLICY_BLOCK",
+      "phase": "powershell-execution",
+      "symptom": "PowerShell refused to load the preflight script because script execution was disabled.",
+      "root_cause": "Process execution policy had not been inspected before script invocation.",
+      "early_signals": [
+        "Windows PowerShell 5.1 environment",
+        "ExecutionPolicy is deterministically queryable"
+      ],
+      "human_cost": "One failed execution and policy-adjustment cycle",
+      "avoidable": true,
+      "prevention_rule": "Read execution policy as part of Windows PowerShell precheck.",
+      "automated_detection": "Preflight/bootstrap preparation should query Get-ExecutionPolicy for relevant scopes before script execution.",
+      "evidence_refs": [
+        "session:PSSecurityException"
+      ],
+      "control_status": "MITIGATED",
+      "regression_test": "PENDING_EXECUTION_POLICY_PREFLIGHT_TEST"
+    },
+    {
+      "error_id": "ERR-20260926-005",
+      "detected_at": "2026-09-26",
+      "class": "STALE_DEFAULT",
+      "phase": "oidc-plan",
+      "symptom": "Bootstrap planned federation for feature/soa-intelligence-a2-postgres-20260906-r2 instead of Landscape branch.",
+      "root_cause": "FeatureBranch default was stale and coupled to an older development line.",
+      "early_signals": [
+        "Bootstrap parameter default was readable before execution",
+        "Active PR head was known"
+      ],
+      "human_cost": "Additional PLAN_ONLY cycle and manual source inspection",
+      "avoidable": true,
+      "prevention_rule": "Defaults for branch-scoped authority must be derived or explicitly validated against active branch.",
+      "automated_detection": "CI asserts Landscape bootstrap default equals active canonical Landscape branch.",
+      "evidence_refs": [
+        "scripts/azure/Bootstrap-SOAIntelligenceGitHubOidc.ps1"
+      ],
+      "control_status": "CONTROLLED",
+      "regression_test": "test_bootstrap_uses_isolated_landscape_oidc_credential_and_branch"
+    },
+    {
+      "error_id": "ERR-20260926-006",
+      "detected_at": "2026-09-26",
+      "class": "IDENTITY_COLLISION",
+      "phase": "oidc-apply",
+      "symptom": "Bootstrap attempted to reuse credential name github-feature-a2 for a different branch subject.",
+      "root_cause": "Credential name was fixed and shared across independent development lines.",
+      "early_signals": [
+        "Existing identity and federated credentials were queryable read-only before Apply",
+        "Other teams/projects shared the identity"
+      ],
+      "human_cost": "Material Apply attempt failed before intended reconciliation; collision had to be investigated",
+      "avoidable": true,
+      "prevention_rule": "Enumerate existing federated credentials and consumers before Apply; use purpose-specific credential names.",
+      "automated_detection": "Bootstrap now uses github-landscape-intelligence-v1 and refuses implicit replacement.",
+      "evidence_refs": [
+        "azure:github-feature-a2",
+        "scripts/azure/Bootstrap-SOAIntelligenceGitHubOidc.ps1"
+      ],
+      "control_status": "CONTROLLED",
+      "regression_test": "test_bootstrap_uses_isolated_landscape_oidc_credential_and_branch"
+    },
+    {
+      "error_id": "ERR-20260926-007",
+      "detected_at": "2026-09-26",
+      "class": "COMPATIBILITY_DEFECT",
+      "phase": "oidc-apply",
+      "symptom": "Expected Azure CLI NotFound was elevated to NativeCommandError and stopped bootstrap.",
+      "root_cause": "Windows PowerShell 5.1 plus ErrorActionPreference=Stop treated stderr from az federated-credential show as terminating.",
+      "early_signals": [
+        "PowerShell edition/version already known",
+        "NotFound was an expected control path"
+      ],
+      "human_cost": "Failed Apply cycle",
+      "avoidable": true,
+      "prevention_rule": "Do not use expected-error CLI calls as existence tests under PS5.1; list/filter or explicitly neutralize expected stderr semantics.",
+      "automated_detection": "Bootstrap uses list/filter helper Get-FederatedCredentialByName.",
+      "evidence_refs": [
+        "session:NativeCommandError-github-pr",
+        "scripts/azure/Bootstrap-SOAIntelligenceGitHubOidc.ps1"
+      ],
+      "control_status": "CONTROLLED",
+      "regression_test": "test_bootstrap_uses_isolated_landscape_oidc_credential_and_branch"
+    },
+    {
+      "error_id": "ERR-20260926-008",
+      "detected_at": "2026-09-26",
+      "class": "TRIGGER_COVERAGE_GAP",
+      "phase": "github-actions",
+      "symptom": "Azure auth workflow did not trigger for feat/landscape-intelligence-data-model-v1.",
+      "root_cause": "Workflow branch filter covered A2 legacy branch and main only.",
+      "early_signals": [
+        "Workflow YAML was available before Azure work",
+        "Active Landscape branch was known"
+      ],
+      "human_cost": "Would have produced a false sense of readiness until actual CI execution",
+      "avoidable": true,
+      "prevention_rule": "Validate workflow trigger coverage against the subject being federated before creating credentials.",
+      "automated_detection": "CI test asserts Landscape branch exists in auth workflow triggers.",
+      "evidence_refs": [
+        ".github/workflows/azure-soa-intelligence-auth-preflight.yml"
+      ],
+      "control_status": "CONTROLLED",
+      "regression_test": "test_azure_auth_workflow_listens_to_landscape_branch"
+    },
+    {
+      "error_id": "ERR-20260926-009",
+      "detected_at": "2026-09-26",
+      "class": "MISSING_FEDERATION",
+      "phase": "github-actions-oidc",
+      "symptom": "GitHub Actions OIDC login failed with AADSTS700213.",
+      "root_cause": "No Azure federated identity record existed for the Landscape branch subject.",
+      "early_signals": [
+        "Credential enumeration showed github-landscape-intelligence-v1 absent"
+      ],
+      "human_cost": "One required material creation action after precheck",
+      "avoidable": false,
+      "prevention_rule": "Enumerate exact issuer/audience/subject tuple before first live OIDC run.",
+      "automated_detection": "Auth workflow exposes federated token subject and fails closed at login.",
+      "evidence_refs": [
+        "github-actions:36229378530-attempt1",
+        "azure:github-landscape-intelligence-v1"
+      ],
+      "control_status": "CONTROLLED",
+      "regression_test": "LIVE_OIDC_PREFLIGHT"
+    },
+    {
+      "error_id": "ERR-20260926-010",
+      "detected_at": "2026-09-26",
+      "class": "NETWORK_VISIBILITY_BLOCK",
+      "phase": "tfstate-data-plane",
+      "symptom": "OIDC and management-plane reads passed; tfstate container data-plane read failed.",
+      "root_cause": "Storage network policy DefaultAction=Deny blocks the GitHub-hosted runner data-plane path.",
+      "early_signals": [
+        "Storage network posture was inspectable",
+        "No private endpoint; zero VNet rules; restricted IP/resource access rules"
+      ],
+      "human_cost": "No additional operator action required for current product objective",
+      "avoidable": false,
+      "prevention_rule": "Treat inaccessible required authority as SOURCE_VISIBILITY_GAP/HOLD_NETWORK; do not weaken network controls automatically.",
+      "automated_detection": "SCN-023 and triple-reconciliation regression test.",
+      "evidence_refs": [
+        "github-actions:36229378530-attempt2",
+        "SCN-023"
+      ],
+      "control_status": "ACCEPTED_GAP",
+      "regression_test": "test_missing_terraform_state_yields_visibility_gap_not_drift"
+    },
+    {
+      "error_id": "ERR-20260926-011",
+      "detected_at": "2026-09-26",
+      "class": "PRECHECK_MISS",
+      "phase": "session-orchestration",
+      "symptom": "Several independently discoverable prerequisites were found only after asking the operator to execute commands.",
+      "root_cause": "Prechecks were performed incrementally instead of exhausting available read-only evidence first.",
+      "early_signals": [
+        "GitHub connector available",
+        "Azure state could be indirectly validated through existing workflows and user-provided outputs",
+        "Repository files and workflows were inspectable"
+      ],
+      "human_cost": "Approximately an hour of avoidable operator interaction",
+      "avoidable": true,
+      "prevention_rule": "Before material human action, exhaust available read-only dependency, collision, compatibility, trigger and authority checks.",
+      "automated_detection": "Human-interaction efficiency register plus mandatory pre-action gate.",
+      "evidence_refs": [
+        "PROACTIVE_ERROR_LEARNING_POLICY_v0.1"
+      ],
+      "control_status": "CONTROLLED",
+      "regression_test": "test_error_register_contains_precheck_miss_and_required_fields"
+    },
+    {
+      "error_id": "ERR-20260926-012",
+      "detected_at": "2026-09-26",
+      "class": "REDUNDANT_HUMAN_ACTION",
+      "phase": "session-orchestration",
+      "symptom": "Operator was asked for sequential discovery commands that could have been consolidated or performed by connected tools.",
+      "root_cause": "Optimization targeted safe next-step progression rather than minimum necessary human interventions.",
+      "early_signals": [
+        "Available GitHub connector could inspect branch, workflow and source directly"
+      ],
+      "human_cost": "Excessive manual copy/paste and context switching",
+      "avoidable": true,
+      "prevention_rule": "Optimize for minimum operator interventions, not minimum assistant computation.",
+      "automated_detection": "Track avoidable=true entries and Human Interaction Efficiency.",
+      "evidence_refs": [
+        "PROACTIVE_ERROR_LEARNING_POLICY_v0.1"
+      ],
+      "control_status": "CONTROLLED",
+      "regression_test": "test_error_register_tracks_avoidable_human_cost"
+    },
+    {
+      "error_id": "ERR-20260926-013",
+      "detected_at": "2026-09-26",
+      "class": "PRIORITY_DRIFT",
+      "phase": "session-orchestration",
+      "symptom": "Infrastructure/network hardening began to dominate a session whose objective was Landscape Intelligence product advancement.",
+      "root_cause": "Technical curiosity and local completeness displaced the active product objective.",
+      "early_signals": [
+        "HOLD_NETWORK did not block model development",
+        "User explicitly redirected focus"
+      ],
+      "human_cost": "Attention diverted from primary deliverable",
+      "avoidable": true,
+      "prevention_rule": "Once a non-blocking issue is classified and evidenced, park it unless it gates the current objective.",
+      "automated_detection": "Task-objective checkpoint before opening a new remediation substream.",
+      "evidence_refs": [
+        "SCN-023",
+        "PROACTIVE_ERROR_LEARNING_POLICY_v0.1"
+      ],
+      "control_status": "CONTROLLED",
+      "regression_test": "test_error_register_includes_priority_drift"
+    },
+    {
+      "error_id": "ERR-20260926-014",
+      "detected_at": "2026-09-26",
+      "class": "INTENT_INTERPRETATION_MISS",
+      "phase": "conversation",
+      "symptom": "A sarcastic remark about spending two hours was interpreted literally.",
+      "root_cause": "Literal parsing overrode conversational intent and current task context.",
+      "early_signals": [
+        "User had repeatedly emphasized efficiency and focus",
+        "The literal request conflicted with the active synchronous workflow"
+      ],
+      "human_cost": "Unnecessary explanation and conversational friction",
+      "avoidable": true,
+      "prevention_rule": "When literal wording conflicts with established task intent, prefer contextual interpretation and avoid derailing the work.",
+      "automated_detection": "Qualitative conversation regression scenario; no execution authority implication.",
+      "evidence_refs": [
+        "session:sarcasm-miss"
+      ],
+      "control_status": "MITIGATED",
+      "regression_test": "PENDING_CONVERSATIONAL_INTENT_SCENARIO"
+    }
+  ]
+}
