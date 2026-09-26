@@ -144,3 +144,30 @@ This is the initial executable boundary between F2 normalization and F3 automate
 - Terraform/GitHub configuration mismatch continues to produce PENDING, not automatic remediation.
 
 The policy engine keeps severity, impact, adjudication, confidence, and authority as separate dimensions. No opaque aggregate score is required.
+
+## Committee Decision Cases
+
+The read-only projection `tools/landscape/decision_case.py` turns correlated findings into committee-ready cases without creating a decision.
+
+Each case assembles:
+
+- finding type, adjudication, severity, status and confidence
+- evidence references
+- multidimensional impacts
+- related cost context
+- dependencies
+- non-ranked alternatives
+- explicit decision and execution authority boundary
+
+The projection never selects an option, never creates a Decision Record, and never executes. Alternatives are presented for independent human adjudication.
+
+## Additional source adapters
+
+F2 source coverage now includes:
+
+- Security / RBAC
+- Application runtime
+- GitHub pull requests
+- COMITE / Drive human decisions
+
+A GitHub pull request is normalized as an observation, not an implicit decision. A COMITE decision becomes canonical only when explicit authority, rationale and status are present.
