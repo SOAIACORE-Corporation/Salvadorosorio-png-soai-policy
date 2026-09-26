@@ -390,6 +390,27 @@
       ],
       "control_status": "CONTROLLED",
       "regression_test": "DURABLE_MANIFEST_SMALL_BATCH_WRITE_PATTERN"
+    },
+    {
+      "error_id": "ERR-20260926-019",
+      "detected_at": "2026-09-26",
+      "class": "REGRESSION",
+      "phase": "source-adapter-implementation",
+      "symptom": "Connector safety controls again rejected a combined write after the prior TOOL_WRITE_POLICY_BLOCK had been marked CONTROLLED.",
+      "root_cause": "The prevention rule was documented but not yet enforced as an execution constraint; another combined update was attempted.",
+      "early_signals": [
+        "ERR-20260926-018 already established bounded semantic batches as the prevention pattern"
+      ],
+      "human_cost": "No operator intervention; execution switched immediately to one-file writes",
+      "avoidable": true,
+      "prevention_rule": "After a tool-size/policy block is controlled, enforce bounded writes for the remainder of the objective rather than treating the rule as advisory.",
+      "automated_detection": "Repeated tool block references the prior controlled error and is classified as REGRESSION.",
+      "evidence_refs": [
+        "ERR-20260926-018",
+        "session:second-connector-write-block"
+      ],
+      "control_status": "CONTROLLED",
+      "regression_test": "BOUNDED_WRITE_AFTER_CONNECTOR_POLICY_BLOCK"
     }
   ]
 }
