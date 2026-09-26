@@ -57,4 +57,4 @@ Expected result:
 - new adaptive cycle tests pass;
 - recoverable gaps are PARTIAL rather than falsely BLOCKED;
 - critical evidence/authority gaps block canonicalization;
-- human and methodology efficiency semantics remain deterministic.
+- human, recovery and methodology efficiency semantics remain deterministic.

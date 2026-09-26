@@ -49,7 +49,7 @@ The pilot is read-only. It may identify recovery/adjudication actions but does n
 
 ## DEMONSTRATE
 
-Publish three kinds of evidence:
+Publish four kinds of evidence:
 
 ### Context Integrity
 The existing deterministic continuity score and gates.
@@ -67,6 +67,16 @@ avoidable_human_actions / total_human_actions
 ```
 
 When no human action is needed, efficiency is 100% and avoidable rate is 0%.
+
+### Recovery Efficiency
+
+Measures recoverable execution errors resolved without human intervention:
+
+```text
+autonomously_resolved_recoverable_events / recoverable_events
+```
+
+Non-recoverable authority events are excluded from this denominator.
 
 ### Methodology efficiency
 

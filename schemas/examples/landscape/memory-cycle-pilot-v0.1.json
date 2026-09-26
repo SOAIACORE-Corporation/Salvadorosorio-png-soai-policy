@@ -62,5 +62,19 @@
       "executed": true,
       "changed_outcome": true
     }
+  ],
+  "recovery_events": [
+    {
+      "event_id": "source-discovery-miss",
+      "recoverable": true,
+      "resolved": true,
+      "human_intervention_required": false
+    },
+    {
+      "event_id": "metric-semantics-defect",
+      "recoverable": true,
+      "resolved": true,
+      "human_intervention_required": false
+    }
   ]
 }

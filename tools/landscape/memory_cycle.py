@@ -45,6 +45,42 @@ def assess_human_interaction_efficiency(events: list[dict[str, Any]] | None) -> 
     }
 
 
+
+def assess_recovery_efficiency(events: list[dict[str, Any]] | None) -> dict[str, Any]:
+    events = list(events or [])
+    recoverable = []
+    for event in events:
+        if not isinstance(event.get("recoverable"), bool):
+            raise ValueError("recovery events require boolean 'recoverable'")
+        if not isinstance(event.get("resolved"), bool):
+            raise ValueError("recovery events require boolean 'resolved'")
+        if not isinstance(event.get("human_intervention_required"), bool):
+            raise ValueError("recovery events require boolean 'human_intervention_required'")
+        if event["recoverable"]:
+            recoverable.append(event)
+
+    total = len(recoverable)
+    resolved = sum(1 for event in recoverable if event["resolved"])
+    autonomous = sum(
+        1
+        for event in recoverable
+        if event["resolved"] and not event["human_intervention_required"]
+    )
+    unresolved = total - resolved
+
+    if total == 0:
+        recovery_efficiency = 100.0
+    else:
+        recovery_efficiency = round(autonomous / total * 100, 2)
+
+    return {
+        "recoverable_events": total,
+        "resolved_recoverable_events": resolved,
+        "autonomously_resolved_events": autonomous,
+        "unresolved_recoverable_events": unresolved,
+        "recovery_efficiency_pct": recovery_efficiency,
+    }
+
 def assess_methodology_controls(controls: list[dict[str, Any]] | None) -> dict[str, Any]:
     controls = list(controls or [])
     executed = [control for control in controls if control.get("executed", True) is True]

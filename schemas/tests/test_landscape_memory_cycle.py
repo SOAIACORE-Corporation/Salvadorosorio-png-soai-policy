@@ -91,3 +91,23 @@ def test_invalid_human_event_fails_closed():
         pass
     else:
         raise AssertionError("ambiguous human-action requirement must fail closed")
+
+
+def test_recovery_efficiency_measures_autonomous_resolution():
+    result = assess_recovery_efficiency([
+        {"event_id":"path-miss","recoverable":True,"resolved":True,"human_intervention_required":False},
+        {"event_id":"syntax-fix","recoverable":True,"resolved":True,"human_intervention_required":False},
+        {"event_id":"approval","recoverable":False,"resolved":True,"human_intervention_required":True},
+    ])
+    assert result["recoverable_events"] == 2
+    assert result["autonomously_resolved_events"] == 2
+    assert result["recovery_efficiency_pct"] == 100
+
+
+def test_unresolved_recoverable_event_reduces_recovery_efficiency():
+    result = assess_recovery_efficiency([
+        {"event_id":"a","recoverable":True,"resolved":True,"human_intervention_required":False},
+        {"event_id":"b","recoverable":True,"resolved":False,"human_intervention_required":False},
+    ])
+    assert result["recovery_efficiency_pct"] == 50
+    assert result["unresolved_recoverable_events"] == 1
