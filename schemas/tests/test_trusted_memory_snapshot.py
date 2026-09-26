@@ -12,6 +12,7 @@ from trusted_memory import (  # noqa: E402
     postgres_projection,
     reconstruct_from_snapshot,
     recovery_decision,
+    validate_evidence_inventory,
     seal_snapshot,
     validate_manifest,
     validate_snapshot,
@@ -57,6 +58,16 @@ def _snapshot():
     })
 
 
+def _evidence_inventory():
+    return {
+        "inventory_id":"EV-TEST-001",
+        "evidence":[
+            {"evidence_id":"EV-1","objective_id":"OBJ-1","quality":"CONFIRMED","freshness":"CURRENT"},
+            {"evidence_id":"EV-2","objective_id":"OBJ-1","quality":"MISSING","freshness":"UNKNOWN"},
+        ],
+    }
+
+
 def _manifest(snapshot):
     return {
         "manifest_id":"RM-1",
@@ -69,8 +80,8 @@ def _manifest(snapshot):
             "expected_hash":snapshot["content_sha256"],
         },
         "requirements":[
-            {"requirement_id":"REQ-1","criticality":"critical","status":"CONFIRMED"},
-            {"requirement_id":"REQ-2","criticality":"necessary","status":"MISSING"},
+            {"requirement_id":"REQ-1","criticality":"critical","status":"CONFIRMED","evidence_ids":["EV-1"]},
+            {"requirement_id":"REQ-2","criticality":"necessary","status":"MISSING","evidence_ids":["EV-2"]},
         ],
     }
 
@@ -197,3 +208,38 @@ def test_postgres_projection_reuses_existing_bitemporal_model():
     assert projection["canonical_memory"]["epistemic_class"]=="CONFIRMED_CONTEXT"
     assert projection["canonical_memory"]["admission_state"]=="ADMITTED"
     assert projection["operational_state"]["source_authority"]=="TRUSTED_MEMORY_SNAPSHOT"
+
+
+def test_evidence_inventory_requires_confirmed_fresh_matching_evidence():
+    snapshot=_snapshot()
+    manifest=_manifest(snapshot)
+    inventory=_evidence_inventory()
+    result=validate_evidence_inventory(manifest,inventory,objective_id="OBJ-1")
+    assert result["valid"] is True
+
+
+def test_evidence_inventory_rejects_stale_as_confirmed():
+    snapshot=_snapshot()
+    manifest=_manifest(snapshot)
+    inventory=_evidence_inventory()
+    inventory["evidence"][0]["freshness"]="STALE"
+    result=validate_evidence_inventory(manifest,inventory,objective_id="OBJ-1")
+    assert result["valid"] is False
+    assert any("stale_evidence_as_current" in e for e in result["errors"])
+
+
+def test_evidence_inventory_rejects_wrong_objective_correlation():
+    snapshot=_snapshot()
+    manifest=_manifest(snapshot)
+    inventory=_evidence_inventory()
+    inventory["evidence"][0]["objective_id"]="OBJ-OTHER"
+    result=validate_evidence_inventory(manifest,inventory,objective_id="OBJ-1")
+    assert result["valid"] is False
+    assert any("evidence_objective_mismatch" in e for e in result["errors"])
+
+
+def test_blind_reconstruction_requires_manifest_and_evidence_to_agree():
+    snapshot=_snapshot()
+    manifest=_manifest(snapshot)
+    recovered=reconstruct_from_snapshot(snapshot,manifest,_evidence_inventory())
+    assert recovered["objective"]["objective_id"]=="OBJ-1"
