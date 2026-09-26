@@ -111,7 +111,9 @@ def verify_resume_snapshot(
 
     baseline_pending = set(baseline.get("pending_ids", []))
     resumed_pending = set(resumed.get("pending_ids", []))
-    lost_pending = sorted(baseline_pending - resumed_pending)
+    completed_since_checkpoint = set(resumed.get("completed_since_checkpoint_ids", []))
+    accounted_pending = resumed_pending | completed_since_checkpoint
+    lost_pending = sorted(baseline_pending - accounted_pending)
     invented_pending = sorted(resumed_pending - baseline_pending)
 
     baseline_evidence = set(baseline.get("evidence_refs", []))
@@ -128,6 +130,7 @@ def verify_resume_snapshot(
         "mismatches": mismatches,
         "lost_pending_ids": lost_pending,
         "invented_pending_ids": invented_pending,
+        "completed_since_checkpoint_ids": sorted(completed_since_checkpoint),
         "lost_evidence_refs": lost_evidence,
         "execution_continuity": resumed.get("external_execution_status") == "SUCCESS",
         "observation_continuity": resumed.get("observation_channel_status") == "RECOVERED",
