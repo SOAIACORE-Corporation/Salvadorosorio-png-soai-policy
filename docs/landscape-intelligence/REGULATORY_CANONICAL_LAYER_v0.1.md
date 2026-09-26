@@ -36,17 +36,28 @@ The engine must know which tier supports each claim.
 
 ## Freshness semantics
 
+Canonical source freshness remains:
 - current
 - stale
 - unknown
 
-A stale/unknown regulatory basis does not shut down cognition.
+The deterministic assessment layer additionally exposes:
+- CURRENT
+- DUE_FOR_REVERIFY
+- STALE
+- UNKNOWN
+
+Freshness is derived from `verified_at` plus explicit policy windows (`due_after_hours`, `stale_after_hours`). HTTP reachability or page existence never makes a regulatory source current by itself.
+
+`DUE_FOR_REVERIFY` is intentionally distinct from `STALE`: the source remains canonically current but its verification window is approaching the stale boundary. A stale/unknown regulatory basis does not shut down cognition.
 
 It does:
 - permit analysis,
 - mark uncertainty,
 - require refresh/review,
 - block material execution when the regulatory basis is required.
+
+A future, missing or invalid verification timestamp becomes UNKNOWN and fails closed for material execution.
 
 ## Exception semantics
 
