@@ -233,6 +233,19 @@ Expected:
 - Produce one integrated result for OBSERVE → UNDERSTAND → RESOLVE → DEMONSTRATE.
 
 
+#### SCN-026 · Durable evidence to Recovery Manifest
+A recovery objective has a declared policy of required evidence and a durable evidence inventory containing commits, CI outcomes, receipts and source observations. One required item is absent or stale.
+
+Expected:
+- Keep requirement policy separate from observed evidence.
+- Derive requirement status deterministically from evidence.
+- Missing evidence becomes `MISSING`, never implicitly healthy or false.
+- Stale evidence becomes `STALE`, never current.
+- Partial/unknown evidence must not be promoted to `CONFIRMED`.
+- Preserve evidence IDs and source references for every requirement.
+- Feed the generated manifest directly into the Memory Integrity Cycle.
+- Missing required authority or material primary evidence must still activate the existing fail-closed gates.
+
 The pack is successful when the system can:
 1. detect complex contradictions,
 2. surface missing information,
