@@ -132,3 +132,15 @@ Reconciliation is intentionally conservative:
 6. Evidence refs from both sides are preserved in the finding.
 
 This is the initial executable boundary between F2 normalization and F3 automated correlation.
+
+## Initial F3 correlation policies
+
+`tools/landscape/correlate.py` adds explainable, read-only policies:
+
+- Unknown cost → VISIBILITY_GAP + financial impact UNKNOWN.
+- Stale or expired source → VISIBILITY_GAP, never FIX.
+- Degraded monitoring → PENDING risk; availability impact remains UNKNOWN until domain assessment.
+- Critical health may carry CRITICAL severity while adjudication remains PENDING.
+- Terraform/GitHub configuration mismatch continues to produce PENDING, not automatic remediation.
+
+The policy engine keeps severity, impact, adjudication, confidence, and authority as separate dimensions. No opaque aggregate score is required.
