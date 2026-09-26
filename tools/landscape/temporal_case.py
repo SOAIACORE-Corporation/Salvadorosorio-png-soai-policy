@@ -42,6 +42,7 @@ def temporal_decision_cases(patterns: list[dict[str, Any]]) -> list[dict[str, An
                 "ai_role":"ANALYZE_AND_RECOMMEND_ONLY",
                 "decision_owner":"OWNER_REQUIRED",
                 "execution_authority":"SEPARATE_APPROVAL_REQUIRED",
+                "exception_authority":"SOA / Salvador Osorio Ayala",
             },
         })
     return cases
