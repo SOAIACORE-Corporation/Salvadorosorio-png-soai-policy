@@ -28,3 +28,17 @@ def test_powershell_preflight_avoids_pwsh7_only_shortcuts():
     text = SCRIPT.read_text(encoding="utf-8")
     assert "&&" not in text
     assert "??" not in text
+
+
+def test_bootstrap_uses_isolated_landscape_oidc_credential_and_branch():
+    bootstrap = (ROOT / "scripts" / "azure" / "Bootstrap-SOAIntelligenceGitHubOidc.ps1").read_text(encoding="utf-8")
+    assert "[string]$FeatureBranch = 'feat/landscape-intelligence-data-model-v1'" in bootstrap
+    assert "[string]$FeatureCredentialName = 'github-landscape-intelligence-v1'" in bootstrap
+    assert "Ensure-FederatedCredential -Name $FeatureCredentialName -Subject $featureSubject" in bootstrap
+    assert "Ensure-FederatedCredential -Name 'github-feature-a2' -Subject $featureSubject" not in bootstrap
+    assert "Get-FederatedCredentialByName -Name 'github-pr'" in bootstrap
+
+
+def test_azure_auth_workflow_listens_to_landscape_branch():
+    workflow = (ROOT / ".github" / "workflows" / "azure-soa-intelligence-auth-preflight.yml").read_text(encoding="utf-8")
+    assert "- feat/landscape-intelligence-data-model-v1" in workflow
