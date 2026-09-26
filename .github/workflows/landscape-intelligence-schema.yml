@@ -31,4 +31,4 @@ jobs:
       - name: Sync frozen workspace
         run: uv sync --frozen
       - name: Validate canonical schema and fixtures
-        run: uv run --frozen pytest -q schemas/tests/test_landscape_intelligence_schema.py schemas/tests/test_landscape_normalizer.py
+        run: uv run --frozen pytest -q schemas/tests
