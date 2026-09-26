@@ -1,9 +1,13 @@
 import json
 from pathlib import Path
+import sys
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools" / "landscape"))
 REGISTER = ROOT / "schemas" / "examples" / "landscape" / "operating-error-register-v0.1.json"
 POLICY = ROOT / "docs" / "landscape-intelligence" / "PROACTIVE_ERROR_LEARNING_POLICY_v0.1.md"
+
+from error_register import load_error_register  # noqa: E402
 
 REQUIRED_FIELDS = {
     "error_id", "detected_at", "class", "phase", "symptom", "root_cause",
@@ -15,7 +19,7 @@ ALLOWED_STATUS = {"OPEN", "MITIGATED", "CONTROLLED", "ACCEPTED_GAP"}
 
 
 def _load():
-    return json.loads(REGISTER.read_text(encoding="utf-8"))
+    return load_error_register(ROOT)
 
 
 def test_error_learning_policy_declares_precheck_and_human_efficiency():
@@ -82,3 +86,10 @@ def test_policy_executes_by_objective_not_microstep():
     assert "INTEGRATED VALIDATION" in text
     assert "Technical curiosity never outranks the declared objective" in text
     assert "capability to act is not itself a reason to act" in text
+
+
+def test_append_only_error_events_are_part_of_logical_matrix():
+    data = _load()
+    assert data["append_only_event_count"] >= 1
+    ids = {entry["error_id"] for entry in data["entries"]}
+    assert "ERR-20260926-020" in ids
