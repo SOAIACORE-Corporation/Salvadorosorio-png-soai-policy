@@ -122,3 +122,60 @@ def test_missing_required_source_is_visibility_gap_not_healthy():
 
 def test_one_source_only_does_not_invent_drift_or_visibility_case():
     assert reconcile_triple([_tf()]) == []
+
+
+def test_missing_terraform_state_yields_visibility_gap_not_drift():
+    records = [
+        {
+            "schema_version": "0.1",
+            "record_id": "obs:azure:db",
+            "record_type": "observation",
+            "source": {
+                "source_id": "azure-live",
+                "system": "azure",
+                "source_type": "api",
+                "location": "arm",
+                "collected_at": "2026-09-26T08:22:20Z",
+                "hash": None,
+                "freshness": "current",
+                "trust_level": "authoritative",
+            },
+            "observed_at": "2026-09-26T08:22:20Z",
+            "payload": {
+                "observation_id": "obs:azure:db",
+                "asset_id": "asset:postgresql:p0",
+                "fact_type": "config",
+                "value": {"sku": "B_Standard_B1ms", "public_network_access": False},
+            },
+        },
+        {
+            "schema_version": "0.1",
+            "record_id": "obs:github:db",
+            "record_type": "observation",
+            "source": {
+                "source_id": "github-iac",
+                "system": "github",
+                "source_type": "repository",
+                "location": "infra/azure/p0/data.tf",
+                "collected_at": "2026-09-26T08:22:20Z",
+                "hash": None,
+                "freshness": "current",
+                "trust_level": "authoritative",
+            },
+            "observed_at": "2026-09-26T08:22:20Z",
+            "payload": {
+                "observation_id": "obs:github:db",
+                "asset_id": "asset:postgresql:p0",
+                "fact_type": "config",
+                "value": {"intent": {"sku": "B_Standard_B1ms", "public_network_access": False}},
+            },
+        },
+    ]
+
+    findings = reconcile_triple(records)
+    assert len(findings) == 1
+    finding = findings[0]["payload"]
+    assert finding["classification"] == "SOURCE_VISIBILITY_GAP"
+    assert finding["adjudication"] == "VISIBILITY_GAP"
+    assert finding["type"] == "visibility_gap"
+    assert finding["severity"] == "UNKNOWN"
