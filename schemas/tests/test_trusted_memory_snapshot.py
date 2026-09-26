@@ -253,3 +253,7 @@ def test_blind_reconstruction_requires_manifest_and_evidence_to_agree():
     manifest=_manifest(snapshot)
     recovered=reconstruct_from_snapshot(snapshot,manifest,_evidence_inventory())
     assert recovered["objective"]["objective_id"]=="OBJ-1"
+
+
+def test_canonical_hash_is_stable_for_integral_float_representation():
+    assert sha256_hex({"value":100}) == sha256_hex({"value":100.0})
