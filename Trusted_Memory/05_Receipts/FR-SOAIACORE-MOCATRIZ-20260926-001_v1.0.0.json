@@ -59,6 +59,46 @@
         "functional endpoint success without durable functional evidence"
       ]
     },
-    "final_head_gate": "PENDING_FINAL_RECEIPT_HEAD_CI"
+    "final_head_gate": "PASS",
+    "validated_content_head": "9db4dd3dd353a31d13af04cd843cf86444c4fb59",
+    "final_ci": [
+      {
+        "workflow": "Landscape Intelligence Schema",
+        "run_number": 188,
+        "run_id": 36242997067,
+        "result": "SUCCESS"
+      },
+      {
+        "workflow": "Terraform SOA Intelligence DEV Static",
+        "run_number": 132,
+        "run_id": 36242997031,
+        "result": "SUCCESS"
+      },
+      {
+        "workflow": "SOA Intelligence A2 Persistence Static",
+        "run_number": 60,
+        "run_id": 36242997094,
+        "result": "SUCCESS"
+      },
+      {
+        "workflow": "SOA Intelligence Worker OCI Runtime Smoke",
+        "run_number": 86,
+        "run_id": 36242997116,
+        "result": "SUCCESS"
+      },
+      {
+        "workflow": "OCI Build, Scan, and Publish",
+        "run_number": 244,
+        "run_id": 36242997247,
+        "result": "SUCCESS"
+      },
+      {
+        "workflow": "PR #84",
+        "run_number": 440,
+        "run_id": 36242996098,
+        "result": "SUCCESS"
+      }
+    ],
+    "receipt_self_reference_policy": "The receipt records the validated content head; its own metadata-only closure commit is externally CI-verified and does not alter the frozen Snapshot/Manifest hashes."
   }
 }
