@@ -180,8 +180,8 @@ def methodology_telemetry(events: list[dict[str, Any]]) -> dict[str, Any]:
             if event.get("success") is True:
                 counts["correlation_success_count"] += 1
 
-    def ratio(num: int, den: int) -> float:
-        return 100.0 if den == 0 else round(num / den * 100, 2)
+    def ratio(num: int, den: int) -> float | None:
+        return None if den == 0 else round(num / den * 100, 2)
 
     return {
         **counts,
@@ -194,4 +194,7 @@ def methodology_telemetry(events: list[dict[str, Any]]) -> dict[str, Any]:
         "correlation_integrity_pct": ratio(
             counts["correlation_success_count"], counts["correlation_attempt_count"]
         ),
+        "recovery_efficiency_applicable": counts["recovery_attempt_count"] > 0,
+        "resume_success_applicable": counts["resume_attempt_count"] > 0,
+        "correlation_integrity_applicable": counts["correlation_attempt_count"] > 0,
     }
