@@ -7,6 +7,7 @@ sys.path.insert(0, str(ROOT / "tools" / "landscape"))
 from memory_cycle import (  # noqa: E402
     assess_human_interaction_efficiency,
     assess_methodology_controls,
+    assess_recovery_efficiency,
     run_memory_cycle,
 )
 
@@ -28,6 +29,9 @@ def test_complete_cycle_is_eligible_and_reuses_context_integrity():
     result = run_memory_cycle(
         _manifest(),
         human_interactions=[{"action_id":"h1","required":True}],
+        recovery_events=[
+            {"event_id":"r1","recoverable":True,"resolved":True,"human_intervention_required":False},
+        ],
         controls=[
             {"control_id":"c1","executed":True,"changed_outcome":True},
             {"control_id":"c2","executed":True,"changed_outcome":False},
@@ -38,6 +42,7 @@ def test_complete_cycle_is_eligible_and_reuses_context_integrity():
     assert result["resolve"]["canonicalization_status"] == "ELIGIBLE"
     assert result["resolve"]["automatic_source_mutation"] is False
     assert result["demonstrate"]["human_interaction"]["human_interaction_efficiency_pct"] == 100
+    assert result["demonstrate"]["recovery_efficiency"]["recovery_efficiency_pct"] == 100
 
 
 def test_missing_authority_blocks_canonicalization_without_inventing_certainty():
@@ -73,26 +78,6 @@ def test_no_human_actions_is_not_penalized():
     assert result["avoidable_human_interaction_rate_pct"] == 0
 
 
-def test_control_yield_and_overhead_have_consistent_semantics():
-    result = assess_methodology_controls([
-        {"control_id":"inventory","executed":True,"changed_outcome":True},
-        {"control_id":"authority","executed":True,"changed_outcome":True},
-        {"control_id":"redundant","executed":True,"changed_outcome":False},
-    ])
-    assert result["control_yield_pct"] == 66.67
-    assert result["methodological_overhead_pct"] == 33.33
-    assert round(result["control_yield_pct"] + result["methodological_overhead_pct"], 2) == 100
-
-
-def test_invalid_human_event_fails_closed():
-    try:
-        assess_human_interaction_efficiency([{"action_id":"x","required":"maybe"}])
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("ambiguous human-action requirement must fail closed")
-
-
 def test_recovery_efficiency_measures_autonomous_resolution():
     result = assess_recovery_efficiency([
         {"event_id":"path-miss","recoverable":True,"resolved":True,"human_intervention_required":False},
@@ -111,3 +96,23 @@ def test_unresolved_recoverable_event_reduces_recovery_efficiency():
     ])
     assert result["recovery_efficiency_pct"] == 50
     assert result["unresolved_recoverable_events"] == 1
+
+
+def test_control_yield_and_overhead_have_consistent_semantics():
+    result = assess_methodology_controls([
+        {"control_id":"inventory","executed":True,"changed_outcome":True},
+        {"control_id":"authority","executed":True,"changed_outcome":True},
+        {"control_id":"redundant","executed":True,"changed_outcome":False},
+    ])
+    assert result["control_yield_pct"] == 66.67
+    assert result["methodological_overhead_pct"] == 33.33
+    assert round(result["control_yield_pct"] + result["methodological_overhead_pct"], 2) == 100
+
+
+def test_invalid_human_event_fails_closed():
+    try:
+        assess_human_interaction_efficiency([{"action_id":"x","required":"maybe"}])
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("ambiguous human-action requirement must fail closed")

@@ -346,6 +346,28 @@
       ],
       "control_status": "CONTROLLED",
       "regression_test": "test_control_yield_and_overhead_have_consistent_semantics"
+    },
+    {
+      "error_id": "ERR-20260926-017",
+      "detected_at": "2026-09-26",
+      "class": "PATCH_APPLICATION_MISS",
+      "phase": "memory-cycle-implementation",
+      "symptom": "Recovery Efficiency function was added, but exact-string patching failed to wire it into imports and run_memory_cycle.",
+      "root_cause": "Implementation used brittle text replacements whose target strings did not exactly match the current file.",
+      "early_signals": [
+        "Multiple dependent edits were being applied through literal string replacement",
+        "No post-patch structural assertion verified imports and function signature before CI"
+      ],
+      "human_cost": "No operator intervention; one additional CI recovery cycle",
+      "avoidable": true,
+      "prevention_rule": "For multi-location semantic edits, rewrite the bounded module/test explicitly or verify every expected structural marker before commit.",
+      "automated_detection": "Landscape CI exposed NameError; regression test now imports and executes Recovery Efficiency through run_memory_cycle.",
+      "evidence_refs": [
+        "github-actions:36233244457",
+        "schemas/tests/test_landscape_memory_cycle.py"
+      ],
+      "control_status": "CONTROLLED",
+      "regression_test": "test_complete_cycle_is_eligible_and_reuses_context_integrity"
     }
   ]
 }

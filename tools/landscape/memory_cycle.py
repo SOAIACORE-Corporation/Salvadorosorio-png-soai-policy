@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Adaptive memory-integrity cycle for SOAiaCore / Landscape Intelligence.
 
-The cycle composes existing evidentiary continuity with two execution-quality
+The cycle composes existing evidentiary continuity with three execution-quality
 metrics. It remains read-only: it assesses evidence and execution traces but
 does not mutate source systems or grant authority.
 """
@@ -45,7 +45,6 @@ def assess_human_interaction_efficiency(events: list[dict[str, Any]] | None) -> 
     }
 
 
-
 def assess_recovery_efficiency(events: list[dict[str, Any]] | None) -> dict[str, Any]:
     events = list(events or [])
     recoverable = []
@@ -68,10 +67,7 @@ def assess_recovery_efficiency(events: list[dict[str, Any]] | None) -> dict[str,
     )
     unresolved = total - resolved
 
-    if total == 0:
-        recovery_efficiency = 100.0
-    else:
-        recovery_efficiency = round(autonomous / total * 100, 2)
+    recovery_efficiency = 100.0 if total == 0 else round(autonomous / total * 100, 2)
 
     return {
         "recoverable_events": total,
@@ -80,6 +76,7 @@ def assess_recovery_efficiency(events: list[dict[str, Any]] | None) -> dict[str,
         "unresolved_recoverable_events": unresolved,
         "recovery_efficiency_pct": recovery_efficiency,
     }
+
 
 def assess_methodology_controls(controls: list[dict[str, Any]] | None) -> dict[str, Any]:
     controls = list(controls or [])
@@ -113,13 +110,10 @@ def run_memory_cycle(
     manifest: dict[str, Any],
     *,
     human_interactions: list[dict[str, Any]] | None = None,
+    recovery_events: list[dict[str, Any]] | None = None,
     controls: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Run OBSERVE → UNDERSTAND → RESOLVE → DEMONSTRATE.
-
-    The function intentionally does not auto-correct durable sources. It
-    identifies what can be canonicalized and what evidence remains unresolved.
-    """
+    """Run OBSERVE → UNDERSTAND → RESOLVE → DEMONSTRATE."""
 
     recovery = assess_recovery_manifest(manifest)
     counts = recovery["requirement_counts"]
@@ -140,11 +134,10 @@ def run_memory_cycle(
     resolution_actions = [
         f"RECOVER_OR_ADJUDICATE:{requirement_id}"
         for requirement_id in unresolved
-    ]
-    if not resolution_actions:
-        resolution_actions = ["NO_CORRECTIVE_ACTION_REQUIRED"]
+    ] or ["NO_CORRECTIVE_ACTION_REQUIRED"]
 
     human = assess_human_interaction_efficiency(human_interactions)
+    recovery_efficiency = assess_recovery_efficiency(recovery_events)
     method = assess_methodology_controls(controls)
 
     return {
@@ -170,6 +163,7 @@ def run_memory_cycle(
         "demonstrate": {
             "context_integrity": recovery,
             "human_interaction": human,
+            "recovery_efficiency": recovery_efficiency,
             "methodology_efficiency": method,
         },
         "semantics": {
