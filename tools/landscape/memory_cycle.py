@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from recovery_manifest import assess_recovery_manifest
+from recovery_manifest_builder import build_recovery_manifest
 
 
 CRITICAL_GATES = {
@@ -173,3 +174,28 @@ def run_memory_cycle(
             "adaptivity_rule": "Recoverable friction may be corrected or bypassed; critical evidence or authority gates stop canonicalization.",
         },
     }
+
+
+def run_memory_cycle_from_evidence(
+    evidence: list[dict[str, Any]],
+    *,
+    requirements: list[dict[str, Any]] | None = None,
+    verbatim_dialogue_unrecovered: bool = False,
+    human_interactions: list[dict[str, Any]] | None = None,
+    recovery_events: list[dict[str, Any]] | None = None,
+    controls: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Generate the Recovery Manifest from durable evidence and run the cycle."""
+    manifest = build_recovery_manifest(
+        evidence,
+        requirements=requirements,
+        verbatim_dialogue_unrecovered=verbatim_dialogue_unrecovered,
+    )
+    result = run_memory_cycle(
+        manifest,
+        human_interactions=human_interactions,
+        recovery_events=recovery_events,
+        controls=controls,
+    )
+    result["generated_manifest"] = manifest
+    return result
