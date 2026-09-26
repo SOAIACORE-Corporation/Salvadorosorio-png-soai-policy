@@ -100,7 +100,6 @@ def verify_resume_snapshot(
         "objective_id",
         "scope_id",
         "rule_set_id",
-        "state_version",
         "closure_contract_id",
     )
 
@@ -120,14 +119,23 @@ def verify_resume_snapshot(
     lost_evidence = sorted(baseline_evidence - resumed_evidence)
 
     return {
-        "checkpoint_match": not mismatches and not lost_pending and not lost_evidence,
+        "checkpoint_match": (
+            not mismatches
+            and not lost_pending
+            and not lost_evidence
+            and resumed.get("source_checkpoint_id") == baseline.get("checkpoint_id")
+        ),
         "mismatches": mismatches,
         "lost_pending_ids": lost_pending,
         "invented_pending_ids": invented_pending,
         "lost_evidence_refs": lost_evidence,
         "execution_continuity": resumed.get("external_execution_status") == "SUCCESS",
         "observation_continuity": resumed.get("observation_channel_status") == "RECOVERED",
-        "memory_continuity": not mismatches and not lost_pending,
+        "memory_continuity": (
+            not mismatches
+            and not lost_pending
+            and resumed.get("source_checkpoint_id") == baseline.get("checkpoint_id")
+        ),
         "resumption_continuity": resumed.get("resume_from_id") == baseline.get("resume_from_id"),
     }
 
