@@ -271,6 +271,7 @@ def normalize_security_rbac(raw: dict[str, Any], *, source: dict[str, Any]) -> d
                 "role": raw["role"],
                 "inherited": bool(raw.get("inherited", False)),
                 "assignment_id": raw.get("assignment_id"),
+                "scope_level": raw.get("scope_level", "unknown"),
             },
             "unit": None,
             "evidence_refs": raw.get("evidence_refs", []),
