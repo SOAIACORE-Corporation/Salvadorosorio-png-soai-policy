@@ -301,6 +301,29 @@
       ],
       "control_status": "MITIGATED",
       "regression_test": "PENDING_CONVERSATIONAL_INTENT_SCENARIO"
+    },
+    {
+      "error_id": "ERR-20260926-015",
+      "detected_at": "2026-09-26",
+      "class": "EXISTING_SECURITY_GATE_CONDITION",
+      "phase": "oci-security-gate",
+      "symptom": "OCI Build, Scan, and Publish fails at the fixable HIGH/CRITICAL Trivy enforcement gate while runtime tests and image builds pass.",
+      "root_cause": "At least one scanned OCI image contains fixable HIGH/CRITICAL findings under the existing security policy; this condition predates the final Landscape control changes.",
+      "early_signals": [
+        "Equivalent OCI failures recur across earlier Landscape branch runs",
+        "Core/Worker runtime tests, Web BFF build, and all image builds succeed before the security gate"
+      ],
+      "human_cost": "Potential distraction into a separate container-security remediation stream during Landscape work",
+      "avoidable": false,
+      "prevention_rule": "Keep the security gate fail-closed and visible; do not weaken or bypass it. Treat remediation as a separate objective unless image publication or production release is in current scope.",
+      "automated_detection": "OCI workflow Trivy fixable HIGH/CRITICAL gate",
+      "evidence_refs": [
+        "github-actions:36231314578",
+        "github-actions:36230732478",
+        "receipts/LANDSCAPE_INTELLIGENCE_OBJECTIVE_CLOSURE_2026-09-26.md"
+      ],
+      "control_status": "ACCEPTED_GAP",
+      "regression_test": "OCI_BUILD_SCAN_PUBLISH_SECURITY_GATE"
     }
   ]
 }
