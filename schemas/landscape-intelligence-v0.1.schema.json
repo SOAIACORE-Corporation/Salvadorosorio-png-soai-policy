@@ -829,7 +829,13 @@
           "then": {
             "required": [
               "formula"
-            ]
+            ],
+            "properties": {
+              "formula": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
           }
         }
       ]
