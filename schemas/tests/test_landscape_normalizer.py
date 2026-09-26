@@ -90,3 +90,58 @@ def test_normalizer_rejects_unsupported_source_kind():
         assert "unsupported kind" in str(exc)
     else:
         raise AssertionError("normalizer must reject execution-oriented kinds")
+
+
+def test_normalize_terraform_state_observation():
+    record = normalize(
+        "terraform-state",
+        {
+            "observation_id": "obs:tf:psql",
+            "asset_id": "azure:sub:psql",
+            "address": "azurerm_postgresql_flexible_server.pilot",
+            "resource_type": "postgresql_flexible_server",
+            "native_id": "psql",
+            "attributes": {"public_network_access": "Disabled", "sku": "Standard_B1ms"},
+            "observed_at": "2026-09-25T22:29:14Z",
+        },
+    )
+    assert record["record_type"] == "observation"
+    assert record["source"]["system"] == "terraform"
+    assert record["payload"]["value"]["sku"] == "Standard_B1ms"
+
+
+def test_normalize_github_iac_preserves_declarative_intent():
+    record = normalize(
+        "github-iac",
+        {
+            "observation_id": "obs:git:psql",
+            "asset_id": "azure:sub:psql",
+            "repo": "SOAIACORE-Corporation/Salvadorosorio-png-soai-policy",
+            "commit": "fc60164b",
+            "path": "infra/azure/p0/main.tf",
+            "intent": {"resource_type": "postgresql_flexible_server", "public_network_access": "Disabled"},
+            "observed_at": "2026-09-25T22:29:14Z",
+        },
+    )
+    assert record["source"]["system"] == "github"
+    assert record["payload"]["value"]["intent"]["public_network_access"] == "Disabled"
+
+
+def test_normalize_monitoring_keeps_window_and_threshold():
+    record = normalize(
+        "monitoring",
+        {
+            "observation_id": "obs:monitor:core-health",
+            "asset_id": "azure:sub:core",
+            "metric": "FailedRequests",
+            "state": "Healthy",
+            "value": 0,
+            "threshold": 1,
+            "window": "PT5M",
+            "unit": "count",
+            "observed_at": "2026-09-25T22:29:14Z",
+        },
+    )
+    assert record["source"]["system"] == "monitoring"
+    assert record["payload"]["value"]["window"] == "PT5M"
+    assert record["payload"]["unit"] == "count"
