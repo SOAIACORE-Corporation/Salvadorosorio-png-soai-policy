@@ -18,6 +18,8 @@ Write-Check 'PREFLIGHT_MODE' 'READ_ONLY'
 Write-Check 'POWERSHELL_EDITION' $PSVersionTable.PSEdition
 Write-Check 'POWERSHELL_VERSION' $PSVersionTable.PSVersion.ToString()
 Write-Check 'CURRENT_DIRECTORY' (Get-Location).Path
+Write-Check 'EXECUTION_POLICY_PROCESS' (Get-ExecutionPolicy -Scope Process)
+Write-Check 'EXECUTION_POLICY_CURRENT_USER' (Get-ExecutionPolicy -Scope CurrentUser)
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $BootstrapScript = Join-Path $PSScriptRoot 'Bootstrap-SOAIntelligenceGitHubOidc.ps1'
@@ -30,6 +32,28 @@ if (-not (Test-Path -LiteralPath $BootstrapScript -PathType Leaf)) {
     throw 'Bootstrap script not found. Stop before attempting execution.'
 }
 Write-Check 'BOOTSTRAP_SCRIPT_EXISTS' 'true'
+
+$GitCommand = Get-Command git -ErrorAction SilentlyContinue
+if ($null -eq $GitCommand) {
+    Write-Check 'GIT_AVAILABLE' 'false'
+    throw 'Git was not found in PATH.'
+}
+Write-Check 'GIT_AVAILABLE' 'true'
+
+$Refspec = (& git -C $RepoRoot config --get-all remote.origin.fetch) -join ';'
+Write-Check 'GIT_REMOTE_FETCH' $Refspec
+$RefspecRestricted = ($Refspec -match 'refs/heads/main:refs/remotes/origin/main') -and ($Refspec -notmatch 'refs/heads/\*:refs/remotes/origin/\*')
+Write-Check 'GIT_REFSPEC_RESTRICTED' ($RefspecRestricted.ToString().ToLowerInvariant())
+
+$GitStatus = @(& git -C $RepoRoot status --porcelain)
+$WorkspaceDirty = ($GitStatus.Count -gt 0)
+Write-Check 'WORKSPACE_DIRTY' ($WorkspaceDirty.ToString().ToLowerInvariant())
+Write-Check 'WORKSPACE_CHANGE_COUNT' $GitStatus.Count
+if ($WorkspaceDirty) {
+    Write-Check 'WORKSPACE_BRANCH_MUTATION_RISK' 'true'
+} else {
+    Write-Check 'WORKSPACE_BRANCH_MUTATION_RISK' 'false'
+}
 
 $AzCommand = Get-Command az -ErrorAction SilentlyContinue
 if ($null -eq $AzCommand) {
