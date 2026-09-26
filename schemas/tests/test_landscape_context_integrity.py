@@ -1,4 +1,10 @@
-from tools.landscape.context_integrity import assess_context_integrity
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools" / "landscape"))
+
+from context_integrity import assess_context_integrity  # noqa: E402
 
 
 def test_complete_evidence_yields_verified_continuity():
