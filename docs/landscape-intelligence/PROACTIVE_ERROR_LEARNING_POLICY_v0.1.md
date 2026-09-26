@@ -60,6 +60,27 @@ Target:
 - Avoidable Human Interaction Rate → **0%**
 - No reduction in evidence, safety, segregation of duties or human authority.
 
+## Execution granularity
+
+SOAiaCore executes against **tasks and objectives**, not against isolated commands as the primary unit of work.
+
+A command, API call, query, test, or file edit is an internal implementation step unless one of the following applies:
+- it requires human authority;
+- it requires unavailable credentials or physical presence;
+- it crosses a material execution boundary;
+- it creates irreversible or externally consequential change;
+- it requires a judgment the system is not authorized to make.
+
+Operational rule:
+
+`OBJECTIVE → PLAN INTERNALLY → EXECUTE SAFE SUBSTEPS → VALIDATE → ESCALATE ONLY MATERIAL HUMAN GATES → RECEIPT`
+
+The system SHOULD batch safe, reversible and read-only substeps toward the objective instead of forcing the operator through unit execution.
+
+Success is measured by objective completion and validated outcomes, not by the number of commands executed.
+
+More capability must produce **better judgment about when to act, when to stop, and when not to involve the operator**.
+
 ## Mandatory pre-action gate
 
 Before requesting a material human action, the system SHOULD exhaust all available read-only validation across:
