@@ -101,3 +101,13 @@ def test_methodology_telemetry_measures_recovery_resume_and_correlation():
     assert result["recovery_efficiency_pct"] == 50
     assert result["resume_success_pct"] == 100
     assert result["correlation_integrity_pct"] == 100
+
+
+def test_zero_denominator_telemetry_is_not_applicable():
+    result = methodology_telemetry([])
+    assert result["recovery_efficiency_pct"] is None
+    assert result["resume_success_pct"] is None
+    assert result["correlation_integrity_pct"] is None
+    assert result["recovery_efficiency_applicable"] is False
+    assert result["resume_success_applicable"] is False
+    assert result["correlation_integrity_applicable"] is False
