@@ -152,12 +152,110 @@ def normalize_terraform_plan_summary(raw: dict[str, Any], *, source: dict[str, A
     return record
 
 
+
+def normalize_terraform_state(raw: dict[str, Any], *, source: dict[str, Any]) -> dict[str, Any]:
+    required = ("observation_id", "asset_id", "address", "resource_type")
+    missing = [key for key in required if not raw.get(key)]
+    if missing:
+        raise ValueError(f"terraform state missing required fields: {', '.join(missing)}")
+
+    record = {
+        "schema_version": "0.1",
+        "record_id": raw["observation_id"],
+        "record_type": "observation",
+        "source": source,
+        "observed_at": raw.get("observed_at") or source["collected_at"],
+        "payload": {
+            "observation_id": raw["observation_id"],
+            "asset_id": raw["asset_id"],
+            "fact_type": "config",
+            "value": {
+                "address": raw["address"],
+                "resource_type": raw["resource_type"],
+                "native_id": raw.get("native_id"),
+                "attributes": raw.get("attributes", {}),
+            },
+            "unit": None,
+            "evidence_refs": raw.get("evidence_refs", []),
+            "confidence": float(raw.get("confidence", 1.0)),
+        },
+    }
+    _validator().validate(record)
+    return record
+
+
+def normalize_github_iac(raw: dict[str, Any], *, source: dict[str, Any]) -> dict[str, Any]:
+    required = ("observation_id", "asset_id", "repo", "commit", "path")
+    missing = [key for key in required if not raw.get(key)]
+    if missing:
+        raise ValueError(f"github iac observation missing required fields: {', '.join(missing)}")
+
+    record = {
+        "schema_version": "0.1",
+        "record_id": raw["observation_id"],
+        "record_type": "observation",
+        "source": source,
+        "observed_at": raw.get("observed_at") or source["collected_at"],
+        "payload": {
+            "observation_id": raw["observation_id"],
+            "asset_id": raw["asset_id"],
+            "fact_type": "config",
+            "value": {
+                "repo": raw["repo"],
+                "commit": raw["commit"],
+                "path": raw["path"],
+                "intent": raw.get("intent", {}),
+            },
+            "unit": None,
+            "evidence_refs": raw.get("evidence_refs", []),
+            "confidence": float(raw.get("confidence", 1.0)),
+        },
+    }
+    _validator().validate(record)
+    return record
+
+
+def normalize_monitoring(raw: dict[str, Any], *, source: dict[str, Any]) -> dict[str, Any]:
+    required = ("observation_id", "asset_id", "metric", "state")
+    missing = [key for key in required if not raw.get(key)]
+    if missing:
+        raise ValueError(f"monitoring observation missing required fields: {', '.join(missing)}")
+
+    record = {
+        "schema_version": "0.1",
+        "record_id": raw["observation_id"],
+        "record_type": "observation",
+        "source": source,
+        "observed_at": raw.get("observed_at") or source["collected_at"],
+        "payload": {
+            "observation_id": raw["observation_id"],
+            "asset_id": raw["asset_id"],
+            "fact_type": "health",
+            "value": {
+                "metric": raw["metric"],
+                "state": raw["state"],
+                "value": raw.get("value"),
+                "threshold": raw.get("threshold"),
+                "window": raw.get("window"),
+            },
+            "unit": raw.get("unit"),
+            "evidence_refs": raw.get("evidence_refs", []),
+            "confidence": float(raw.get("confidence", 1.0)),
+        },
+    }
+    _validator().validate(record)
+    return record
+
+
 def normalize(kind: str, raw: dict[str, Any]) -> dict[str, Any]:
     collected_at = raw.get("collected_at") or raw.get("observed_at") or _utc()
     system_map = {
         "azure-resource": ("azure", "api"),
         "cost": ("cost", "api"),
         "terraform-plan-summary": ("terraform", "plan"),
+        "terraform-state": ("terraform", "state"),
+        "github-iac": ("github", "repo"),
+        "monitoring": ("monitoring", "telemetry"),
     }
     if kind not in system_map:
         raise ValueError(f"unsupported kind: {kind}")
@@ -177,14 +275,20 @@ def normalize(kind: str, raw: dict[str, Any]) -> dict[str, Any]:
         return normalize_azure_resource(raw, source=source)
     if kind == "cost":
         return normalize_cost(raw, source=source)
-    return normalize_terraform_plan_summary(raw, source=source)
+    if kind == "terraform-plan-summary":
+        return normalize_terraform_plan_summary(raw, source=source)
+    if kind == "terraform-state":
+        return normalize_terraform_state(raw, source=source)
+    if kind == "github-iac":
+        return normalize_github_iac(raw, source=source)
+    return normalize_monitoring(raw, source=source)
 
 
 def main() -> int:
     import argparse
 
     parser = argparse.ArgumentParser(description="Normalize collected Landscape evidence")
-    parser.add_argument("--kind", required=True, choices=["azure-resource", "cost", "terraform-plan-summary"])
+    parser.add_argument("--kind", required=True, choices=["azure-resource", "cost", "terraform-plan-summary", "terraform-state", "github-iac", "monitoring"])
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
