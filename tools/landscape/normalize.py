@@ -250,6 +250,41 @@ def normalize_monitoring(raw: dict[str, Any], *, source: dict[str, Any]) -> dict
 
 
 
+
+def normalize_github_branch(raw: dict[str, Any], *, source: dict[str, Any]) -> dict[str, Any]:
+    required = ("observation_id", "repo", "base", "head", "ahead_by", "behind_by")
+    missing = [key for key in required if raw.get(key) is None]
+    if missing:
+        raise ValueError(f"github branch observation missing required fields: {', '.join(missing)}")
+    record = {
+        "schema_version": "0.1",
+        "record_id": raw["observation_id"],
+        "record_type": "observation",
+        "source": source,
+        "observed_at": raw.get("observed_at") or source["collected_at"],
+        "payload": {
+            "observation_id": raw["observation_id"],
+            "asset_id": None,
+            "fact_type": "state",
+            "value": {
+                "repo": raw["repo"],
+                "base": raw["base"],
+                "head": raw["head"],
+                "ahead_by": int(raw["ahead_by"]),
+                "behind_by": int(raw["behind_by"]),
+                "total_commits": int(raw.get("total_commits", raw["ahead_by"])),
+                "changed_files": int(raw.get("changed_files", 0)),
+                "base_sha": raw.get("base_sha"),
+            },
+            "unit": None,
+            "evidence_refs": raw.get("evidence_refs", []),
+            "confidence": float(raw.get("confidence", 1.0)),
+        },
+    }
+    _validator().validate(record)
+    return record
+
+
 def normalize_security_rbac(raw: dict[str, Any], *, source: dict[str, Any]) -> dict[str, Any]:
     required = ("observation_id", "asset_id", "scope", "principal_id", "role")
     missing = [key for key in required if not raw.get(key)]
@@ -383,6 +418,7 @@ def normalize(kind: str, raw: dict[str, Any]) -> dict[str, Any]:
         "security-rbac": ("azure", "api"),
         "runtime": ("runtime", "telemetry"),
         "github-pr": ("github", "api"),
+        "github-branch": ("github", "repo"),
         "committee-decision": ("drive", "human_decision"),
     }
     if kind not in system_map:
@@ -417,6 +453,8 @@ def normalize(kind: str, raw: dict[str, Any]) -> dict[str, Any]:
         return normalize_runtime(raw, source=source)
     if kind == "github-pr":
         return normalize_github_pr(raw, source=source)
+    if kind == "github-branch":
+        return normalize_github_branch(raw, source=source)
     return normalize_committee_decision(raw, source=source)
 
 
@@ -424,7 +462,7 @@ def main() -> int:
     import argparse
 
     parser = argparse.ArgumentParser(description="Normalize collected Landscape evidence")
-    parser.add_argument("--kind", required=True, choices=["azure-resource", "cost", "terraform-plan-summary", "terraform-state", "github-iac", "monitoring", "security-rbac", "runtime", "github-pr", "committee-decision"])
+    parser.add_argument("--kind", required=True, choices=["azure-resource", "cost", "terraform-plan-summary", "terraform-state", "github-iac", "monitoring", "security-rbac", "runtime", "github-pr", "github-branch", "committee-decision"])
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
