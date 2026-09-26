@@ -110,3 +110,163 @@ def reconcile(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
         findings.append(finding)
 
     return findings
+
+
+def _latest_config_by_system(records: list[dict[str, Any]], asset_id: str) -> dict[str, dict[str, Any]]:
+    latest: dict[str, dict[str, Any]] = {}
+    for record in records:
+        payload = record.get("payload", {})
+        if payload.get("asset_id") != asset_id:
+            continue
+        if record.get("record_type") != "observation" or payload.get("fact_type") != "config":
+            continue
+        system = record.get("source", {}).get("system")
+        if system not in {"azure", "terraform", "github"}:
+            continue
+        current = latest.get(system)
+        if current is None or record.get("observed_at", "") >= current.get("observed_at", ""):
+            latest[system] = record
+    return latest
+
+
+def _comparable_for_system(record: dict[str, Any]) -> dict[str, Any]:
+    value = record["payload"]["value"]
+    system = record["source"]["system"]
+    if system == "terraform":
+        return _comparable_terraform(value)
+    if system == "github":
+        return _comparable_github(value)
+    allowed = ("resource_type", "native_id", "location", "sku", "public_network_access", "identity", "image")
+    return {key: value[key] for key in allowed if key in value}
+
+
+def _triple_classification(values: dict[str, Any]) -> str:
+    azure = values["azure"]
+    terraform = values["terraform"]
+    github = values["github"]
+    if azure == terraform != github:
+        return "DECLARATIVE_DRIFT"
+    if azure == github != terraform:
+        return "MANAGED_DRIFT"
+    if terraform == github != azure:
+        return "PHYSICAL_DRIFT"
+    return "MULTI_SOURCE_DIVERGENCE"
+
+
+def reconcile_triple(
+    records: list[dict[str, Any]],
+    *,
+    required_systems: tuple[str, ...] = ("azure", "terraform", "github"),
+) -> list[dict[str, Any]]:
+    """Reconcile physical, managed and declarative configuration without mutation.
+
+    Missing required source coverage becomes a VISIBILITY_GAP. Contradictions are
+    classified but always remain PENDING; this function never proposes or executes
+    a repair.
+    """
+    asset_ids = sorted({
+        r.get("payload", {}).get("asset_id")
+        for r in records
+        if r.get("payload", {}).get("asset_id")
+    })
+    findings: list[dict[str, Any]] = []
+
+    for asset_id in asset_ids:
+        latest = _latest_config_by_system(records, asset_id)
+        present = tuple(system for system in required_systems if system in latest)
+        missing = tuple(system for system in required_systems if system not in latest)
+
+        if len(present) >= 2 and missing:
+            evidence_refs = [latest[s]["record_id"] for s in present]
+            observed_at = max(latest[s]["observed_at"] for s in present)
+            suffix = _digest({"asset_id": asset_id, "missing": missing, "present": present})
+            finding = {
+                "schema_version": "0.1",
+                "record_id": f"finding:visibility:{suffix}",
+                "record_type": "finding",
+                "source": {
+                    "source_id": "landscape-reconciler-v0.2",
+                    "system": "other",
+                    "source_type": "derived",
+                    "location": "tools/landscape/reconcile.py",
+                    "collected_at": observed_at,
+                    "hash": None,
+                    "freshness": "current",
+                    "trust_level": "derived",
+                },
+                "observed_at": observed_at,
+                "payload": {
+                    "finding_id": f"finding:visibility:{suffix}",
+                    "asset_id": asset_id,
+                    "type": "visibility_gap",
+                    "classification": "SOURCE_VISIBILITY_GAP",
+                    "adjudication": "VISIBILITY_GAP",
+                    "severity": "UNKNOWN",
+                    "status": "VISIBILITY_GAP",
+                    "evidence_refs": evidence_refs,
+                    "confidence": 1.0,
+                },
+            }
+            _validator().validate(finding)
+            findings.append(finding)
+
+        if len(present) < 2:
+            continue
+
+        comparable = {system: _comparable_for_system(latest[system]) for system in present}
+        common_keys = set.intersection(*(set(v) for v in comparable.values())) if comparable else set()
+        conflicts = {
+            key: {system: comparable[system][key] for system in present}
+            for key in sorted(common_keys)
+            if len({json.dumps(comparable[system][key], sort_keys=True) for system in present}) > 1
+        }
+        if not conflicts:
+            continue
+
+        if set(present) == {"azure", "terraform", "github"}:
+            classes = {
+                _triple_classification({
+                    "azure": conflicts[key]["azure"],
+                    "terraform": conflicts[key]["terraform"],
+                    "github": conflicts[key]["github"],
+                })
+                for key in conflicts
+            }
+            classification = classes.pop() if len(classes) == 1 else "MULTI_SOURCE_DIVERGENCE"
+        else:
+            classification = "PAIRWISE_DRIFT"
+
+        evidence_refs = [latest[s]["record_id"] for s in present]
+        observed_at = max(latest[s]["observed_at"] for s in present)
+        suffix = _digest({"asset_id": asset_id, "classification": classification, "conflicts": conflicts})
+        finding = {
+            "schema_version": "0.1",
+            "record_id": f"finding:reconcile-v2:{suffix}",
+            "record_type": "finding",
+            "source": {
+                "source_id": "landscape-reconciler-v0.2",
+                "system": "other",
+                "source_type": "derived",
+                "location": "tools/landscape/reconcile.py",
+                "collected_at": observed_at,
+                "hash": None,
+                "freshness": "current",
+                "trust_level": "derived",
+            },
+            "observed_at": observed_at,
+            "payload": {
+                "finding_id": f"finding:reconcile-v2:{suffix}",
+                "asset_id": asset_id,
+                "type": "drift",
+                "classification": classification,
+                "adjudication": "PENDING",
+                "severity": "UNKNOWN",
+                "status": "OPEN",
+                "evidence_refs": evidence_refs,
+                "confidence": 1.0,
+            },
+        }
+        _validator().validate(finding)
+        findings.append(finding)
+
+    return findings
