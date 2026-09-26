@@ -152,6 +152,46 @@ def validate_manifest(manifest: dict[str, Any], snapshot: dict[str, Any]) -> dic
     return {"valid": not errors, "errors": errors}
 
 
+def validate_evidence_inventory(
+    manifest: dict[str, Any],
+    evidence_inventory: dict[str, Any],
+    *,
+    objective_id: str,
+) -> dict[str, Any]:
+    errors: list[str] = []
+    evidence = {
+        item.get("evidence_id"): item
+        for item in evidence_inventory.get("evidence", [])
+        if item.get("evidence_id")
+    }
+
+    for req in manifest.get("requirements", []):
+        rid = req.get("requirement_id")
+        status = req.get("status")
+        ids = req.get("evidence_ids", [])
+
+        if status == "CONFIRMED" and not ids:
+            errors.append(f"confirmed_without_evidence:{rid}")
+
+        for eid in ids:
+            item = evidence.get(eid)
+            if item is None:
+                errors.append(f"missing_evidence_item:{rid}:{eid}")
+                continue
+
+            if item.get("objective_id") not in {None, objective_id}:
+                errors.append(f"evidence_objective_mismatch:{rid}:{eid}")
+
+            quality = item.get("quality")
+            if status == "CONFIRMED" and quality != "CONFIRMED":
+                errors.append(f"confirmed_requirement_uses_{quality}:{rid}:{eid}")
+
+            if item.get("freshness") == "STALE" and status == "CONFIRMED":
+                errors.append(f"stale_evidence_as_current:{rid}:{eid}")
+
+    return {"valid": not errors, "errors": errors}
+
+
 def recovery_decision(manifest: dict[str, Any]) -> dict[str, Any]:
     requirements = manifest.get("requirements", [])
     blocking = []
@@ -186,12 +226,30 @@ def recovery_decision(manifest: dict[str, Any]) -> dict[str, Any]:
 def reconstruct_from_snapshot(
     snapshot: dict[str, Any],
     manifest: dict[str, Any],
+    evidence_inventory: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     sv = validate_snapshot(snapshot)
     mv = validate_manifest(manifest, snapshot)
     decision = recovery_decision(manifest)
-    if not sv["valid"] or not mv["valid"] or decision["result"] == "RECOVERY_BLOCKED":
-        raise ValueError("trusted recovery prerequisites not satisfied")
+    ev = (
+        validate_evidence_inventory(
+            manifest,
+            evidence_inventory,
+            objective_id=snapshot["objective"]["objective_id"],
+        )
+        if evidence_inventory is not None
+        else {"valid": True, "errors": []}
+    )
+    if (
+        not sv["valid"]
+        or not mv["valid"]
+        or not ev["valid"]
+        or decision["result"] == "RECOVERY_BLOCKED"
+    ):
+        raise ValueError(
+            "trusted recovery prerequisites not satisfied: "
+            + ", ".join(sv["errors"] + mv["errors"] + ev["errors"])
+        )
 
     return {
         "snapshot_id": snapshot["snapshot_id"],
