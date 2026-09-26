@@ -15,6 +15,8 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
+from identity import azure_asset_id
+
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_PATH = ROOT / "schemas" / "landscape-intelligence-v0.1.schema.json"
 
@@ -70,7 +72,7 @@ def normalize_azure_resource(raw: dict[str, Any], *, source: dict[str, Any]) -> 
     if environment not in {"p0", "dev", "test", "prod", "unknown"}:
         environment = "unknown"
 
-    asset_id = f"azure:{raw['subscription_id']}:{raw['resource_id']}"
+    asset_id = azure_asset_id(raw['subscription_id'], raw['resource_id'])
     record = {
         "schema_version": "0.1",
         "record_id": f"asset:{asset_id}",
