@@ -1,0 +1,25 @@
+{
+  "manifest_version": "0.1",
+  "sources": [
+    {
+      "kind": "azure-resource",
+      "path": "raw/azure-postgresql-p0.json"
+    },
+    {
+      "kind": "terraform-state",
+      "path": "raw/terraform-state-postgresql-p0.json"
+    },
+    {
+      "kind": "github-iac",
+      "path": "raw/github-iac-postgresql-p0.json"
+    },
+    {
+      "kind": "cost",
+      "path": "raw/cost-soaiacore-p0.json"
+    },
+    {
+      "kind": "monitoring",
+      "path": "raw/monitoring-postgresql-p0.json"
+    }
+  ]
+}
