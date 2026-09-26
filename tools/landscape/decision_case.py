@@ -114,6 +114,7 @@ def build_decision_cases(
                 "decision_owner": "UNASSIGNED" if not asset_id else "OWNER_REQUIRED",
                 "ai_role": "ANALYZE_AND_RECOMMEND_ONLY",
                 "execution_authority": "SEPARATE_APPROVAL_REQUIRED",
+                "exception_authority": "SOA / Salvador Osorio Ayala",
             },
         })
     return cases
