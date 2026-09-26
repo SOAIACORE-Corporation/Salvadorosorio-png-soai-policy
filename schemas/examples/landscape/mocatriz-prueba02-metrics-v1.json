@@ -1,0 +1,99 @@
+{
+  "metrics_id": "MOCATRIZ-PRUEBA02-METRICS-20260926",
+  "scope": "MOCATRIZ_PRUEBA02_AND_CLOSURE",
+  "source_head": "fdbc56cbbc25b9c572a70f570fab22cc879e989c",
+  "objective_completion": {
+    "satisfied": 8,
+    "applicable": 8,
+    "pct": 100,
+    "note": "Measures the eight closure activities defined for this objective; service functional validation is tracked separately and is not claimed as satisfied."
+  },
+  "autonomous_completion": {
+    "satisfied_without_material_human_execution": 8,
+    "satisfied_total": 8,
+    "pct": 100,
+    "note": "The user defined/corrected the objective and acceptance model; execution of the eight closure activities after that instruction was autonomous."
+  },
+  "recovery_efficiency": {
+    "recoverable_events": 5,
+    "successful_recoveries": 5,
+    "pct": 100,
+    "events": [
+      "authoritative-source recovery after observation timeout",
+      "state-evolution continuity-model correction",
+      "pending-accounting continuity-model correction",
+      "open-error closure-gate recovery after CI #163",
+      "zero-denominator metric-semantics correction"
+    ]
+  },
+  "strategy_mutation": {
+    "count": 4,
+    "events": [
+      "conversation timeout → authoritative external-source verification",
+      "state equality → checkpoint lineage with evidence-backed evolution",
+      "pending-set equality → pending-or-completed accounting",
+      "0/0=100% telemetry → NOT_APPLICABLE/null"
+    ]
+  },
+  "human_intervention_efficiency": {
+    "material_interventions": 1,
+    "materially_useful_interventions": 1,
+    "pct": 100,
+    "note": "The continuity-test correction supplied by the user materially changed the evaluation model."
+  },
+  "human_dependency": {
+    "status": "NOT_RETROSPECTIVELY_QUANTIFIED",
+    "reason": "A complete actor-tagged decision ledger was not persisted from the beginning of the broader MOCATRIZ run; backfilling a denominator would be inferential."
+  },
+  "resume_success": {
+    "successful_resumptions": 1,
+    "resumptions": 1,
+    "pct": 100,
+    "evidence": "Recovered context was explicitly accepted by the user and checkpoint comparison lost no pending item or required evidence."
+  },
+  "correlation_integrity": {
+    "pct": null,
+    "applicable": false,
+    "reason": "No formal Human Task with Objective/Execution/HumanTask/Correlation IDs existed during the observed channel interruption. The mechanism is unit-tested but not empirically exercised in this incident."
+  },
+  "drift": {
+    "count": 1,
+    "events": [
+      "CI starvation by commit churn"
+    ],
+    "status": "CONTROLLED"
+  },
+  "false_completion": {
+    "false_closures": 0,
+    "closure_claims": 1,
+    "pct": 0,
+    "note": "Final status is COMPLETED_WITH_EXCEPTIONS and does not claim functional service validation."
+  },
+  "control_yield": {
+    "useful_controls": 7,
+    "executed_explicit_controls": 7,
+    "pct": 100,
+    "scope_note": "Count-based only for explicit Prueba 02 controls."
+  },
+  "methodological_overhead": {
+    "count_based_pct": 0,
+    "time_based_status": "NOT_MEASURED",
+    "limitation": "Precise preflight/registration/evidence time and avoided-rework time were not instrumented from execution start."
+  },
+  "continuity_test": {
+    "score": 30,
+    "max_score": 30,
+    "band": "FUNCTIONAL_CONTINUITY_DEMONSTRATED",
+    "nullifying_failures": [],
+    "effective_continuity": true,
+    "limitation": "Validates this interruption instance and the tested checkpoint mechanism; it is not universal proof for all future interruptions."
+  },
+  "error_control_audit": {
+    "total_errors": 27,
+    "controlled": 25,
+    "accepted_gap": 2,
+    "open": 0,
+    "mitigated": 0,
+    "waiting_human": 0
+  }
+}

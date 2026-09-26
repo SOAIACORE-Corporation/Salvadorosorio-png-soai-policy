@@ -2,7 +2,19 @@
 
 **Fecha:** 2026-09-26  
 **Clasificación:** Prueba funcional crítica  
-**Estado:** EN VALIDACIÓN
+**Estado:** PASS
+
+## Resultado
+
+- Puntaje: **30/30**
+- Condiciones anuladoras: **0**
+- Continuidad efectiva: **DEMOSTRADA para esta instancia**
+- Checkpoint identity: preservada
+- Objetivo/alcance/reglas/contrato de cierre: preservados
+- Pendientes previos: preservados o explícitamente resueltos
+- Evidencia previa requerida: no perdida
+- Fuente externa: consultada antes de reanudar
+- Cierre funcional del servicio: **NO inferido**
 
 ## Objetivo
 
@@ -90,32 +102,15 @@ La forma es multiplicativa: si un factor crítico es cero, no existe continuidad
 
 El estado técnico puede cambiar durante la interrupción porque una ejecución externa puede continuar.
 
-Por tanto, la reanudación no exige identidad del estado previo. Exige:
-
-- identidad del checkpoint de origen;
-- trazabilidad de la evolución;
-- fuente autoritativa;
-- conservación o resolución explícita de los pendientes previos.
+La reanudación exige identidad del checkpoint de origen, trazabilidad de la evolución, fuente autoritativa y conservación o resolución explícita de los pendientes previos.
 
 ## Regla de pendientes
 
-Un pendiente previo se considera preservado cuando al reanudar:
-
-- sigue pendiente, o
-- aparece explícitamente como completado desde el checkpoint.
-
-Si desaparece de ambos conjuntos, existe pérdida contextual.
+Un pendiente previo se considera preservado cuando al reanudar sigue pendiente o aparece explícitamente como completado desde el checkpoint. Si desaparece de ambos conjuntos, existe pérdida contextual.
 
 ## Cierre funcional
 
-La evidencia se separa por capas:
-
-- construcción;
-- seguridad;
-- despliegue;
-- funcionalidad.
-
-Ninguna de las tres primeras sustituye evidencia funcional.
+La evidencia se separa por capas: construcción, seguridad, despliegue y funcionalidad. Ninguna de las tres primeras sustituye evidencia funcional.
 
 ## Reglas canónicas
 
