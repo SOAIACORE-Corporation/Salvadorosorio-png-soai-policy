@@ -160,7 +160,7 @@ def correlate(records: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
         if payload.get("fact_type") != "health":
             continue
         value = payload.get("value") or {}
-        state = value.get("state")
+        state = value.get("state") or value.get("health")
         if state not in unhealthy:
             continue
         fid = f"finding:health:{_digest([payload.get('asset_id'), state, record['record_id']])}"
@@ -184,6 +184,45 @@ def correlate(records: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
                 domain="availability",
                 score="UNKNOWN",
                 rationale="Observed health degradation requires domain assessment before assigning material impact.",
+                observed_at=record["observed_at"],
+                confidence=1.0,
+            )
+        )
+
+
+    # Policy: broad Key Vault secret access is a security case, never an automatic removal.
+    for record in records:
+        if record["record_type"] != "observation":
+            continue
+        payload = record["payload"]
+        if payload.get("fact_type") != "identity":
+            continue
+        value = payload.get("value") or {}
+        if value.get("role") != "Key Vault Secrets User":
+            continue
+        if value.get("scope_level") != "vault":
+            continue
+        fid = f"finding:security-rbac:{_digest([payload.get('asset_id'), value.get('principal_id'), value.get('scope')])}"
+        findings.append(
+            _finding(
+                finding_id=fid,
+                finding_type="security",
+                adjudication="PENDING",
+                severity="WARNING",
+                status="OPEN",
+                observed_at=record["observed_at"],
+                evidence_refs=[record["record_id"]],
+                asset_id=payload.get("asset_id"),
+                confidence=1.0,
+            )
+        )
+        impacts.append(
+            _impact(
+                impact_id=f"impact:{fid}:security",
+                subject_id=fid,
+                domain="security",
+                score="UNKNOWN",
+                rationale="Broad secret access is visible; functional substitution and blast-radius evidence are required before any removal.",
                 observed_at=record["observed_at"],
                 confidence=1.0,
             )
