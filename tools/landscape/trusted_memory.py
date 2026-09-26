@@ -129,6 +129,11 @@ def validate_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
 
 def validate_manifest(manifest: dict[str, Any], snapshot: dict[str, Any]) -> dict[str, Any]:
     errors: list[str] = []
+    manifest_body = deepcopy(manifest)
+    expected_manifest_hash = manifest_body.pop("content_sha256", None)
+    actual_manifest_hash = sha256_hex(manifest_body)
+    if expected_manifest_hash != actual_manifest_hash:
+        errors.append("manifest_hash_mismatch")
     target = manifest.get("target_snapshot", {})
     if target.get("snapshot_id") != snapshot.get("snapshot_id"):
         errors.append("snapshot_id_mismatch")
@@ -149,7 +154,11 @@ def validate_manifest(manifest: dict[str, Any], snapshot: dict[str, Any]) -> dic
         }:
             errors.append(f"invalid_requirement_status:{rid}")
 
-    return {"valid": not errors, "errors": errors}
+    return {
+        "valid": not errors,
+        "errors": errors,
+        "actual_content_sha256": actual_manifest_hash,
+    }
 
 
 def validate_evidence_inventory(
@@ -159,6 +168,18 @@ def validate_evidence_inventory(
     objective_id: str,
 ) -> dict[str, Any]:
     errors: list[str] = []
+    inventory_body = deepcopy(evidence_inventory)
+    expected_inventory_hash = inventory_body.pop("content_sha256", None)
+    actual_inventory_hash = sha256_hex(inventory_body)
+    if expected_inventory_hash != actual_inventory_hash:
+        errors.append("evidence_inventory_hash_mismatch")
+
+    manifest_inventory = manifest.get("evidence_inventory", {})
+    if manifest_inventory.get("inventory_id") != evidence_inventory.get("inventory_id"):
+        errors.append("evidence_inventory_id_mismatch")
+    if manifest_inventory.get("expected_hash") != evidence_inventory.get("content_sha256"):
+        errors.append("evidence_inventory_expected_hash_mismatch")
+
     evidence = {
         item.get("evidence_id"): item
         for item in evidence_inventory.get("evidence", [])
@@ -189,7 +210,11 @@ def validate_evidence_inventory(
             if item.get("freshness") == "STALE" and status == "CONFIRMED":
                 errors.append(f"stale_evidence_as_current:{rid}:{eid}")
 
-    return {"valid": not errors, "errors": errors}
+    return {
+        "valid": not errors,
+        "errors": errors,
+        "actual_content_sha256": actual_inventory_hash,
+    }
 
 
 def recovery_decision(manifest: dict[str, Any]) -> dict[str, Any]:
