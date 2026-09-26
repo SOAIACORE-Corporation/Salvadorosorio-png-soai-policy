@@ -368,6 +368,28 @@
       ],
       "control_status": "CONTROLLED",
       "regression_test": "test_complete_cycle_is_eligible_and_reuses_context_integrity"
+    },
+    {
+      "error_id": "ERR-20260926-018",
+      "detected_at": "2026-09-26",
+      "class": "TOOL_WRITE_POLICY_BLOCK",
+      "phase": "durable-manifest-implementation",
+      "symptom": "A large atomic GitHub write was rejected by connector safety controls before repository mutation.",
+      "root_cause": "The attempted write bundled too much content into one tool transaction for the connector's execution boundary.",
+      "early_signals": [
+        "The payload combined multiple new source, test, documentation, scenario and receipt files",
+        "The connector can safely perform smaller repository writes"
+      ],
+      "human_cost": "No operator intervention; implementation continued using smaller writes",
+      "avoidable": true,
+      "prevention_rule": "Prefer bounded semantic batches when connector write limits are uncertain; preserve objective-level execution while reducing transaction size.",
+      "automated_detection": "Tool failure is recorded as a recovery event; subsequent smaller writes and CI validate the same intended objective.",
+      "evidence_refs": [
+        "session:connector-write-block",
+        "github-actions:36233632981"
+      ],
+      "control_status": "CONTROLLED",
+      "regression_test": "DURABLE_MANIFEST_SMALL_BATCH_WRITE_PATTERN"
     }
   ]
 }
