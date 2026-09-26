@@ -228,6 +228,45 @@ def correlate(records: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
             )
         )
 
+
+    # Policy: active asset without owner is a governance visibility gap.
+    for record in records:
+        if record["record_type"] != "asset":
+            continue
+        payload = record["payload"]
+        if payload.get("status") != "ACTIVE":
+            continue
+        if payload.get("owner"):
+            continue
+        fid = f"finding:missing-owner:{_digest(payload.get('asset_id'))}"
+        findings.append(
+            _finding(
+                finding_id=fid,
+                finding_type="governance",
+                adjudication="VISIBILITY_GAP",
+                severity="INFO",
+                status="VISIBILITY_GAP",
+                observed_at=record["observed_at"],
+                evidence_refs=[record["record_id"]],
+                asset_id=payload.get("asset_id"),
+                confidence=1.0,
+            )
+        )
+
+    # Policy: a draft/open PR is evidence only; it never becomes a decision.
+    for record in records:
+        if record["record_type"] != "observation":
+            continue
+        payload = record["payload"]
+        if payload.get("fact_type") != "state":
+            continue
+        value = payload.get("value") or {}
+        if "pr_number" not in value:
+            continue
+        if value.get("draft") is True:
+            # Deliberately no finding: visibility is preserved without manufacturing risk.
+            continue
+
     # Deduplicate by record id while preserving deterministic ordering.
     unique_findings = {f["record_id"]: f for f in findings}
     unique_impacts = {i["record_id"]: i for i in impacts}
