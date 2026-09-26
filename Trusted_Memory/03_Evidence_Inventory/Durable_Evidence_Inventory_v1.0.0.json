@@ -1,0 +1,163 @@
+{
+  "inventory_id": "DEI-SOAIACORE-MOCATRIZ-20260926-001",
+  "inventory_version": "1.0.0",
+  "created_at": "2026-09-26T12:30:00Z",
+  "target_objective_id": "OBJ-MOCATRIZ-CONTINUITY-002",
+  "evidence": [
+    {
+      "evidence_id": "EV-001",
+      "objective_id": "OBJ-MOCATRIZ-CONTINUITY-002",
+      "claim": "Final closure contract and metrics",
+      "location": "receipts/MOCATRIZ_CONTINUITY_TEST_02_CLOSURE_2026-09-26.md",
+      "type": "receipt",
+      "authority": "PRIMARY_MATERIAL",
+      "quality": "CONFIRMED",
+      "freshness": "CURRENT",
+      "source_ref": "receipt:continuity-test-02"
+    },
+    {
+      "evidence_id": "EV-002",
+      "objective_id": "OBJ-MOCATRIZ-CONTINUITY-002",
+      "claim": "Frozen checkpoint HEAD",
+      "location": "git",
+      "type": "git_commit",
+      "authority": "PRIMARY_AUTHORITATIVE",
+      "quality": "CONFIRMED",
+      "freshness": "CURRENT",
+      "source_ref": "814aae7c548247ab9b0c79c42bf586e939a7c064"
+    },
+    {
+      "evidence_id": "EV-003",
+      "objective_id": "OBJ-MOCATRIZ-CONTINUITY-002",
+      "claim": "Continuity test result 30/30 with zero nullifiers",
+      "location": "docs/landscape-intelligence/MOCATRIZ_CONTINUITY_TEST_02_v1.md",
+      "type": "test_document",
+      "authority": "PRIMARY_MATERIAL",
+      "quality": "CONFIRMED",
+      "freshness": "CURRENT",
+      "source_ref": "MOCATRIZ-PRUEBA-02"
+    },
+    {
+      "evidence_id": "EV-004",
+      "objective_id": "OBJ-MOCATRIZ-CONTINUITY-002",
+      "claim": "Error matrix 27 total / 25 controlled / 2 accepted gaps",
+      "location": "receipts/MOCATRIZ_CONTINUITY_TEST_02_CLOSURE_2026-09-26.md",
+      "type": "receipt",
+      "authority": "SECONDARY_VERIFIED",
+      "quality": "CONFIRMED",
+      "freshness": "CURRENT",
+      "source_ref": "error-control-audit"
+    },
+    {
+      "evidence_id": "EV-005",
+      "objective_id": "OBJ-MOCATRIZ-CONTINUITY-002",
+      "claim": "Landscape Intelligence Schema #170 SUCCESS",
+      "location": "github-actions",
+      "type": "ci_run",
+      "authority": "PRIMARY_AUTHORITATIVE",
+      "quality": "CONFIRMED",
+      "freshness": "CURRENT",
+      "source_ref": "36241248488"
+    },
+    {
+      "evidence_id": "EV-006",
+      "objective_id": "OBJ-MOCATRIZ-CONTINUITY-002",
+      "claim": "Terraform Static #114 SUCCESS",
+      "location": "github-actions",
+      "type": "ci_run",
+      "authority": "PRIMARY_AUTHORITATIVE",
+      "quality": "CONFIRMED",
+      "freshness": "CURRENT",
+      "source_ref": "36241248516"
+    },
+    {
+      "evidence_id": "EV-007",
+      "objective_id": "OBJ-MOCATRIZ-CONTINUITY-002",
+      "claim": "A2 Persistence Static #42 SUCCESS",
+      "location": "github-actions",
+      "type": "ci_run",
+      "authority": "PRIMARY_AUTHORITATIVE",
+      "quality": "CONFIRMED",
+      "freshness": "CURRENT",
+      "source_ref": "36241248542"
+    },
+    {
+      "evidence_id": "EV-008",
+      "objective_id": "OBJ-MOCATRIZ-CONTINUITY-002",
+      "claim": "Worker OCI Runtime Smoke #68 SUCCESS",
+      "location": "github-actions",
+      "type": "ci_run",
+      "authority": "PRIMARY_AUTHORITATIVE",
+      "quality": "CONFIRMED",
+      "freshness": "CURRENT",
+      "source_ref": "36241248491"
+    },
+    {
+      "evidence_id": "EV-009",
+      "objective_id": "OBJ-MOCATRIZ-CONTINUITY-002",
+      "claim": "OCI Build, Scan, and Publish #226 SUCCESS",
+      "location": "github-actions",
+      "type": "ci_run",
+      "authority": "PRIMARY_AUTHORITATIVE",
+      "quality": "CONFIRMED",
+      "freshness": "CURRENT",
+      "source_ref": "36241248509"
+    },
+    {
+      "evidence_id": "EV-010",
+      "objective_id": "OBJ-MOCATRIZ-CONTINUITY-002",
+      "claim": "PR #84 SUCCESS",
+      "location": "github-actions",
+      "type": "ci_run",
+      "authority": "PRIMARY_AUTHORITATIVE",
+      "quality": "CONFIRMED",
+      "freshness": "CURRENT",
+      "source_ref": "36241245973"
+    },
+    {
+      "evidence_id": "EV-011",
+      "objective_id": "OBJ-MOCATRIZ-CONTINUITY-002",
+      "claim": "Canonical MOCATRIZ rules",
+      "location": "docs/landscape-intelligence/MOCATRIZ_ADAPTIVE_EXECUTION_v1.md",
+      "type": "policy_document",
+      "authority": "PRIMARY_MATERIAL",
+      "quality": "CONFIRMED",
+      "freshness": "CURRENT",
+      "source_ref": "MOCATRIZ-RULESET-v1"
+    },
+    {
+      "evidence_id": "EV-012",
+      "objective_id": "OBJ-MOCATRIZ-CONTINUITY-002",
+      "claim": "Final endpoint functional contract",
+      "location": null,
+      "type": "functional_evidence",
+      "authority": "UNKNOWN",
+      "quality": "MISSING",
+      "freshness": "UNKNOWN",
+      "source_ref": null,
+      "interpretation": "NOT_DEMONSTRATED"
+    },
+    {
+      "evidence_id": "EV-013",
+      "objective_id": "OBJ-MOCATRIZ-CONTINUITY-002",
+      "claim": "Complete historical human decision ledger",
+      "location": null,
+      "type": "decision_ledger",
+      "authority": "UNKNOWN",
+      "quality": "MISSING",
+      "freshness": "UNKNOWN",
+      "source_ref": null
+    },
+    {
+      "evidence_id": "EV-014",
+      "objective_id": "OBJ-MOCATRIZ-CONTINUITY-002",
+      "claim": "Time-based methodological overhead telemetry",
+      "location": null,
+      "type": "telemetry",
+      "authority": "UNKNOWN",
+      "quality": "MISSING",
+      "freshness": "UNKNOWN",
+      "source_ref": null
+    }
+  ]
+}
