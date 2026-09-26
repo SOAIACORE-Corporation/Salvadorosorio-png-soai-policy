@@ -490,6 +490,16 @@
             "other"
           ]
         },
+        "classification": {
+          "enum": [
+            "PHYSICAL_DRIFT",
+            "MANAGED_DRIFT",
+            "DECLARATIVE_DRIFT",
+            "MULTI_SOURCE_DIVERGENCE",
+            "PAIRWISE_DRIFT",
+            "SOURCE_VISIBILITY_GAP"
+          ]
+        },
         "adjudication": {
           "enum": [
             "KEEP",
