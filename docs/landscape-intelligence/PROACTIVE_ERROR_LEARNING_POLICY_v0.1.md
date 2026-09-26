@@ -156,3 +156,31 @@ Allowed `control_status` values:
 ## Product criterion
 
 A mature SOAiaCore should make the operator feel that, when human intervention is finally requested, the system has already exhausted every safe and relevant machine-resolvable path.
+
+## Objective-oriented execution
+
+The canonical unit of execution is an **objective**, not an individual command, tool call, or technical curiosity.
+
+Execution should follow:
+
+```text
+OBJECTIVE
+→ REQUIRED TASK SET
+→ PRECHECK / DEPENDENCY RESOLUTION
+→ EXECUTION BATCH
+→ INTEGRATED VALIDATION
+→ RECEIPT / CLOSURE
+```
+
+Rules:
+
+- Commands and tool calls are implementation details, not progress units.
+- Before execution, group all deterministically related tasks required to close the objective.
+- Do not interrupt the operator after every successful micro-step when the remaining steps are safe, authorized and machine-executable.
+- Human intervention is requested at authority boundaries, material decisions, credentials, physical-world dependencies, or irreducible ambiguity.
+- A discovered issue that does not block the active objective is classified, evidenced and parked instead of opening an uncontrolled remediation substream.
+- Technical curiosity never outranks the declared objective.
+- Integrated validation is preferred over isolated success signals.
+- An objective is complete only when its acceptance criteria and evidence are satisfied, not when its last command returned exit code 0.
+
+This policy distinguishes **impetuous execution** from **execution judgment**: capability to act is not itself a reason to act.
