@@ -91,7 +91,7 @@ The test suite also verifies rejection of:
 ## Acceptance gate
 
 ```bash
-uv run --frozen pytest -q tests/test_landscape_intelligence_schema.py
+uv run --frozen pytest -q schemas/tests/test_landscape_intelligence_schema.py
 ```
 
 The GitHub workflow `Landscape Intelligence Schema` runs the same gate on pull requests affecting the schema or its fixtures.
