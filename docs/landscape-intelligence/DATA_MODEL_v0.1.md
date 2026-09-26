@@ -111,3 +111,24 @@ Initial adapters:
 - Terraform plan summary → finding
 
 The normalizer performs no cloud calls and exposes no mutation path. Unsupported execution-oriented kinds are rejected.
+
+## Multi-source bundle and reconciliation
+
+The v0.1 implementation now includes:
+
+- `tools/landscape/bundle.py`: deterministic bundle creation with SHA-256 over canonical ordering.
+- `tools/landscape/reconcile.py`: read-only Terraform State ↔ GitHub IaC comparison.
+- Terraform State adapter.
+- GitHub IaC adapter.
+- Monitoring adapter.
+
+Reconciliation is intentionally conservative:
+
+1. Sources remain distinct.
+2. Only explicitly comparable fields are evaluated.
+3. A single source never creates a contradiction.
+4. A mismatch produces a derived `PENDING / OPEN / UNKNOWN severity` finding.
+5. The reconciler never emits `FIX`, never calls a cloud API, and never executes a change.
+6. Evidence refs from both sides are preserved in the finding.
+
+This is the initial executable boundary between F2 normalization and F3 automated correlation.
