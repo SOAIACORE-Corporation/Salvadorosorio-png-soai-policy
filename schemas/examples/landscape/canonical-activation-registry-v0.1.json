@@ -1,0 +1,25 @@
+{
+  "schema_version": "0.1",
+  "purpose": "Canonical activation signatures for cross-thread SOAiaCore commands.",
+  "rules": [
+    {
+      "activation_signature": "MOCATRIZ",
+      "semantic_domain": "canonical_language",
+      "behavior": "Review the available thread and extract high-density language candidates into the SOAiaCore Canonical Language Bank.",
+      "canonical": true
+    },
+    {
+      "activation_signature": "GO MOCATRIZ",
+      "semantic_domain": "adaptive_execution",
+      "behavior": "Run the active objective under OBSERVE → UNDERSTAND → RESOLVE → DEMONSTRATE with autonomous recovery, correlated human tasks, and evidence-based closure.",
+      "canonical": true
+    },
+    {
+      "activation_signature": "MOCATRIZ MANUFACTURING",
+      "semantic_domain": "manufacturing",
+      "behavior": "Activate the end-to-end manufacturing model covering demand, planning, materials, capacity, production, quality, release, inventory, distribution and cost.",
+      "canonical": true
+    }
+  ],
+  "uniqueness_rule": "No two canonical entries may share the same normalized activation_signature with different semantic_domain values."
+}
