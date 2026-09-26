@@ -1,0 +1,22 @@
+{
+  "error_id": "ERR-20260926-026",
+  "detected_at": "2026-09-26",
+  "class": "CONTINUITY_TEST_MODEL_SEMANTICS_DEFECT",
+  "phase": "mocatriz-continuity-test-design",
+  "symptom": "The first continuity comparator required identical state_version and treated resolved pending items as lost context.",
+  "root_cause": "The model initially confused continuity with immobility: it did not allow evidence-backed state evolution during interruption or explicit completion of previously pending work.",
+  "early_signals": [
+    "External execution is allowed to continue while the observation channel is interrupted",
+    "A recovered task may legitimately have fewer pending items because some were completed"
+  ],
+  "human_cost": "No operator intervention; defect was identified before accepting the test result.",
+  "avoidable": true,
+  "prevention_rule": "Continuity must preserve checkpoint identity, objective, scope, rules, closure contract and accounting of prior pending work; state may evolve when evidence explains the transition.",
+  "automated_detection": "Continuity Test 02 verifies source_checkpoint_id and requires each baseline pending item to remain pending or appear in completed_since_checkpoint_ids.",
+  "evidence_refs": [
+    "tools/landscape/mocatriz_continuity.py",
+    "schemas/tests/test_mocatriz_continuity.py"
+  ],
+  "control_status": "CONTROLLED",
+  "regression_test": "test_resume_preserves_objective_rules_pending_and_checkpoint_identity"
+}
