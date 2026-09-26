@@ -63,8 +63,23 @@ NULLIFIERS = {
 }
 
 
+def _normalize_canonical(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _normalize_canonical(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_canonical(item) for item in value]
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
 def _canonical(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return json.dumps(
+        _normalize_canonical(value),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
 
 
 def sha256_hex(value: Any) -> str:
