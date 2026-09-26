@@ -1,0 +1,78 @@
+{
+  "test_id": "MOCATRIZ-PRUEBA-02-CONTINUIDAD-20260926",
+  "version": "1.0",
+  "classification": "CRITICAL_FUNCTIONAL_TEST",
+  "baseline": {
+    "checkpoint_id": "CHK-MOCATRIZ-02-PRE-INTERRUPTION",
+    "objective_id": "OBJ-MOCATRIZ-ERROR-AUDIT-CLOSURE",
+    "scope_id": "SCOPE-THREAD-ERRORS-SECURITY-CONTINUITY",
+    "rule_set_id": "MOCATRIZ-RULESET-v1",
+    "closure_contract_id": "CC-MOCATRIZ-DEMONSTRATE-v1",
+    "resume_from_id": "DEMONSTRATE-AUDIT",
+    "pending_ids": [
+      "P-ERR015-FORMAL-RECLASSIFICATION",
+      "P-CI-STARVATION-EVENT",
+      "P-OBSERVABILITY-TIMEOUT-EVENT",
+      "P-FINAL-ERROR-AUDIT",
+      "P-METRICS",
+      "P-RECEIPT",
+      "P-CLOSURE-DECISION",
+      "P-TRUSTED-SNAPSHOT"
+    ],
+    "evidence_refs": [
+      "github-actions:36234503732",
+      "commit:badafa3b965ea1a1656b8e478faf4e6f6842c39a",
+      "docs/landscape-intelligence/MOCATRIZ_ADAPTIVE_EXECUTION_v1.md"
+    ],
+    "external_execution_status": "RUNNING_OR_RECENTLY_COMPLETED",
+    "observation_channel_status": "INTERRUPTED"
+  },
+  "resumed": {
+    "source_checkpoint_id": "CHK-MOCATRIZ-02-PRE-INTERRUPTION",
+    "objective_id": "OBJ-MOCATRIZ-ERROR-AUDIT-CLOSURE",
+    "scope_id": "SCOPE-THREAD-ERRORS-SECURITY-CONTINUITY",
+    "rule_set_id": "MOCATRIZ-RULESET-v1",
+    "closure_contract_id": "CC-MOCATRIZ-DEMONSTRATE-v1",
+    "resume_from_id": "DEMONSTRATE-AUDIT",
+    "pending_ids": [
+      "P-OBSERVABILITY-TIMEOUT-EVENT",
+      "P-FINAL-ERROR-AUDIT",
+      "P-METRICS",
+      "P-RECEIPT",
+      "P-CLOSURE-DECISION",
+      "P-TRUSTED-SNAPSHOT"
+    ],
+    "completed_since_checkpoint_ids": [
+      "P-ERR015-FORMAL-RECLASSIFICATION",
+      "P-CI-STARVATION-EVENT"
+    ],
+    "evidence_refs": [
+      "github-actions:36234503732",
+      "commit:badafa3b965ea1a1656b8e478faf4e6f6842c39a",
+      "docs/landscape-intelligence/MOCATRIZ_ADAPTIVE_EXECUTION_v1.md",
+      "github-actions:36235929162"
+    ],
+    "external_execution_status": "SUCCESS",
+    "observation_channel_status": "RECOVERED"
+  },
+  "dimension_scores": {
+    "objective": 3,
+    "scope": 3,
+    "rules": 3,
+    "state": 3,
+    "evidence": 3,
+    "strategy": 3,
+    "resumption": 3,
+    "closure": 3,
+    "uncertainty": 3,
+    "narrative": 3
+  },
+  "nullifying_failures": [],
+  "functional_validation": {
+    "build_verified": true,
+    "security_verified": true,
+    "deployment_verified": false,
+    "functional_verified": false,
+    "reason": "No durable repository evidence was found proving the final functional endpoint/route contract."
+  }
+}
