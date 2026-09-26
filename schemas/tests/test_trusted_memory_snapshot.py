@@ -14,6 +14,7 @@ from trusted_memory import (  # noqa: E402
     recovery_decision,
     validate_evidence_inventory,
     seal_snapshot,
+    sha256_hex,
     validate_manifest,
     validate_snapshot,
 )
@@ -59,17 +60,20 @@ def _snapshot():
 
 
 def _evidence_inventory():
-    return {
+    inventory = {
         "inventory_id":"EV-TEST-001",
         "evidence":[
             {"evidence_id":"EV-1","objective_id":"OBJ-1","quality":"CONFIRMED","freshness":"CURRENT"},
             {"evidence_id":"EV-2","objective_id":"OBJ-1","quality":"MISSING","freshness":"UNKNOWN"},
         ],
     }
+    inventory["content_sha256"] = sha256_hex(inventory)
+    return inventory
 
 
 def _manifest(snapshot):
-    return {
+    inventory = _evidence_inventory()
+    manifest = {
         "manifest_id":"RM-1",
         "manifest_version":"1.0.0",
         "schema_version":"1.0",
@@ -79,11 +83,17 @@ def _manifest(snapshot):
             "snapshot_version":snapshot["snapshot_version"],
             "expected_hash":snapshot["content_sha256"],
         },
+        "evidence_inventory":{
+            "inventory_id":inventory["inventory_id"],
+            "expected_hash":inventory["content_sha256"],
+        },
         "requirements":[
             {"requirement_id":"REQ-1","criticality":"critical","status":"CONFIRMED","evidence_ids":["EV-1"]},
             {"requirement_id":"REQ-2","criticality":"necessary","status":"MISSING","evidence_ids":["EV-2"]},
         ],
     }
+    manifest["content_sha256"] = sha256_hex(manifest)
+    return manifest
 
 
 def test_snapshot_seal_and_validate():
