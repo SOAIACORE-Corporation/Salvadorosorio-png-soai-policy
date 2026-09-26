@@ -107,7 +107,7 @@ def test_normalize_terraform_state_observation():
     )
     assert record["record_type"] == "observation"
     assert record["source"]["system"] == "terraform"
-    assert record["payload"]["value"]["sku"] == "Standard_B1ms"
+    assert record["payload"]["value"]["attributes"]["sku"] == "Standard_B1ms"
 
 
 def test_normalize_github_iac_preserves_declarative_intent():
