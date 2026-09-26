@@ -1,0 +1,15 @@
+{
+  "validation_id": "VAL-ERR-20260926-025",
+  "error_id": "ERR-20260926-025",
+  "status": "CONTROLLED",
+  "validated_at": "2026-09-26",
+  "rationale": "MOCATRIZ Continuity Test 02 preserved checkpoint identity, objective, scope, rule set, pending work, evidence references and closure contract across the observed conversational interruption. The test scored 30/30 with no nullifying failures. Functional service validation remains a separate closure layer and was not inferred from execution success.",
+  "evidence_refs": [
+    "schemas/examples/landscape/mocatriz-continuity-test-02-v1.json",
+    "schemas/tests/test_mocatriz_continuity.py",
+    "docs/landscape-intelligence/MOCATRIZ_CONTINUITY_TEST_02_v1.md",
+    "github-actions:36240831875"
+  ],
+  "human_required": false,
+  "residual_risk": "The result validates the tested continuity mechanism and interruption instance; it is not proof that every future conversational interruption will recover perfectly."
+}
