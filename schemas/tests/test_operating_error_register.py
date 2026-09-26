@@ -58,3 +58,17 @@ def test_error_register_tracks_avoidable_human_cost():
 def test_error_register_includes_priority_drift():
     entries = _load()["entries"]
     assert any(e["class"] == "PRIORITY_DRIFT" for e in entries)
+
+
+def test_policy_requires_task_level_execution():
+    text = POLICY.read_text(encoding="utf-8")
+    assert "Execution granularity" in text
+    assert "tasks and objectives" in text
+    assert "OBJECTIVE → PLAN INTERNALLY → EXECUTE SAFE SUBSTEPS" in text
+    assert "Success is measured by objective completion" in text
+
+
+def test_scenario_pack_contains_task_level_execution():
+    scenario = (ROOT / "docs" / "landscape-intelligence" / "SCENARIO_PACK_v0.1.md").read_text(encoding="utf-8")
+    assert "SCN-024 · Task-level execution versus unit execution" in scenario
+    assert "Treat the task objective as the execution unit." in scenario
