@@ -249,6 +249,127 @@ def normalize_monitoring(raw: dict[str, Any], *, source: dict[str, Any]) -> dict
     return record
 
 
+
+def normalize_security_rbac(raw: dict[str, Any], *, source: dict[str, Any]) -> dict[str, Any]:
+    required = ("observation_id", "asset_id", "scope", "principal_id", "role")
+    missing = [key for key in required if not raw.get(key)]
+    if missing:
+        raise ValueError(f"security/rbac observation missing required fields: {', '.join(missing)}")
+    record = {
+        "schema_version": "0.1",
+        "record_id": raw["observation_id"],
+        "record_type": "observation",
+        "source": source,
+        "observed_at": raw.get("observed_at") or source["collected_at"],
+        "payload": {
+            "observation_id": raw["observation_id"],
+            "asset_id": raw["asset_id"],
+            "fact_type": "identity",
+            "value": {
+                "scope": raw["scope"],
+                "principal_id": raw["principal_id"],
+                "role": raw["role"],
+                "inherited": bool(raw.get("inherited", False)),
+                "assignment_id": raw.get("assignment_id"),
+            },
+            "unit": None,
+            "evidence_refs": raw.get("evidence_refs", []),
+            "confidence": float(raw.get("confidence", 1.0)),
+        },
+    }
+    _validator().validate(record)
+    return record
+
+
+def normalize_runtime(raw: dict[str, Any], *, source: dict[str, Any]) -> dict[str, Any]:
+    required = ("observation_id", "asset_id", "service", "environment", "health")
+    missing = [key for key in required if not raw.get(key)]
+    if missing:
+        raise ValueError(f"runtime observation missing required fields: {', '.join(missing)}")
+    record = {
+        "schema_version": "0.1",
+        "record_id": raw["observation_id"],
+        "record_type": "observation",
+        "source": source,
+        "observed_at": raw.get("observed_at") or source["collected_at"],
+        "payload": {
+            "observation_id": raw["observation_id"],
+            "asset_id": raw["asset_id"],
+            "fact_type": "health",
+            "value": {
+                "service": raw["service"],
+                "environment": raw["environment"],
+                "health": raw["health"],
+                "version": raw.get("version"),
+                "endpoint": raw.get("endpoint"),
+                "dependencies": raw.get("dependencies", []),
+            },
+            "unit": None,
+            "evidence_refs": raw.get("evidence_refs", []),
+            "confidence": float(raw.get("confidence", 1.0)),
+        },
+    }
+    _validator().validate(record)
+    return record
+
+
+def normalize_github_pr(raw: dict[str, Any], *, source: dict[str, Any]) -> dict[str, Any]:
+    required = ("observation_id", "repo", "pr_number", "status")
+    missing = [key for key in required if not raw.get(key)]
+    if missing:
+        raise ValueError(f"github PR observation missing required fields: {', '.join(missing)}")
+    record = {
+        "schema_version": "0.1",
+        "record_id": raw["observation_id"],
+        "record_type": "observation",
+        "source": source,
+        "observed_at": raw.get("observed_at") or source["collected_at"],
+        "payload": {
+            "observation_id": raw["observation_id"],
+            "asset_id": raw.get("asset_id"),
+            "fact_type": "state",
+            "value": {
+                "repo": raw["repo"],
+                "pr_number": int(raw["pr_number"]),
+                "status": raw["status"],
+                "draft": bool(raw.get("draft", False)),
+                "merge_commit": raw.get("merge_commit"),
+                "approvals": raw.get("approvals", []),
+            },
+            "unit": None,
+            "evidence_refs": raw.get("evidence_refs", []),
+            "confidence": float(raw.get("confidence", 1.0)),
+        },
+    }
+    _validator().validate(record)
+    return record
+
+
+def normalize_committee_decision(raw: dict[str, Any], *, source: dict[str, Any]) -> dict[str, Any]:
+    required = ("decision_id", "decision_type", "authority", "rationale", "status")
+    missing = [key for key in required if not raw.get(key)]
+    if missing:
+        raise ValueError(f"committee decision missing required fields: {', '.join(missing)}")
+    record = {
+        "schema_version": "0.1",
+        "record_id": raw["decision_id"],
+        "record_type": "decision",
+        "source": source,
+        "observed_at": raw.get("observed_at") or source["collected_at"],
+        "payload": {
+            "decision_id": raw["decision_id"],
+            "finding_id": raw.get("finding_id"),
+            "decision_type": raw["decision_type"],
+            "authority": raw["authority"],
+            "rationale": raw["rationale"],
+            "conditions": raw.get("conditions", []),
+            "status": raw["status"],
+        },
+    }
+    _validator().validate(record)
+    return record
+
+
 def normalize(kind: str, raw: dict[str, Any]) -> dict[str, Any]:
     collected_at = raw.get("collected_at") or raw.get("observed_at") or _utc()
     system_map = {
@@ -258,6 +379,10 @@ def normalize(kind: str, raw: dict[str, Any]) -> dict[str, Any]:
         "terraform-state": ("terraform", "state"),
         "github-iac": ("github", "repo"),
         "monitoring": ("monitoring", "telemetry"),
+        "security-rbac": ("azure", "api"),
+        "runtime": ("runtime", "telemetry"),
+        "github-pr": ("github", "api"),
+        "committee-decision": ("drive", "human_decision"),
     }
     if kind not in system_map:
         raise ValueError(f"unsupported kind: {kind}")
@@ -283,14 +408,22 @@ def normalize(kind: str, raw: dict[str, Any]) -> dict[str, Any]:
         return normalize_terraform_state(raw, source=source)
     if kind == "github-iac":
         return normalize_github_iac(raw, source=source)
-    return normalize_monitoring(raw, source=source)
+    if kind == "monitoring":
+        return normalize_monitoring(raw, source=source)
+    if kind == "security-rbac":
+        return normalize_security_rbac(raw, source=source)
+    if kind == "runtime":
+        return normalize_runtime(raw, source=source)
+    if kind == "github-pr":
+        return normalize_github_pr(raw, source=source)
+    return normalize_committee_decision(raw, source=source)
 
 
 def main() -> int:
     import argparse
 
     parser = argparse.ArgumentParser(description="Normalize collected Landscape evidence")
-    parser.add_argument("--kind", required=True, choices=["azure-resource", "cost", "terraform-plan-summary", "terraform-state", "github-iac", "monitoring"])
+    parser.add_argument("--kind", required=True, choices=["azure-resource", "cost", "terraform-plan-summary", "terraform-state", "github-iac", "monitoring", "security-rbac", "runtime", "github-pr", "committee-decision"])
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
