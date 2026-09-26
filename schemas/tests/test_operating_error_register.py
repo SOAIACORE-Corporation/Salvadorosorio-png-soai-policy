@@ -72,3 +72,13 @@ def test_scenario_pack_contains_task_level_execution():
     scenario = (ROOT / "docs" / "landscape-intelligence" / "SCENARIO_PACK_v0.1.md").read_text(encoding="utf-8")
     assert "SCN-024 · Task-level execution versus unit execution" in scenario
     assert "Treat the task objective as the execution unit." in scenario
+
+
+def test_policy_executes_by_objective_not_microstep():
+    text = POLICY.read_text(encoding="utf-8")
+    assert "The canonical unit of execution is an **objective**" in text
+    assert "OBJECTIVE" in text
+    assert "REQUIRED TASK SET" in text
+    assert "INTEGRATED VALIDATION" in text
+    assert "Technical curiosity never outranks the declared objective" in text
+    assert "capability to act is not itself a reason to act" in text
