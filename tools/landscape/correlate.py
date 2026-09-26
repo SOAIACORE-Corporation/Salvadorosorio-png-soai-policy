@@ -190,6 +190,45 @@ def correlate(records: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
         )
 
 
+
+    # Policy: explicit NoData/Unknown health states are visibility gaps, not healthy zeroes.
+    no_data_states = {"NoData", "Unknown", "No Data", "UNKNOWN"}
+    for record in records:
+        if record["record_type"] != "observation":
+            continue
+        payload = record["payload"]
+        if payload.get("fact_type") != "health":
+            continue
+        value = payload.get("value") or {}
+        state = value.get("state") or value.get("health")
+        if state not in no_data_states:
+            continue
+        fid = f"finding:health-visibility:{_digest([payload.get('asset_id'), state, record['record_id']])}"
+        findings.append(
+            _finding(
+                finding_id=fid,
+                finding_type="visibility_gap",
+                adjudication="VISIBILITY_GAP",
+                severity="UNKNOWN",
+                status="VISIBILITY_GAP",
+                observed_at=record["observed_at"],
+                evidence_refs=[record["record_id"]],
+                asset_id=payload.get("asset_id"),
+                confidence=1.0,
+            )
+        )
+        impacts.append(
+            _impact(
+                impact_id=f"impact:{fid}:availability",
+                subject_id=fid,
+                domain="availability",
+                score="UNKNOWN",
+                rationale="Source explicitly reports missing/unknown health data; numeric or empty values must not be interpreted as healthy.",
+                observed_at=record["observed_at"],
+                confidence=1.0,
+            )
+        )
+
     # Policy: broad Key Vault secret access is a security case, never an automatic removal.
     for record in records:
         if record["record_type"] != "observation":
