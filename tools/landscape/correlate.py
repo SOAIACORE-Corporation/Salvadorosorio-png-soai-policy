@@ -1,0 +1,198 @@
+#!/usr/bin/env python3
+"""Explainable read-only correlation policies for Landscape Intelligence v0.1."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from typing import Any
+
+from normalize import _validator
+from reconcile import reconcile
+
+
+def _digest(value: Any) -> str:
+    raw = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()[:16]
+
+
+def _finding(
+    *,
+    finding_id: str,
+    finding_type: str,
+    adjudication: str,
+    severity: str,
+    status: str,
+    observed_at: str,
+    evidence_refs: list[str],
+    asset_id: str | None = None,
+    confidence: float = 1.0,
+) -> dict[str, Any]:
+    record = {
+        "schema_version": "0.1",
+        "record_id": finding_id,
+        "record_type": "finding",
+        "source": {
+            "source_id": "landscape-correlation-policy-v0.1",
+            "system": "other",
+            "source_type": "derived",
+            "location": "tools/landscape/correlate.py",
+            "collected_at": observed_at,
+            "hash": None,
+            "freshness": "current",
+            "trust_level": "derived",
+        },
+        "observed_at": observed_at,
+        "payload": {
+            "finding_id": finding_id,
+            "asset_id": asset_id,
+            "type": finding_type,
+            "adjudication": adjudication,
+            "severity": severity,
+            "status": status,
+            "evidence_refs": evidence_refs,
+            "confidence": confidence,
+        },
+    }
+    _validator().validate(record)
+    return record
+
+
+def _impact(
+    *,
+    impact_id: str,
+    subject_id: str,
+    domain: str,
+    score: int | str,
+    rationale: str,
+    observed_at: str,
+    confidence: float,
+) -> dict[str, Any]:
+    record = {
+        "schema_version": "0.1",
+        "record_id": impact_id,
+        "record_type": "impact_assessment",
+        "source": {
+            "source_id": "landscape-correlation-policy-v0.1",
+            "system": "other",
+            "source_type": "derived",
+            "location": "tools/landscape/correlate.py",
+            "collected_at": observed_at,
+            "hash": None,
+            "freshness": "current",
+            "trust_level": "derived",
+        },
+        "observed_at": observed_at,
+        "payload": {
+            "impact_id": impact_id,
+            "subject_id": subject_id,
+            "domain": domain,
+            "score": score,
+            "rationale": rationale,
+            "confidence": confidence,
+        },
+    }
+    _validator().validate(record)
+    return record
+
+
+def correlate(records: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    findings = list(reconcile(records))
+    impacts: list[dict[str, Any]] = []
+
+    # Policy: unknown cost is visibility gap, not zero.
+    for record in records:
+        if record["record_type"] != "cost_snapshot":
+            continue
+        payload = record["payload"]
+        if payload["amount"] is None or payload["cost_type"] == "unknown":
+            fid = f"finding:cost-visibility:{_digest(record['record_id'])}"
+            findings.append(
+                _finding(
+                    finding_id=fid,
+                    finding_type="visibility_gap",
+                    adjudication="VISIBILITY_GAP",
+                    severity="UNKNOWN",
+                    status="VISIBILITY_GAP",
+                    observed_at=record["observed_at"],
+                    evidence_refs=[record["record_id"]],
+                    confidence=1.0,
+                )
+            )
+            impacts.append(
+                _impact(
+                    impact_id=f"impact:{fid}:financial",
+                    subject_id=fid,
+                    domain="financial",
+                    score="UNKNOWN",
+                    rationale="Cost is not evidenced; UNKNOWN must not be represented as zero.",
+                    observed_at=record["observed_at"],
+                    confidence=1.0,
+                )
+            )
+
+    # Policy: stale/expired authoritative sources create a visibility gap.
+    for record in records:
+        freshness = record["source"].get("freshness")
+        if freshness not in {"stale", "expired"}:
+            continue
+        fid = f"finding:source-freshness:{_digest(record['source']['source_id'])}"
+        findings.append(
+            _finding(
+                finding_id=fid,
+                finding_type="visibility_gap",
+                adjudication="VISIBILITY_GAP",
+                severity="WARNING",
+                status="VISIBILITY_GAP",
+                observed_at=record["observed_at"],
+                evidence_refs=[record["record_id"]],
+                asset_id=record.get("payload", {}).get("asset_id"),
+                confidence=1.0,
+            )
+        )
+
+    # Policy: monitoring health states can raise a risk, but never prescribe FIX.
+    unhealthy = {"Degraded", "Unhealthy", "Failed", "Critical"}
+    for record in records:
+        if record["record_type"] != "observation":
+            continue
+        payload = record["payload"]
+        if payload.get("fact_type") != "health":
+            continue
+        value = payload.get("value") or {}
+        state = value.get("state")
+        if state not in unhealthy:
+            continue
+        fid = f"finding:health:{_digest([payload.get('asset_id'), state, record['record_id']])}"
+        findings.append(
+            _finding(
+                finding_id=fid,
+                finding_type="risk",
+                adjudication="PENDING",
+                severity="WARNING" if state != "Critical" else "CRITICAL",
+                status="OPEN",
+                observed_at=record["observed_at"],
+                evidence_refs=[record["record_id"]],
+                asset_id=payload.get("asset_id"),
+                confidence=1.0,
+            )
+        )
+        impacts.append(
+            _impact(
+                impact_id=f"impact:{fid}:availability",
+                subject_id=fid,
+                domain="availability",
+                score="UNKNOWN",
+                rationale="Observed health degradation requires domain assessment before assigning material impact.",
+                observed_at=record["observed_at"],
+                confidence=1.0,
+            )
+        )
+
+    # Deduplicate by record id while preserving deterministic ordering.
+    unique_findings = {f["record_id"]: f for f in findings}
+    unique_impacts = {i["record_id"]: i for i in impacts}
+    return {
+        "findings": [unique_findings[k] for k in sorted(unique_findings)],
+        "impacts": [unique_impacts[k] for k in sorted(unique_impacts)],
+    }
