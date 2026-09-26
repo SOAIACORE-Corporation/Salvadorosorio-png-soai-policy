@@ -5,7 +5,8 @@ on:
     paths:
       - "schemas/landscape-intelligence-v0.1.schema.json"
       - "schemas/examples/landscape/**"
-      - "schemas/tests/test_landscape_intelligence_schema.py"
+      - "schemas/tests/**"
+      - "tools/landscape/**"
       - ".github/workflows/landscape-intelligence-schema.yml"
   push:
     branches:
@@ -13,7 +14,8 @@ on:
     paths:
       - "schemas/landscape-intelligence-v0.1.schema.json"
       - "schemas/examples/landscape/**"
-      - "schemas/tests/test_landscape_intelligence_schema.py"
+      - "schemas/tests/**"
+      - "tools/landscape/**"
 
 permissions:
   contents: read
@@ -29,4 +31,4 @@ jobs:
       - name: Sync frozen workspace
         run: uv sync --frozen
       - name: Validate canonical schema and fixtures
-        run: uv run --frozen pytest -q schemas/tests/test_landscape_intelligence_schema.py
+        run: uv run --frozen pytest -q schemas/tests/test_landscape_intelligence_schema.py schemas/tests/test_landscape_normalizer.py
