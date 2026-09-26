@@ -91,7 +91,7 @@ The test suite also verifies rejection of:
 ## Acceptance gate
 
 ```bash
-uv run --frozen pytest -q schemas/tests/test_landscape_intelligence_schema.py
+uv run --frozen pytest -q schemas/tests/test_landscape_intelligence_schema.py schemas/tests/test_landscape_normalizer.py
 ```
 
 The GitHub workflow `Landscape Intelligence Schema` runs the same gate on pull requests affecting the schema or its fixtures.
@@ -99,3 +99,15 @@ The GitHub workflow `Landscape Intelligence Schema` runs the same gate on pull r
 ## Next implementation step
 
 The next step is a lightweight collector/normalizer that emits these records from Azure, Terraform, GitHub, Cost Management, monitoring, and application runtime. Collection must remain read-only until a separate execution authority is explicitly approved.
+
+## Read-only normalizer
+
+`tools/landscape/normalize.py` converts already-collected payloads into canonical v0.1 records.
+
+Initial adapters:
+
+- Azure resource → asset
+- Cost record → cost_snapshot
+- Terraform plan summary → finding
+
+The normalizer performs no cloud calls and exposes no mutation path. Unsupported execution-oriented kinds are rejected.
