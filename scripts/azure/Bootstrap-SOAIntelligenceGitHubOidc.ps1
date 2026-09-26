@@ -7,7 +7,8 @@ param(
     [string]$BootstrapResourceGroup = 'rg-soa-intelligence-bootstrap',
     [string]$IdentityName = 'id-soa-intelligence-gha-dev',
     [string]$Repository = 'SOAIACORE-Corporation/Salvadorosorio-png-soai-policy',
-    [string]$FeatureBranch = 'feature/soa-intelligence-a2-postgres-20260906-r2',
+    [string]$FeatureBranch = 'feat/landscape-intelligence-data-model-v1',
+    [string]$FeatureCredentialName = 'github-landscape-intelligence-v1',
     [string]$StateResourceGroup = 'rg-soaiacore-tfstate-34utxi',
     [string]$StateStorageAccount = 'stsoaiacoretf34utxi'
 )
@@ -28,6 +29,13 @@ function Invoke-AzJson {
 function Write-Boundary {
     param([string]$Name, [string]$Value)
     Write-Host ("{0}={1}" -f $Name, $Value)
+}
+
+function Get-FederatedCredentialByName {
+    param([Parameter(Mandatory)][string]$Name)
+    $items = Invoke-AzJson -Arguments @('identity','federated-credential','list','--resource-group',$BootstrapResourceGroup,'--identity-name',$IdentityName)
+    if (-not $items) { return $null }
+    return @($items | Where-Object { [string]$_.name -eq $Name }) | Select-Object -First 1
 }
 
 $account = Invoke-AzJson -Arguments @('account','show')
@@ -51,6 +59,7 @@ Write-Host ''
 Write-Host 'Planned identity:'
 Write-Host "  resource-group:  $BootstrapResourceGroup"
 Write-Host "  identity:        $IdentityName"
+Write-Host "  feature credential: $FeatureCredentialName"
 Write-Host "  feature subject: $featureSubject"
 Write-Host "  main subject:    $mainSubject"
 Write-Host '  generic PR subject: FORBIDDEN / removed if present'
@@ -93,14 +102,9 @@ function Ensure-FederatedCredential {
         [Parameter(Mandatory)][string]$Subject
     )
 
-    $existing = & az identity federated-credential show `
-        --resource-group $BootstrapResourceGroup `
-        --identity-name $IdentityName `
-        --name $Name `
-        --only-show-errors --output json 2>$null
+    $existingObject = Get-FederatedCredentialByName -Name $Name
 
-    if ($LASTEXITCODE -eq 0) {
-        $existingObject = $existing | ConvertFrom-Json
+    if ($existingObject) {
         $existingIssuer = [string]$existingObject.issuer
         $existingSubject = [string]$existingObject.subject
         $existingAudiences = @($existingObject.audiences | ForEach-Object { [string]$_ })
@@ -173,12 +177,8 @@ function Ensure-RoleAssignment {
 }
 
 # Security hardening: a generic repo:...:pull_request subject is too broad for a public repository.
-$legacyPrCredential = & az identity federated-credential show `
-    --resource-group $BootstrapResourceGroup `
-    --identity-name $IdentityName `
-    --name 'github-pr' `
-    --only-show-errors --output json 2>$null
-if ($LASTEXITCODE -eq 0) {
+$legacyPrCredential = Get-FederatedCredentialByName -Name 'github-pr'
+if ($legacyPrCredential) {
     & az identity federated-credential delete `
         --resource-group $BootstrapResourceGroup `
         --identity-name $IdentityName `
@@ -191,7 +191,7 @@ if ($LASTEXITCODE -eq 0) {
     Write-Boundary 'LEGACY_GENERIC_PR_CREDENTIAL_REMOVED' 'false'
 }
 
-Ensure-FederatedCredential -Name 'github-feature-a2' -Subject $featureSubject
+Ensure-FederatedCredential -Name $FeatureCredentialName -Subject $featureSubject
 Ensure-FederatedCredential -Name 'github-main' -Subject $mainSubject
 
 if ($AuthorizeIam) {

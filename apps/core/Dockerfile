@@ -43,6 +43,7 @@ RUN apt-get update \
     && apt-get install --only-upgrade -y --no-install-recommends \
       bsdutils libblkid1 liblastlog2-2 libmount1 libsmartcols1 libuuid1 \
       login mount util-linux libssl3t64 openssl openssl-provider-legacy \
+      perl-base libpcre2-8-0 libsqlite3-0 gzip \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /src/.venv /app/.venv
 COPY schemas /app/schemas

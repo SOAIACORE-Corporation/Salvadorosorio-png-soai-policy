@@ -2,7 +2,8 @@
 FROM --platform=linux/amd64 docker.io/library/node:24-trixie-slim@sha256:0711b541c1c33a8a530ac4f0d391baa9a15b3d804695b1b24a47daa5fb60e74d AS dependencies
 WORKDIR /app
 COPY apps/web/package.json apps/web/package-lock.json ./
-RUN npm ci --ignore-scripts --no-audit --no-fund
+RUN npm ci --ignore-scripts --no-audit --no-fund \
+    && npm install --no-save --ignore-scripts --no-audit --no-fund sharp@0.35.4
 
 FROM --platform=linux/amd64 docker.io/library/node:24-trixie-slim@sha256:0711b541c1c33a8a530ac4f0d391baa9a15b3d804695b1b24a47daa5fb60e74d AS builder
 ENV NEXT_TELEMETRY_DISABLED=1 \
@@ -29,6 +30,7 @@ RUN apt-get update \
     && apt-get install --only-upgrade -y --no-install-recommends \
       bsdutils libblkid1 liblastlog2-2 libmount1 libsmartcols1 libuuid1 \
       login mount util-linux libssl3t64 openssl-provider-legacy \
+      perl-base libpcre2-8-0 libsqlite3-0 gzip \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack

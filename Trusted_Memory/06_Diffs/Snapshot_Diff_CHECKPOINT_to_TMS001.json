@@ -1,0 +1,28 @@
+{
+  "diff_version": "1.0",
+  "diff_type": "BASELINE_IMPORT_FROM_CONTINUITY_CHECKPOINT",
+  "previous_snapshot_id": "CHK-MOCATRIZ-02-CLOSURE-20260926",
+  "current_snapshot_id": "TMS-SOAIACORE-MOCATRIZ-20260926-001",
+  "previous_source_head": "fdbc56cbbc25b9c572a70f570fab22cc879e989c",
+  "frozen_target_head": "814aae7c548247ab9b0c79c42bf586e939a7c064",
+  "changes": [
+    "continuity checkpoint normalized into canonical Trusted Memory Snapshot schema",
+    "explicit source authority inventory added",
+    "rules materialized as stable IDs",
+    "metrics normalized with zero-denominator N/A semantics",
+    "decisions and exceptions made explicit",
+    "resume point converted into a first-class recoverable contract",
+    "snapshot content SHA-256 added",
+    "versioned Recovery Manifest added",
+    "Durable Evidence Inventory added",
+    "bitemporal PostgreSQL projection defined without database mutation"
+  ],
+  "preserved": [
+    "objective and COMPLETED_WITH_EXCEPTIONS closure",
+    "Prueba 02 PASS 30/30",
+    "27 error total / 25 controlled / 2 accepted gaps",
+    "functional endpoint NOT_DEMONSTRATED",
+    "next objective = Trusted Memory Snapshot persistence/versioning"
+  ],
+  "interpretation": "This is a schema-baseline import diff, not a same-schema version-to-version diff."
+}

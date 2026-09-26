@@ -1,0 +1,42 @@
+{
+  "durable_evidence_fixture_version": "0.1",
+  "objective": "Generate a Recovery Manifest from durable Landscape Intelligence evidence.",
+  "evidence": [
+    {
+      "evidence_id": "git:9cc6d18",
+      "requirement_id": "primary-state",
+      "available": true,
+      "validation_status": "CONFIRMED",
+      "source_ref": "commit:9cc6d18fabfbb6868052b0edaeee234a67a48861"
+    },
+    {
+      "evidence_id": "receipt:memory-cycle",
+      "requirement_id": "causal-link",
+      "available": true,
+      "validation_status": "CONFIRMED",
+      "source_ref": "receipts/LANDSCAPE_INTELLIGENCE_MEMORY_CYCLE_PILOT_2026-09-26.md"
+    },
+    {
+      "evidence_id": "receipt:pilot-go",
+      "requirement_id": "decision-authority",
+      "available": true,
+      "validation_status": "CONFIRMED",
+      "source_ref": "receipts/LANDSCAPE_INTELLIGENCE_MEMORY_CYCLE_PILOT_2026-09-26.md"
+    },
+    {
+      "evidence_id": "ci:landscape-112",
+      "requirement_id": "source-freshness",
+      "available": true,
+      "validation_status": "CONFIRMED",
+      "fresh": true,
+      "source_ref": "github-actions:36233335910"
+    },
+    {
+      "evidence_id": "receipt:pilot-validation",
+      "requirement_id": "validation-receipt",
+      "available": true,
+      "validation_status": "CONFIRMED",
+      "source_ref": "receipts/LANDSCAPE_INTELLIGENCE_MEMORY_CYCLE_PILOT_2026-09-26.md"
+    }
+  ]
+}

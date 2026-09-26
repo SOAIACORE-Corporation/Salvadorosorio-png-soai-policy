@@ -1,0 +1,1182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://soaiacore.com/schemas/landscape-intelligence-v0.1.schema.json",
+  "title": "SOAiaCore Landscape Intelligence Canonical Record v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "record_id",
+    "record_type",
+    "source",
+    "observed_at",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "record_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "record_type": {
+      "enum": [
+        "asset",
+        "observation",
+        "finding",
+        "decision",
+        "action",
+        "validation",
+        "receipt",
+        "dependency",
+        "cost_snapshot",
+        "impact_assessment",
+        "regulatory_source",
+        "regulatory_assertion",
+        "applicability_assessment"
+      ]
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "asset"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/asset"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "observation"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/observation"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "finding"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/finding"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "decision"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/decision"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "action"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/action"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "validation"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/validation"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "receipt"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/receipt"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "dependency"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/dependency"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "cost_snapshot"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/cost_snapshot"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "impact_assessment"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/impact_assessment"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "regulatory_source"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/regulatory_source"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "regulatory_assertion"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/regulatory_assertion"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "applicability_assessment"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/applicability_assessment"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "nullableString": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "nullableNumber": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "system",
+        "source_type",
+        "collected_at",
+        "freshness",
+        "trust_level"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "minLength": 3
+        },
+        "system": {
+          "enum": [
+            "azure",
+            "terraform",
+            "github",
+            "drive",
+            "monitoring",
+            "cost",
+            "runtime",
+            "other"
+          ]
+        },
+        "source_type": {
+          "enum": [
+            "api",
+            "state",
+            "plan",
+            "repo",
+            "file",
+            "telemetry",
+            "human_decision",
+            "derived"
+          ]
+        },
+        "location": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "collected_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "hash": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "freshness": {
+          "enum": [
+            "current",
+            "stale",
+            "expired",
+            "unknown"
+          ]
+        },
+        "trust_level": {
+          "enum": [
+            "authoritative",
+            "supporting",
+            "derived",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "asset_id",
+        "provider",
+        "scope",
+        "environment",
+        "resource_type",
+        "native_id",
+        "name",
+        "status"
+      ],
+      "properties": {
+        "asset_id": {
+          "type": "string",
+          "minLength": 3
+        },
+        "provider": {
+          "enum": [
+            "azure",
+            "gcp",
+            "app",
+            "external",
+            "other"
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "environment": {
+          "enum": [
+            "p0",
+            "dev",
+            "test",
+            "prod",
+            "unknown"
+          ]
+        },
+        "resource_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "native_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "status": {
+          "enum": [
+            "ACTIVE",
+            "RETIRED",
+            "EXTERNAL",
+            "DERIVED"
+          ]
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observation_id",
+        "asset_id",
+        "fact_type",
+        "value",
+        "confidence"
+      ],
+      "properties": {
+        "observation_id": {
+          "type": "string"
+        },
+        "asset_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fact_type": {
+          "enum": [
+            "state",
+            "config",
+            "cost",
+            "health",
+            "version",
+            "identity",
+            "network",
+            "tag",
+            "policy",
+            "other"
+          ]
+        },
+        "value": {},
+        "unit": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "finding_id",
+        "type",
+        "adjudication",
+        "severity",
+        "status",
+        "confidence"
+      ],
+      "properties": {
+        "finding_id": {
+          "type": "string"
+        },
+        "asset_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "type": {
+          "enum": [
+            "drift",
+            "risk",
+            "visibility_gap",
+            "cost",
+            "security",
+            "governance",
+            "dependency",
+            "compliance",
+            "other"
+          ]
+        },
+        "classification": {
+          "enum": [
+            "PHYSICAL_DRIFT",
+            "MANAGED_DRIFT",
+            "DECLARATIVE_DRIFT",
+            "MULTI_SOURCE_DIVERGENCE",
+            "PAIRWISE_DRIFT",
+            "SOURCE_VISIBILITY_GAP"
+          ]
+        },
+        "adjudication": {
+          "enum": [
+            "KEEP",
+            "ADOPT",
+            "FIX",
+            "REMOVE",
+            "HOLD",
+            "ACCEPT",
+            "EXPECTED_DERIVED",
+            "VISIBILITY_GAP",
+            "PENDING"
+          ]
+        },
+        "severity": {
+          "enum": [
+            "INFO",
+            "WARNING",
+            "ERROR",
+            "CRITICAL",
+            "UNKNOWN"
+          ]
+        },
+        "status": {
+          "enum": [
+            "OPEN",
+            "HOLD",
+            "ACCEPTED",
+            "CLOSED",
+            "VISIBILITY_GAP"
+          ]
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision_id",
+        "decision_type",
+        "authority",
+        "rationale",
+        "status"
+      ],
+      "properties": {
+        "decision_id": {
+          "type": "string"
+        },
+        "finding_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "decision_type": {
+          "enum": [
+            "KEEP",
+            "ADOPT",
+            "FIX",
+            "REMOVE",
+            "HOLD",
+            "ACCEPT",
+            "APPROVE",
+            "REJECT",
+            "DEFER"
+          ]
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "status": {
+          "enum": [
+            "PROPOSED",
+            "APPROVED",
+            "REJECTED",
+            "DEFERRED"
+          ]
+        }
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action_id",
+        "decision_id",
+        "action_type",
+        "status"
+      ],
+      "properties": {
+        "action_id": {
+          "type": "string"
+        },
+        "decision_id": {
+          "type": "string"
+        },
+        "action_type": {
+          "enum": [
+            "config_change",
+            "deploy",
+            "remove",
+            "adopt",
+            "document",
+            "monitor",
+            "none"
+          ]
+        },
+        "executor": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "scope": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "preconditions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rollback": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "status": {
+          "enum": [
+            "PLANNED",
+            "AUTHORIZED",
+            "EXECUTING",
+            "DONE",
+            "ROLLED_BACK",
+            "NONE"
+          ]
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "validation_id",
+        "action_id",
+        "status",
+        "expected",
+        "actual"
+      ],
+      "properties": {
+        "validation_id": {
+          "type": "string"
+        },
+        "action_id": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "PARTIAL",
+            "UNKNOWN"
+          ]
+        },
+        "expected": {},
+        "actual": {},
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "receipt_id",
+        "outcome",
+        "residual_risk"
+      ],
+      "properties": {
+        "receipt_id": {
+          "type": "string"
+        },
+        "decision_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "action_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "validation_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "outcome": {
+          "enum": [
+            "CLOSED",
+            "REOPENED",
+            "ROLLED_BACK",
+            "NO_ACTION"
+          ]
+        },
+        "residual_risk": {
+          "enum": [
+            "NONE",
+            "LOW",
+            "MEDIUM",
+            "HIGH",
+            "CRITICAL",
+            "UNKNOWN"
+          ]
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dependency_id",
+        "from_id",
+        "to_id",
+        "relation_type",
+        "status"
+      ],
+      "properties": {
+        "dependency_id": {
+          "type": "string"
+        },
+        "from_id": {
+          "type": "string"
+        },
+        "to_id": {
+          "type": "string"
+        },
+        "relation_type": {
+          "enum": [
+            "depends_on",
+            "blocks",
+            "blocked_by"
+          ]
+        },
+        "criticality": {
+          "enum": [
+            "LOW",
+            "MEDIUM",
+            "HIGH",
+            "CRITICAL",
+            "UNKNOWN"
+          ]
+        },
+        "status": {
+          "enum": [
+            "ACTIVE",
+            "RESOLVED"
+          ]
+        }
+      }
+    },
+    "cost_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cost_id",
+        "scope_id",
+        "period",
+        "amount",
+        "currency",
+        "cost_type",
+        "confidence"
+      ],
+      "properties": {
+        "cost_id": {
+          "type": "string"
+        },
+        "scope_id": {
+          "type": "string"
+        },
+        "period": {
+          "type": "string",
+          "minLength": 1
+        },
+        "amount": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "currency": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Z]{3}$"
+        },
+        "cost_type": {
+          "enum": [
+            "observed",
+            "estimated",
+            "avoided",
+            "implementation",
+            "operation",
+            "downtime",
+            "unknown"
+          ]
+        },
+        "formula": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "amount": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "amount"
+            ]
+          },
+          "then": {
+            "properties": {
+              "currency": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "cost_type": {
+                "enum": [
+                  "estimated",
+                  "avoided",
+                  "implementation",
+                  "operation",
+                  "downtime"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "formula"
+            ],
+            "properties": {
+              "formula": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "impact_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "impact_id",
+        "subject_id",
+        "domain",
+        "score",
+        "rationale",
+        "confidence"
+      ],
+      "properties": {
+        "impact_id": {
+          "type": "string"
+        },
+        "subject_id": {
+          "type": "string"
+        },
+        "domain": {
+          "enum": [
+            "financial",
+            "operation",
+            "security",
+            "availability",
+            "data",
+            "compliance",
+            "architecture",
+            "reputation",
+            "continuity"
+          ]
+        },
+        "score": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4
+            },
+            {
+              "const": "UNKNOWN"
+            }
+          ]
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "regulatory_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "regulatory_source_id",
+        "jurisdiction",
+        "authority",
+        "instrument_type",
+        "citation",
+        "binding_level",
+        "status",
+        "official_url",
+        "source_tier",
+        "verified_at",
+        "exception_mode"
+      ],
+      "properties": {
+        "regulatory_source_id": {
+          "type": "string",
+          "minLength": 3
+        },
+        "jurisdiction": {
+          "type": "string",
+          "minLength": 2
+        },
+        "authority": {
+          "type": "string",
+          "minLength": 2
+        },
+        "instrument_type": {
+          "enum": [
+            "law",
+            "regulation",
+            "standard",
+            "guidance",
+            "pharmacopeia",
+            "policy",
+            "other"
+          ]
+        },
+        "citation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "binding_level": {
+          "enum": [
+            "binding",
+            "authoritative_guidance",
+            "standard_or_compendial",
+            "internal_control",
+            "informational"
+          ]
+        },
+        "status": {
+          "enum": [
+            "ACTIVE",
+            "AMENDED",
+            "SUPERSEDED",
+            "DRAFT",
+            "UNKNOWN"
+          ]
+        },
+        "effective_from": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "effective_to": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "official_url": {
+          "type": "string",
+          "minLength": 8
+        },
+        "source_tier": {
+          "enum": [
+            "TIER_1_OFFICIAL_MACHINE_READABLE",
+            "TIER_2_OFFICIAL_NAVIGABLE",
+            "TIER_3_LICENSED_STANDARD",
+            "TIER_4_EXPERT_INTERPRETATION"
+          ]
+        },
+        "verified_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "freshness": {
+          "enum": [
+            "current",
+            "stale",
+            "unknown"
+          ]
+        },
+        "hash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exception_mode": {
+          "enum": [
+            "WAIVABLE_INTERNAL",
+            "NON_WAIVABLE_EXTERNAL"
+          ]
+        }
+      }
+    },
+    "regulatory_assertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assertion_id",
+        "claim",
+        "regulatory_source_ids",
+        "jurisdiction",
+        "binding_level",
+        "interpretation",
+        "confidence",
+        "legal_review_required"
+      ],
+      "properties": {
+        "assertion_id": {
+          "type": "string"
+        },
+        "claim": {
+          "type": "string",
+          "minLength": 1
+        },
+        "regulatory_source_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "jurisdiction": {
+          "type": "string",
+          "minLength": 2
+        },
+        "binding_level": {
+          "enum": [
+            "binding",
+            "authoritative_guidance",
+            "standard_or_compendial",
+            "internal_control",
+            "informational"
+          ]
+        },
+        "interpretation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "legal_review_required": {
+          "type": "boolean"
+        }
+      }
+    },
+    "applicability_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assessment_id",
+        "scenario_id",
+        "assertion_id",
+        "applies",
+        "reason",
+        "confidence",
+        "decision_state"
+      ],
+      "properties": {
+        "assessment_id": {
+          "type": "string"
+        },
+        "scenario_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "assertion_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "applies": {
+          "enum": [
+            "YES",
+            "NO",
+            "PARTIAL",
+            "UNKNOWN"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "decision_state": {
+          "enum": [
+            "SUPPORTED",
+            "REQUIRES_REVIEW",
+            "CONTRADICTED",
+            "UNKNOWN"
+          ]
+        }
+      }
+    }
+  }
+}

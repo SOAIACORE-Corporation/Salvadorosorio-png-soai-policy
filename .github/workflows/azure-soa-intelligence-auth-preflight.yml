@@ -3,6 +3,7 @@ name: Azure SOA Intelligence Auth Preflight
 on:
   push:
     branches:
+      - feat/landscape-intelligence-data-model-v1
       - feature/soa-intelligence-a2-postgres-20260906-r2
       - main
     paths:

@@ -1,0 +1,16 @@
+{
+  "observation_id": "obs:github:psql-soaiacore-p0-34utxi",
+  "asset_id": "azure:108eb4dd-25b3-4a7f-8d5e-4ec4389c3f0d:psql-soaiacore-p0-34utxi",
+  "repo": "SOAIACORE-Corporation/Salvadorosorio-png-soai-policy",
+  "commit": "fc60164bc7a9adadccbfcf32c6e5ff6bc3b3163b",
+  "path": "infra/azure/p0",
+  "intent": {
+    "resource_type": "postgresql_flexible_server",
+    "native_id": "psql-soaiacore-p0-34utxi",
+    "public_network_access": "Disabled",
+    "sku": "Standard_B1ms"
+  },
+  "observed_at": "2026-09-25T22:29:14Z",
+  "source_id": "github-main-p0",
+  "source_location": "infra/azure/p0"
+}

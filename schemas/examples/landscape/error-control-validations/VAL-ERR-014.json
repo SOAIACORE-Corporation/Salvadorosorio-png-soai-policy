@@ -1,0 +1,12 @@
+{
+  "validation_id": "VAL-ERR-20260926-014",
+  "error_id": "ERR-20260926-014",
+  "status": "ACCEPTED_GAP",
+  "validated_at": "2026-09-26",
+  "rationale": "Contextual intent interpretation cannot be made deterministically perfect. The system now treats material unresolved ambiguity as a Human Task instead of claiming guaranteed sarcasm detection.",
+  "evidence_refs": [
+    "docs/landscape-intelligence/scenarios/SCN-028-contextual-intent.md",
+    "docs/landscape-intelligence/MOCATRIZ_ADAPTIVE_EXECUTION_v1.md"
+  ],
+  "human_required": false
+}

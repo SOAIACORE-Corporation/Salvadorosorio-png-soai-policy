@@ -1,0 +1,13 @@
+{
+  "validation_id": "VAL-ERR-20260926-002",
+  "error_id": "ERR-20260926-002",
+  "status": "CONTROLLED",
+  "validated_at": "2026-09-26",
+  "rationale": "Git refspec restriction is now detected read-only before branch guidance.",
+  "evidence_refs": [
+    "scripts/azure/Invoke-SOAIntelligenceBootstrapPreflight.ps1",
+    "schemas/tests/test_preflight_environment_controls.py",
+    "github-actions:36234325583"
+  ],
+  "human_required": false
+}
