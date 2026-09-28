@@ -1,0 +1,296 @@
+{
+  "snapshot_id": "TMS-SOAIACORE-MOCATRIZ-20260926-001",
+  "schema_version": "1.0",
+  "snapshot_version": "1.0.0",
+  "version_no": 1,
+  "created_at": "2026-09-26T12:24:00Z",
+  "valid_from": "2026-09-26T12:24:00Z",
+  "valid_until": null,
+  "previous_snapshot_id": "CHK-MOCATRIZ-02-CLOSURE-20260926",
+  "logical_snapshot_id": "SOAIACORE-MOCATRIZ-TRUSTED-MEMORY",
+  "status": "FROZEN",
+  "project": {
+    "name": "SOAiaCore",
+    "capability": "Landscape Intelligence + Memory Integrity",
+    "methodology": "MOCATRIZ"
+  },
+  "objective": {
+    "objective_id": "OBJ-MOCATRIZ-CONTINUITY-002",
+    "statement": "Validar continuidad, recuperación, errores, controles y cierre",
+    "scope_status": "COMPLETED_WITH_EXCEPTIONS",
+    "criteria_total": 8,
+    "criteria_satisfied": 8,
+    "scope": [
+      "continuidad post-interrupción",
+      "auditoría de errores",
+      "seguridad OCI",
+      "métricas MOCATRIZ",
+      "checkpoint y receipt"
+    ],
+    "exclusions": [
+      "funcionalidad final del endpoint no demostrada mediante evidencia durable",
+      "telemetría temporal completa de overhead",
+      "ledger histórico completo de decisiones humanas"
+    ],
+    "authority": "MOCATRIZ closure contract"
+  },
+  "checkpoint": {
+    "branch": "feat/landscape-intelligence-data-model-v1",
+    "head": "814aae7c548247ab9b0c79c42bf586e939a7c064",
+    "writes_frozen": true,
+    "source_checkpoint_id": "CHK-MOCATRIZ-02-CLOSURE-20260926"
+  },
+  "continuity": {
+    "test_id": "MOCATRIZ-PRUEBA-02",
+    "result": "PASS",
+    "score": 30,
+    "maximum_score": 30,
+    "invalidating_conditions": 0,
+    "generalization_scope": "Esta interrupción y este mecanismo de checkpoint"
+  },
+  "error_matrix": {
+    "total": 27,
+    "controlled": 25,
+    "accepted_gaps": 2,
+    "open": 0,
+    "mitigated": 0,
+    "waiting_human": 0,
+    "accepted_gap_ids": [
+      "ERR-20260926-010",
+      "ERR-20260926-014"
+    ]
+  },
+  "metrics": {
+    "objective_completion": {
+      "numerator": 8,
+      "denominator": 8,
+      "result_pct": 100
+    },
+    "autonomous_completion": {
+      "numerator": 8,
+      "denominator": 8,
+      "result_pct": 100
+    },
+    "recovery_efficiency": {
+      "numerator": 5,
+      "denominator": 5,
+      "result_pct": 100
+    },
+    "strategy_mutation": {
+      "count": 4
+    },
+    "human_intervention_efficiency": {
+      "numerator": 1,
+      "denominator": 1,
+      "result_pct": 100
+    },
+    "resume_success": {
+      "numerator": 1,
+      "denominator": 1,
+      "result_pct": 100
+    },
+    "correlation_integrity": {
+      "numerator": 0,
+      "denominator": 0,
+      "result_pct": null,
+      "status": "NOT_EXERCISED"
+    },
+    "material_drift": {
+      "count": 1
+    },
+    "false_completion": {
+      "numerator": 0,
+      "denominator": 1,
+      "result_pct": 0
+    },
+    "control_yield": {
+      "numerator": 7,
+      "denominator": 7,
+      "result_pct": 100
+    },
+    "unproductive_methodological_overhead_count": {
+      "numerator": 0,
+      "denominator": 7,
+      "result_pct": 0
+    },
+    "time_based_methodological_overhead": {
+      "status": "NOT_MEASURED"
+    },
+    "human_dependency": {
+      "status": "NOT_RETROSPECTIVELY_QUANTIFIED"
+    }
+  },
+  "rules": [
+    {
+      "rule_id": "R-001",
+      "statement": "La unidad de ejecución es el objetivo, no el comando.",
+      "status": "ACTIVE"
+    },
+    {
+      "rule_id": "R-002",
+      "statement": "Terminar acciones no equivale a terminar el objetivo.",
+      "status": "ACTIVE"
+    },
+    {
+      "rule_id": "R-003",
+      "statement": "La pérdida del canal de observación no implica pérdida de ejecución.",
+      "status": "ACTIVE"
+    },
+    {
+      "rule_id": "R-004",
+      "statement": "La continuidad de ejecución no equivale a continuidad de tarea.",
+      "status": "ACTIVE"
+    },
+    {
+      "rule_id": "R-005",
+      "statement": "Pipeline exitoso no equivale a funcionalidad validada.",
+      "status": "ACTIVE"
+    },
+    {
+      "rule_id": "R-006",
+      "statement": "Una memoria recuperada debe demostrar fidelidad, no sólo coherencia.",
+      "status": "ACTIVE"
+    },
+    {
+      "rule_id": "R-007",
+      "statement": "No inventar intención ante ambigüedad material.",
+      "status": "ACTIVE"
+    },
+    {
+      "rule_id": "R-008",
+      "statement": "Una métrica con denominador cero se declara no ejercitada.",
+      "status": "ACTIVE"
+    },
+    {
+      "rule_id": "R-009",
+      "statement": "La evidencia tiene prioridad sobre el canon.",
+      "status": "ACTIVE"
+    },
+    {
+      "rule_id": "R-010",
+      "statement": "No introducir cambios en la línea evaluada durante una prueba de cierre.",
+      "status": "ACTIVE"
+    }
+  ],
+  "authoritative_sources": [
+    {
+      "source_id": "SRC-GIT-HEAD",
+      "type": "git_commit",
+      "authority": "PRIMARY_AUTHORITATIVE",
+      "ref": "814aae7c548247ab9b0c79c42bf586e939a7c064"
+    },
+    {
+      "source_id": "SRC-RECEIPT-P02",
+      "type": "receipt",
+      "authority": "PRIMARY_MATERIAL",
+      "ref": "receipts/MOCATRIZ_CONTINUITY_TEST_02_CLOSURE_2026-09-26.md"
+    },
+    {
+      "source_id": "SRC-CONTINUITY-FIXTURE",
+      "type": "snapshot",
+      "authority": "PRIMARY_MATERIAL",
+      "ref": "schemas/examples/landscape/mocatriz-continuity-closure-snapshot-v1.json"
+    },
+    {
+      "source_id": "SRC-CI-LANDSCAPE",
+      "type": "ci_run",
+      "authority": "PRIMARY_AUTHORITATIVE",
+      "ref": "github-actions:36241248488"
+    },
+    {
+      "source_id": "SRC-CI-TERRAFORM",
+      "type": "ci_run",
+      "authority": "PRIMARY_AUTHORITATIVE",
+      "ref": "github-actions:36241248516"
+    },
+    {
+      "source_id": "SRC-CI-A2",
+      "type": "ci_run",
+      "authority": "PRIMARY_AUTHORITATIVE",
+      "ref": "github-actions:36241248542"
+    },
+    {
+      "source_id": "SRC-CI-WORKER",
+      "type": "ci_run",
+      "authority": "PRIMARY_AUTHORITATIVE",
+      "ref": "github-actions:36241248491"
+    },
+    {
+      "source_id": "SRC-CI-OCI",
+      "type": "ci_run",
+      "authority": "PRIMARY_AUTHORITATIVE",
+      "ref": "github-actions:36241248509"
+    },
+    {
+      "source_id": "SRC-CI-PR84",
+      "type": "ci_run",
+      "authority": "PRIMARY_AUTHORITATIVE",
+      "ref": "github-actions:36241245973"
+    }
+  ],
+  "evidence_inventory_ref": "Trusted_Memory/03_Evidence_Inventory/Durable_Evidence_Inventory_v1.0.0.json",
+  "decisions": [
+    {
+      "decision_id": "DEC-001",
+      "question": "¿Estado final del objetivo?",
+      "decision": "COMPLETED_WITH_EXCEPTIONS",
+      "basis": [
+        "Prueba 02 PASS 30/30",
+        "27 errores auditados",
+        "funcionalidad endpoint no demostrada"
+      ],
+      "reversible": true
+    },
+    {
+      "decision_id": "DEC-002",
+      "question": "¿Brechas aceptadas?",
+      "decision": [
+        "ERR-20260926-010",
+        "ERR-20260926-014"
+      ],
+      "basis": [
+        "network policy",
+        "non-deterministic intent interpretation"
+      ],
+      "reversible": true
+    }
+  ],
+  "pending_and_exceptions": {
+    "pending": [
+      {
+        "pending_id": "P-NEXT-OBJECTIVE",
+        "description": "Iniciar Trusted Memory Snapshot + persistencia temporal",
+        "priority": "HIGH",
+        "status": "NEXT_OBJECTIVE"
+      }
+    ],
+    "exceptions": [
+      "tfstate direct data-plane visibility remains an accepted network-policy gap",
+      "intent interpretation remains a non-deterministic accepted epistemic gap",
+      "functional service closure is not claimed without separate evidence",
+      "time-based methodological overhead is not measured",
+      "historical human dependency cannot be retrospectively quantified"
+    ],
+    "functional_endpoint_validation": {
+      "status": "MISSING",
+      "interpretation": "NOT_DEMONSTRATED"
+    }
+  },
+  "resume_point": {
+    "phase": "OBSERVE",
+    "next_objective": "Trusted Memory Snapshot + persistencia y versionado temporal del estado canónico",
+    "last_confirmed_action": "Prueba 02 closure receipt and frozen HEAD validation complete",
+    "gate": "Receipt, manifest and durable evidence available",
+    "prohibited_actions": [
+      "reopen OCI without new evidence",
+      "reclassify accepted gaps without evidence",
+      "claim functional endpoint success without durable functional evidence"
+    ]
+  },
+  "metadata": {
+    "receipt_ref": "receipts/MOCATRIZ_CONTINUITY_TEST_02_CLOSURE_2026-09-26.md",
+    "methodology": "MOCATRIZ",
+    "serialization": "JSON-compatible YAML 1.2"
+  },
+  "content_sha256": "EEDFA3D7AE3AB292BAD75F87067ECB63AA63FCB374096BBE04958A4998DD1C4A"
+}

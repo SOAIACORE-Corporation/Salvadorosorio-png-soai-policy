@@ -1,0 +1,22 @@
+{
+  "error_id": "ERR-20260926-027",
+  "detected_at": "2026-09-26",
+  "class": "ZERO_DENOMINATOR_METRIC_SEMANTICS_DEFECT",
+  "phase": "mocatriz-metrics",
+  "symptom": "Telemetry helpers represented 0/0 cases as 100%, which could falsely imply proven success for unexercised resume or correlation behavior.",
+  "root_cause": "Convenience handling for empty denominators conflated absence of failures with demonstrated effectiveness.",
+  "early_signals": [
+    "No formal Human Task was created during the observed interruption",
+    "Correlation Integrity therefore had no empirical denominator"
+  ],
+  "human_cost": "No operator troubleshooting; risk was semantic overstatement in the final receipt.",
+  "avoidable": true,
+  "prevention_rule": "Metrics with zero empirical denominator must report NOT_APPLICABLE/null rather than 100%, unless the metric definition explicitly treats zero activity as successful by design.",
+  "automated_detection": "MOCATRIZ telemetry exposes applicability flags and returns null for zero-denominator recovery/resume/correlation ratios.",
+  "evidence_refs": [
+    "tools/landscape/mocatriz_execution.py",
+    "schemas/tests/test_mocatriz_execution.py"
+  ],
+  "control_status": "CONTROLLED",
+  "regression_test": "test_zero_denominator_telemetry_is_not_applicable"
+}

@@ -1,0 +1,18 @@
+{
+  "regulatory_source_id": "regsrc:us:21cfr:part211",
+  "jurisdiction": "US",
+  "authority": "FDA / Office of the Federal Register",
+  "instrument_type": "regulation",
+  "citation": "21 CFR Part 211",
+  "title": "Current Good Manufacturing Practice for Finished Pharmaceuticals",
+  "binding_level": "binding",
+  "status": "ACTIVE",
+  "effective_from": null,
+  "effective_to": null,
+  "official_url": "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-C/part-211",
+  "source_tier": "TIER_2_OFFICIAL_NAVIGABLE",
+  "verified_at": "2026-09-26T04:23:00Z",
+  "freshness": "current",
+  "hash": null,
+  "exception_mode": "NON_WAIVABLE_EXTERNAL"
+}

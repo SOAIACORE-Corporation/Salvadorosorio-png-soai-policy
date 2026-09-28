@@ -1,0 +1,23 @@
+{
+  "error_id": "ERR-20260926-024",
+  "detected_at": "2026-09-26",
+  "class": "OBSERVABILITY_CHANNEL_TIMEOUT",
+  "phase": "mocatriz-continuity",
+  "symptom": "The ChatGPT recovery/polling stream timed out while the external GitHub Actions execution continued and later completed successfully.",
+  "root_cause": "The conversational observation channel and the external execution lifecycle are independent; channel timeout does not terminate the external process.",
+  "early_signals": [
+    "UI reported stream recovery polling timed out",
+    "GitHub Actions remained the authoritative execution source"
+  ],
+  "human_cost": "Operator lost live conversational visibility and had to re-enter the conversation to continue.",
+  "avoidable": false,
+  "prevention_rule": "On observation-channel loss, mark execution result INDETERMINATE in the conversation, do not restart or infer outcome, recover the durable checkpoint, and query the authoritative external source before continuing.",
+  "automated_detection": "MOCATRIZ Continuity Test 02 distinguishes execution, observation, memory and resumption planes.",
+  "evidence_refs": [
+    "conversation:image-stream-timeout-2026-09-26",
+    "github-actions:36234503732",
+    "docs/landscape-intelligence/MOCATRIZ_CONTINUITY_TEST_02_v1.md"
+  ],
+  "control_status": "OPEN",
+  "regression_test": "test_resume_preserves_objective_rules_pending_and_checkpoint_identity"
+}

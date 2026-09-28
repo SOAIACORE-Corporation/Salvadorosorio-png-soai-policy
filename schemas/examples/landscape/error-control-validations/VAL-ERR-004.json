@@ -1,0 +1,13 @@
+{
+  "validation_id": "VAL-ERR-20260926-004",
+  "error_id": "ERR-20260926-004",
+  "status": "CONTROLLED",
+  "validated_at": "2026-09-26",
+  "rationale": "A process-scoped CMD launcher bypasses PowerShell execution-policy blockage without changing persistent policy, and the script reports current policy scopes.",
+  "evidence_refs": [
+    "scripts/azure/Invoke-SOAIntelligenceBootstrapPreflight.cmd",
+    "scripts/azure/Invoke-SOAIntelligenceBootstrapPreflight.ps1",
+    "schemas/tests/test_preflight_environment_controls.py"
+  ],
+  "human_required": false
+}

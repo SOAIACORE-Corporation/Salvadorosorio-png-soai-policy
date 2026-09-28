@@ -1,0 +1,23 @@
+{
+  "error_id": "ERR-20260926-028",
+  "detected_at": "2026-09-26",
+  "class": "CROSS_RUNTIME_CANONICALIZATION_DEFECT",
+  "phase": "trusted-memory-fidelity",
+  "symptom": "The first frozen snapshot hash differed after JSON serialization because one runtime emitted integral floats as integers.",
+  "root_cause": "Canonical hashing did not normalize semantically equivalent numeric representations before SHA-256.",
+  "early_signals": [
+    "Snapshot fields included percentage values represented as 100.0 in Python",
+    "JSON serialization from JavaScript emitted the same values as 100"
+  ],
+  "human_cost": "No operator troubleshooting required; first fidelity CI run failed and triggered autonomous recovery.",
+  "avoidable": true,
+  "prevention_rule": "Canonicalize integral floats to integers recursively before hashing cross-runtime JSON/YAML artifacts.",
+  "automated_detection": "Regression test asserts sha256({value:100}) equals sha256({value:100.0}).",
+  "evidence_refs": [
+    "tools/landscape/trusted_memory.py",
+    "schemas/tests/test_trusted_memory_snapshot.py",
+    "github-actions:36242587054"
+  ],
+  "control_status": "CONTROLLED",
+  "regression_test": "test_canonical_hash_is_stable_for_integral_float_representation"
+}

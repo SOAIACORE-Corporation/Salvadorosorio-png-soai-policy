@@ -1,0 +1,15 @@
+{
+  "validation_id": "VAL-ERR-20260926-024",
+  "error_id": "ERR-20260926-024",
+  "status": "CONTROLLED",
+  "validated_at": "2026-09-26",
+  "rationale": "The observation channel timed out while GitHub Actions continued. Recovery queried the authoritative external source, preserved the execution result as indeterminate until verified, and resumed without restarting or inventing outcome. Continuity Test 02 passed the execution/observation separation.",
+  "evidence_refs": [
+    "docs/landscape-intelligence/MOCATRIZ_CONTINUITY_TEST_02_v1.md",
+    "schemas/tests/test_mocatriz_continuity.py",
+    "github-actions:36234503732",
+    "github-actions:36240831875"
+  ],
+  "human_required": false,
+  "residual_risk": "Future channel failures remain possible; control guarantees recovery procedure, not channel availability."
+}

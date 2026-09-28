@@ -1,0 +1,12 @@
+{
+  "subscription_id": "108eb4dd-25b3-4a7f-8d5e-4ec4389c3f0d",
+  "resource_id": "psql-soaiacore-p0-34utxi",
+  "name": "psql-soaiacore-p0-34utxi",
+  "resource_type": "postgresql_flexible_server",
+  "environment": "p0",
+  "owner": "SOAiaCore",
+  "observed_at": "2026-09-25T22:29:14Z",
+  "source_id": "azure-physical-evidence-v3",
+  "source_location": "COMITE/azure_physical_telemetry_v3.json",
+  "source_hash": "0E63C56C1CDD51EC8756EB881795E41F0BBDC27B74AC495D3C3214B1F9CB32DC"
+}

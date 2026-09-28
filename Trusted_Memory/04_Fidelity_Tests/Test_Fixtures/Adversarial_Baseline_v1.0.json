@@ -1,0 +1,48 @@
+{
+  "fixture_id": "TMS-FIDELITY-ADVERSARIAL-001",
+  "target_snapshot_id": "TMS-SOAIACORE-MOCATRIZ-20260926-001",
+  "cases": [
+    {
+      "case_id": "ADV-001",
+      "name": "wrong_commit",
+      "mutation": "checkpoint.head != frozen HEAD",
+      "expected": "FAIL: HEAD_MISMATCH"
+    },
+    {
+      "case_id": "ADV-002",
+      "name": "foreign_receipt",
+      "mutation": "confirmed evidence objective_id belongs to another execution",
+      "expected": "REJECT evidence correlation"
+    },
+    {
+      "case_id": "ADV-003",
+      "name": "zero_denominator_100",
+      "mutation": "correlation_integrity 0/0 -> 100%",
+      "expected": "FAIL: FALSE_CORRELATION_100"
+    },
+    {
+      "case_id": "ADV-004",
+      "name": "missing_endpoint",
+      "mutation": "endpoint evidence remains absent",
+      "expected": "MISSING / NOT_DEMONSTRATED; not failed or successful"
+    },
+    {
+      "case_id": "ADV-005",
+      "name": "erase_exceptions",
+      "mutation": "COMPLETED + empty exception list",
+      "expected": "FAIL: FALSE_COMPLETE_STATUS + EXCEPTION_LOSS"
+    },
+    {
+      "case_id": "ADV-006",
+      "name": "plausible_no_source",
+      "mutation": "authoritative_sources removed",
+      "expected": "FAIL: AUTHORITATIVE_SOURCE_MISSING"
+    },
+    {
+      "case_id": "ADV-007",
+      "name": "stale_as_current",
+      "mutation": "CONFIRMED requirement references STALE evidence",
+      "expected": "REJECT evidence freshness"
+    }
+  ]
+}

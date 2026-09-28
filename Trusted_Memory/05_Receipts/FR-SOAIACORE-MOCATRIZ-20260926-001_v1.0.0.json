@@ -1,0 +1,104 @@
+{
+  "fidelity_receipt": {
+    "receipt_id": "FR-SOAIACORE-MOCATRIZ-20260926-001",
+    "receipt_version": "1.0.0",
+    "snapshot_id": "TMS-SOAIACORE-MOCATRIZ-20260926-001",
+    "manifest_id": "RM-SOAIACORE-MOCATRIZ-20260926-001",
+    "snapshot_hash": "EEDFA3D7AE3AB292BAD75F87067ECB63AA63FCB374096BBE04958A4998DD1C4A",
+    "manifest_hash": "53D02B5647A8B10EDFB25F00F248300D292B14A898B319A2233C730DE00964AC",
+    "evidence_inventory_hash": "E44E004153B0B23919F6AAA46A211513E3C51113FCDA7275E2DFD66E149911C1",
+    "physical_integrity": {
+      "hash_match": true,
+      "schema_valid": true,
+      "version_compatible": true
+    },
+    "reconstruction": {
+      "structural_score": 100,
+      "semantic_score": 100,
+      "total_score": 100,
+      "invalidating_conditions": 0
+    },
+    "critical_fields": {
+      "objective_preserved": true,
+      "rules_preserved": true,
+      "checkpoint_preserved": true,
+      "evidence_authority_preserved": true,
+      "exceptions_preserved": true,
+      "pending_items_preserved": true,
+      "resume_point_preserved": true
+    },
+    "recovery_state": {
+      "result": "RECOVERABLE_WITH_EXCEPTIONS",
+      "endpoint_functionality": "MISSING / NOT_DEMONSTRATED",
+      "human_decision_ledger": "MISSING / COMPLEMENTARY",
+      "time_based_overhead": "MISSING / COMPLEMENTARY"
+    },
+    "persistence": {
+      "logical_dual_storage": true,
+      "independent_fault_domain_replication": false,
+      "postgres_projection_validated": true,
+      "postgres_write_performed": false
+    },
+    "decision": {
+      "result": "PASS",
+      "recovery_status": "RECOVERABLE_WITH_EXCEPTIONS"
+    },
+    "limitations": [
+      "Prueba válida para el snapshot, herramientas y fuentes evaluadas.",
+      "No demuestra fidelidad universal bajo cualquier tipo de corrupción.",
+      "Las dos copias actuales permanecen dentro del mismo dominio de infraestructura GitHub.",
+      "No declara funcionalidad del endpoint sin evidencia durable separada.",
+      "No declara persistencia PostgreSQL aplicada; sólo la compatibilidad de proyección bitemporal."
+    ],
+    "next_resume_point": {
+      "phase": "OBSERVE",
+      "next_objective": "Versionado temporal y endurecimiento de persistencia del Trusted Memory Snapshot",
+      "prohibited_reopenings": [
+        "OCI security without new evidence",
+        "Prueba 02 without contradictory evidence",
+        "functional endpoint success without durable functional evidence"
+      ]
+    },
+    "final_head_gate": "PASS",
+    "validated_content_head": "9db4dd3dd353a31d13af04cd843cf86444c4fb59",
+    "final_ci": [
+      {
+        "workflow": "Landscape Intelligence Schema",
+        "run_number": 188,
+        "run_id": 36242997067,
+        "result": "SUCCESS"
+      },
+      {
+        "workflow": "Terraform SOA Intelligence DEV Static",
+        "run_number": 132,
+        "run_id": 36242997031,
+        "result": "SUCCESS"
+      },
+      {
+        "workflow": "SOA Intelligence A2 Persistence Static",
+        "run_number": 60,
+        "run_id": 36242997094,
+        "result": "SUCCESS"
+      },
+      {
+        "workflow": "SOA Intelligence Worker OCI Runtime Smoke",
+        "run_number": 86,
+        "run_id": 36242997116,
+        "result": "SUCCESS"
+      },
+      {
+        "workflow": "OCI Build, Scan, and Publish",
+        "run_number": 244,
+        "run_id": 36242997247,
+        "result": "SUCCESS"
+      },
+      {
+        "workflow": "PR #84",
+        "run_number": 440,
+        "run_id": 36242996098,
+        "result": "SUCCESS"
+      }
+    ],
+    "receipt_self_reference_policy": "The receipt records the validated content head; its own metadata-only closure commit is externally CI-verified and does not alter the frozen Snapshot/Manifest hashes."
+  }
+}

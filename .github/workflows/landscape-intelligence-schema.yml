@@ -1,0 +1,34 @@
+name: Landscape Intelligence Schema
+
+on:
+  pull_request:
+    paths:
+      - "schemas/landscape-intelligence-v0.1.schema.json"
+      - "schemas/examples/landscape/**"
+      - "schemas/tests/**"
+      - "tools/landscape/**"
+      - ".github/workflows/landscape-intelligence-schema.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "schemas/landscape-intelligence-v0.1.schema.json"
+      - "schemas/examples/landscape/**"
+      - "schemas/tests/**"
+      - "tools/landscape/**"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.5"
+      - name: Sync frozen workspace
+        run: uv sync --frozen
+      - name: Validate canonical schema and fixtures
+        run: uv run --frozen pytest -q schemas/tests

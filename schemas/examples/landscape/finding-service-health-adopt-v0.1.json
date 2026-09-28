@@ -1,0 +1,29 @@
+{
+  "schema_version": "0.1",
+  "record_id": "finding:R-003",
+  "record_type": "finding",
+  "source": {
+    "source_id": "committee-traceability",
+    "system": "drive",
+    "source_type": "human_decision",
+    "location": "SOAiaCore_COMITE_Landscape_Live/TRAZABILIDAD_IA",
+    "collected_at": "2026-09-25T22:29:14Z",
+    "hash": null,
+    "freshness": "current",
+    "trust_level": "authoritative"
+  },
+  "observed_at": "2026-09-25T22:29:14Z",
+  "payload": {
+    "finding_id": "R-003",
+    "asset_id": null,
+    "type": "governance",
+    "adjudication": "ADOPT",
+    "severity": "INFO",
+    "status": "CLOSED",
+    "evidence_refs": [
+      "PR#83",
+      "terraform-targeted-post-validation"
+    ],
+    "confidence": 1
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "error_id": "ERR-20260926-023",
+  "detected_at": "2026-09-26",
+  "class": "FALSE_USER_ATTRIBUTION",
+  "phase": "cross-thread-context",
+  "symptom": "The assistant stated that the user had assigned MOCATRIZ as the name of a manufacturing model even though the source corpus did not establish that user-authored naming decision.",
+  "root_cause": "Assistant-generated interpretation was promoted to user-authored canonical intent without source-level attribution verification.",
+  "early_signals": [
+    "The quoted wording used 'tú estás asignando' without a cited user-authored naming statement",
+    "The manufacturing meaning was introduced in assistant prose rather than established by explicit user authority",
+    "Cross-thread semantic reuse was accepted without provenance check"
+  ],
+  "human_cost": "Created a false canonical meaning and triggered a downstream token-collision diagnosis that was itself partly based on incorrect provenance.",
+  "avoidable": true,
+  "prevention_rule": "Never canonicalize a user preference, naming decision, policy, or semantic assignment unless it is explicitly user-authored or supported by durable authoritative evidence. Assistant-originated formulations must be labeled as proposals until adopted.",
+  "automated_detection": "Canonical registry entries require an authority_source field distinguishing USER_AUTHORED, USER_APPROVED, or ASSISTANT_PROPOSED; ASSISTANT_PROPOSED entries cannot become canonical without explicit promotion.",
+  "evidence_refs": [
+    "conversation:user-correction-2026-09-26",
+    "schemas/examples/landscape/canonical-activation-registry-v0.1.json",
+    "ERR-20260926-022"
+  ],
+  "control_status": "CONTROLLED",
+  "regression_test": "test_canonical_terms_require_authority_provenance"
+}
