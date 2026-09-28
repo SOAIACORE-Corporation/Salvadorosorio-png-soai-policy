@@ -1,0 +1,64 @@
+{
+  "inventory_id": "DEI-SOAIACORE-MOCATRIZ-20260928-002",
+  "inventory_version": "1.1.0",
+  "created_at": "2026-09-28T12:33:00Z",
+  "target_objective_id": "OBJ-TMS-TEMPORAL-VERSIONING-001",
+  "evidence": [
+    {
+      "evidence_id": "EV2-001",
+      "objective_id": "OBJ-TMS-TEMPORAL-VERSIONING-001",
+      "claim": "TMS-001 frozen predecessor",
+      "location": "Trusted_Memory/01_Snapshots/TMS-SOAIACORE-MOCATRIZ-20260926-001_v1.0.0_FROZEN.yaml",
+      "type": "trusted_memory_snapshot",
+      "authority": "PRIMARY_MATERIAL",
+      "quality": "CONFIRMED",
+      "freshness": "CURRENT",
+      "source_ref": "TMS-SOAIACORE-MOCATRIZ-20260926-001"
+    },
+    {
+      "evidence_id": "EV2-002",
+      "objective_id": "OBJ-TMS-TEMPORAL-VERSIONING-001",
+      "claim": "ERR-028 cross-runtime canonicalization defect controlled",
+      "location": "schemas/examples/landscape/error-events/ERR-20260926-028.json",
+      "type": "error_event",
+      "authority": "PRIMARY_MATERIAL",
+      "quality": "CONFIRMED",
+      "freshness": "CURRENT",
+      "source_ref": "ERR-20260926-028"
+    },
+    {
+      "evidence_id": "EV2-003",
+      "objective_id": "OBJ-TMS-TEMPORAL-VERSIONING-001",
+      "claim": "TMS-001 fidelity receipt PASS",
+      "location": "Trusted_Memory/05_Receipts/FR-SOAIACORE-MOCATRIZ-20260926-001_v1.0.0.json",
+      "type": "receipt",
+      "authority": "PRIMARY_MATERIAL",
+      "quality": "CONFIRMED",
+      "freshness": "CURRENT",
+      "source_ref": "FR-SOAIACORE-MOCATRIZ-20260926-001"
+    },
+    {
+      "evidence_id": "EV2-004",
+      "objective_id": "OBJ-TMS-TEMPORAL-VERSIONING-001",
+      "claim": "Current Git head before TMS-002 lineage creation",
+      "location": "git",
+      "type": "git_commit",
+      "authority": "PRIMARY_AUTHORITATIVE",
+      "quality": "CONFIRMED",
+      "freshness": "CURRENT",
+      "source_ref": "d74ef5968bafb3d8fa632a2ad8252570eadca425"
+    },
+    {
+      "evidence_id": "EV2-005",
+      "objective_id": "OBJ-TMS-TEMPORAL-VERSIONING-001",
+      "claim": "PostgreSQL write/read-back real",
+      "location": null,
+      "type": "database_readback",
+      "authority": "UNKNOWN",
+      "quality": "MISSING",
+      "freshness": "UNKNOWN",
+      "source_ref": null
+    }
+  ],
+  "content_sha256": "4C8BAA3FEB850DB16A86AA150322E27201450B4CC7D5CDBF74BF4B1CD005C96F"
+}
