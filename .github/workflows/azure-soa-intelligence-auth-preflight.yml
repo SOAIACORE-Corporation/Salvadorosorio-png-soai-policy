@@ -1,6 +1,7 @@
 name: Azure SOA Intelligence Auth Preflight
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - feature/soa-intelligence-a2-postgres-20260906-r2
@@ -53,6 +54,7 @@ jobs:
           echo 'STATE_STORAGE_ACCOUNT_READ=PASS'
 
       - name: Inspect backend network posture read-only
+        id: network
         shell: bash
         env:
           AZURE_CORE_OUTPUT: json
@@ -78,10 +80,12 @@ jobs:
           echo "STATE_VNET_RULE_COUNT=$vnet_rule_count"
           echo "STATE_RESOURCE_ACCESS_RULE_COUNT=$resource_access_rule_count"
           echo "STATE_PRIVATE_ENDPOINT_COUNT=$private_endpoint_count"
+          echo "default_action=$default_action" >> "$GITHUB_OUTPUT"
           echo 'STATE_NETWORK_POSTURE_READ=PASS'
 
       - name: Verify Terraform state container data-plane access
         id: state_data
+        continue-on-error: true
         shell: bash
         env:
           AZURE_CORE_OUTPUT: json
@@ -97,10 +101,11 @@ jobs:
           echo 'STATE_CONTAINER_EXISTS=PASS'
           echo 'STATE_DATA_PLANE_READ=PASS'
 
-      - name: Record execution boundary
+      - name: Record and enforce execution boundary
         if: always()
         shell: bash
         run: |
+          set -euo pipefail
           echo 'OIDC_SUBJECT_SCOPE=TRUSTED_BRANCH_ONLY'
           echo 'AZURE_MUTATION=false'
           echo 'TERRAFORM_INIT=false'
@@ -108,8 +113,18 @@ jobs:
           echo 'TERRAFORM_APPLY=false'
           echo 'TERRAFORM_DESTROY=false'
           echo 'STATE_DATA_PLANE_OUTCOME=${{ steps.state_data.outcome }}'
+          echo 'STATE_NETWORK_DEFAULT_ACTION=${{ steps.network.outputs.default_action }}'
+
           if [ '${{ steps.state_data.outcome }}' = 'success' ]; then
             echo 'SOA_INTELLIGENCE_AZURE_AUTH_PREFLIGHT=PASS'
-          else
-            echo 'SOA_INTELLIGENCE_AZURE_AUTH_PREFLIGHT=HOLD_NETWORK'
+            exit 0
           fi
+
+          if [ '${{ steps.network.outputs.default_action }}' = 'Deny' ]; then
+            echo 'SOA_INTELLIGENCE_AZURE_AUTH_PREFLIGHT=HOLD_NETWORK'
+            echo 'EXPECTED_BACKEND_NETWORK_DENIAL=true'
+            exit 0
+          fi
+
+          echo 'SOA_INTELLIGENCE_AZURE_AUTH_PREFLIGHT=FAIL_UNEXPECTED_DATA_PLANE'
+          exit 1
