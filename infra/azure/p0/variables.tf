@@ -51,32 +51,32 @@ variable "expires_at" {
 }
 
 variable "core_image" {
-  description = "Approved immutable Core API GHCR image reference pinned to the P0 sha256 digest."
+  description = "Approved immutable Core API GHCR image reference pinned to the EXEC-03 sha256 digest."
   type        = string
 
   validation {
-    condition     = var.core_image == "ghcr.io/soaiacore-corporation/soaiacore-core@sha256:e6564cad60afa7f7e1828c193c3512c7f1b0ce53aed26459e0a61b8ac33fb467"
-    error_message = "core_image must equal the exact approved P0 digest reference."
+    condition     = var.core_image == "ghcr.io/soaiacore-corporation/soaiacore-core@sha256:8dae834b15be70f08ad82171ee785d01798e9bd3e7760942de49bf4060b9bf64"
+    error_message = "core_image must equal the exact approved EXEC-03 digest reference."
   }
 }
 
 variable "web_image" {
-  description = "Approved immutable Web GHCR image reference pinned to the P0 sha256 digest."
+  description = "Approved immutable Web GHCR image reference pinned to the EXEC-03 sha256 digest."
   type        = string
 
   validation {
-    condition     = var.web_image == "ghcr.io/soaiacore-corporation/soaiacore-web@sha256:da26fd8bcf6cb2a4c242d380a28c682b19c6f094f0a898258a727ef558fa6c58"
-    error_message = "web_image must equal the exact approved P0 digest reference."
+    condition     = var.web_image == "ghcr.io/soaiacore-corporation/soaiacore-web@sha256:3302541a1f237a38ab9adffc958df8b8b6e8ec50ed6991d784e35ff2e0cd96f1"
+    error_message = "web_image must equal the exact approved EXEC-03 digest reference."
   }
 }
 
 variable "worker_image" {
-  description = "Approved immutable Worker GHCR image reference pinned to the P0 sha256 digest."
+  description = "Approved immutable Worker GHCR image reference pinned to the EXEC-03 sha256 digest."
   type        = string
 
   validation {
-    condition     = var.worker_image == "ghcr.io/soaiacore-corporation/soaiacore-worker@sha256:971dc02fd1ba2306cd6e1d4864e8d7de0d447169256f7d89071bc5c94ccde9a1"
-    error_message = "worker_image must equal the exact approved P0 digest reference."
+    condition     = var.worker_image == "ghcr.io/soaiacore-corporation/soaiacore-worker@sha256:26513cc25d4544ed5468e34e3a7310ca36db57b20d8bd5ae123381a2f5155bb4"
+    error_message = "worker_image must equal the exact approved EXEC-03 digest reference."
   }
 }
 
@@ -108,18 +108,23 @@ variable "postgresql_administrator_login" {
 }
 
 variable "github_repository" {
-  description = "GitHub owner/repository allowed to federate as the pilot deployer."
+  description = "GitHub owner/repository allowed to federate as the pilot deployer. Case must match the observed GitHub OIDC repository claim."
   type        = string
   default     = "SOAIACORE-Corporation/Salvadorosorio-png-soai-policy"
 
   validation {
-    condition     = can(regex("^[^/]+/[^/]+$", var.github_repository))
-    error_message = "github_repository must use owner/repository format."
+    condition     = var.github_repository == "SOAIACORE-Corporation/Salvadorosorio-png-soai-policy"
+    error_message = "github_repository must equal the empirically observed GitHub OIDC repository claim."
   }
 }
 
-variable "github_branch" {
-  description = "Only branch authorized by the pilot deployer federated credential."
+variable "github_environment" {
+  description = "Only protected GitHub Environment authorized by the deployer federated credential."
   type        = string
-  default     = "rebuild/p0-v0.6-final"
+  default     = "production"
+
+  validation {
+    condition     = var.github_environment == "production"
+    error_message = "github_environment must remain exactly production for the P0 deploy trust boundary."
+  }
 }
