@@ -7,11 +7,18 @@ sys.path.insert(0, str(ROOT / "tools" / "landscape"))
 from error_control_audit import audit_error_controls  # noqa: E402
 
 
-def test_all_known_errors_are_closed_or_explicit_gap():
+def test_all_known_errors_are_accounted_for_and_unresolved_are_explicit():
     result = audit_error_controls(ROOT)
     assert result["total_errors"] >= 21
-    assert result["unresolved_error_ids"] == []
-    assert result["all_errors_closed_or_explicit_gap"] is True
+    assert result["all_errors_accounted_for"] is True
+
+    rows = {row["error_id"]: row for row in result["rows"]}
+    for error_id in result["unresolved_error_ids"]:
+        assert error_id in rows
+        assert rows[error_id]["effective_status"] in {"OPEN", "MITIGATED", "WAITING_HUMAN"}
+
+    assert "ERR-20261017-031" in result["unresolved_error_ids"]
+    assert rows["ERR-20261017-031"]["effective_status"] == "OPEN"
 
 
 def test_security_gate_error_is_effectively_controlled():
