@@ -13,6 +13,9 @@ from soaiacore_runtime.a2_persistence import (
     _require_scope,
     apply_a2_persistence,
     canonical_memory_as_of,
+    load_human_task_bundle,
+    persist_human_response,
+    persist_human_task,
     verify_a2_persistence,
 )
 
@@ -20,7 +23,9 @@ from soaiacore_runtime.a2_persistence import (
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools" / "landscape"))
 from trusted_memory import postgres_projection  # noqa: E402
+from mocatriz_execution import create_human_task, correlate_human_response  # noqa: E402
 A2_MIGRATION = ROOT / "db" / "a2_migrations" / "1001_memory_decision_bitemporal.sql"
+A2_HUMAN_TASK_MIGRATION = ROOT / "db" / "a2_migrations" / "1002_mocatriz_human_task_resume.sql"
 A2_RUNNER = ROOT / "packages" / "python-runtime" / "src" / "soaiacore_runtime" / "a2_persistence.py"
 WORKER_MAIN = ROOT / "apps" / "worker" / "src" / "soaiacore_worker" / "__main__.py"
 WORKER_DOCKERFILE = ROOT / "apps" / "worker" / "Dockerfile"
@@ -32,6 +37,7 @@ def _sql() -> str:
 
 def test_a2_overlay_is_separate_from_p0_migration_directory() -> None:
     assert A2_MIGRATION.is_file()
+    assert A2_HUMAN_TASK_MIGRATION.is_file()
     assert A2_MIGRATION.parent.name == "a2_migrations"
     assert A2_MIGRATION.parent != ROOT / "db" / "migrations"
 
@@ -339,3 +345,128 @@ def test_tms002_round_trips_through_ephemeral_bitemporal_postgres(database) -> N
     assert row["content"] == p2["content"]
     assert row["metadata"]["content_sha256"] == tms2["content_sha256"]
     assert row["content"]["resume_point"]["next_objective"].startswith("Ejecutar PostgreSQL")
+
+
+def test_overlay_runner_verifies_each_migration_semantically() -> None:
+    runner = A2_RUNNER.read_text(encoding="utf-8")
+    assert "_migration_objects_present(connection, path)" in runner
+    assert 'path.name.startswith("1002_")' in runner
+    assert "A2_HUMAN_TASK_RELATIONS" in runner
+    assert "A2_HUMAN_TASK_TRIGGERS" in runner
+
+
+def test_human_task_cross_session_persists_correlates_and_resumes(database) -> None:
+    """SCN-030 / MOCATRIZ Test 03: durable Human Task across session boundaries."""
+    apply_a2_persistence(
+        database,
+        base_migration_dir=ROOT / "db" / "migrations",
+        a2_migration_dir=ROOT / "db" / "a2_migrations",
+    )
+    verification = verify_a2_persistence(
+        database,
+        base_migration_dir=ROOT / "db" / "migrations",
+        a2_migration_dir=ROOT / "db" / "a2_migrations",
+    )
+    assert "soa_memory.human_tasks" in verification.relations
+    assert "soa_memory.human_task_responses" in verification.relations
+
+    task = create_human_task(
+        objective_id="OBJ-MOCATRIZ-002",
+        execution_id="EXE-MOCATRIZ-002-01",
+        human_task_id="HT-MOCATRIZ-002-01",
+        correlation_id="CORR-MOCATRIZ-002-01",
+        reason="Material human authority is required before continuing the selected branch.",
+        question="Authorize or reject continuation of the authority-bound branch?",
+        evidence=["TMS-002", "RM-TMS-002", "SCN-029"],
+        resume_from="RESOLVE-AUTHORITY-GATE",
+    )
+
+    persist_human_task(
+        database,
+        project_scope="SOAiaCore",
+        task=task,
+        observed_time=datetime(2026, 10, 17, 23, 45, tzinfo=timezone.utc),
+    )
+
+    # Simulated later session: recover only from durable PostgreSQL state.
+    recovered_before = load_human_task_bundle(
+        database,
+        project_scope="SOAiaCore",
+        human_task_id=task["human_task_id"],
+    )
+    assert recovered_before["task"]["status"] == "WAITING_HUMAN"
+    assert recovered_before["response"] is None
+    assert recovered_before["task"]["resume_from"] == "RESOLVE-AUTHORITY-GATE"
+
+    response = {
+        "objective_id": "OBJ-MOCATRIZ-002",
+        "execution_id": "EXE-MOCATRIZ-002-01",
+        "human_task_id": "HT-MOCATRIZ-002-01",
+        "correlation_id": "CORR-MOCATRIZ-002-01",
+        "answer": {"decision": "AUTHORIZED_FOR_TEST_ONLY"},
+    }
+    persist_human_response(
+        database,
+        project_scope="SOAiaCore",
+        response_id="HR-MOCATRIZ-002-01",
+        response=response,
+        received_time=datetime(2026, 10, 17, 23, 50, tzinfo=timezone.utc),
+    )
+
+    # Another simulated later session: reload and correlate from durable state.
+    recovered_after = load_human_task_bundle(
+        database,
+        project_scope="SOAiaCore",
+        human_task_id=task["human_task_id"],
+    )
+    result = correlate_human_response(
+        recovered_after["task"],
+        recovered_after["response"],
+    )
+    assert result["correlation_status"] == "MATCHED"
+    assert result["resume_from"] == "RESOLVE-AUTHORITY-GATE"
+    assert result["recommended_phase"] == "UNDERSTAND"
+
+    with database.connect(autocommit=True) as connection:
+        connection.execute(
+            """
+            INSERT INTO soa_memory.operational_state(
+              state_id,state_key,version_no,project_scope,status,phase,decision,
+              source_authority,source_ref,observed_time,valid_from
+            ) VALUES
+              ('OBJ-MOCATRIZ-002:state:v1','OBJ-MOCATRIZ-002',1,'SOAiaCore',
+               'WAITING_HUMAN','RESOLVE','awaiting authority-bound response',
+               'MOCATRIZ','HT-MOCATRIZ-002-01',now(),now()),
+              ('OBJ-MOCATRIZ-002:state:v2','OBJ-MOCATRIZ-002',2,'SOAiaCore',
+               'RUNNING','UNDERSTAND','human response correlated; reinterpret before resume',
+               'HUMAN','HR-MOCATRIZ-002-01',now(),now())
+            """,
+            prepare=False,
+        )
+        latest = connection.execute(
+            """
+            SELECT status,phase,source_ref
+            FROM soa_memory.operational_state
+            WHERE project_scope='SOAiaCore' AND state_key='OBJ-MOCATRIZ-002'
+            ORDER BY version_no DESC LIMIT 1
+            """
+        ).fetchone()
+    assert latest["status"] == "RUNNING"
+    assert latest["phase"] == "UNDERSTAND"
+    assert latest["source_ref"] == "HR-MOCATRIZ-002-01"
+
+    bad = {
+        "objective_id": "OBJ-MOCATRIZ-002",
+        "execution_id": "EXE-WRONG",
+        "human_task_id": "HT-MOCATRIZ-002-01",
+        "correlation_id": "CORR-MOCATRIZ-002-01",
+        "answer": {"decision": "SHOULD_NOT_BIND"},
+    }
+    with pytest.raises(psycopg.Error):
+        persist_human_response(
+            database,
+            project_scope="SOAiaCore",
+            response_id="HR-MOCATRIZ-002-BAD",
+            response=bad,
+            received_time=datetime(2026, 10, 17, 23, 51, tzinfo=timezone.utc),
+        )

@@ -271,3 +271,19 @@ Expected:
 - `Avoidable Human Interaction Rate` must be greater than 0 for the defective run.
 - A corrected run that validates all machine-verifiable prerequisites first and requests only the authority-bound action must PASS with avoidable interaction rate 0%.
 - Zero human actions must be reported as `NOT_EXERCISED`, never as an artificial 100% efficiency.
+
+
+#### SCN-030 · Human Task durable cross-session resume
+A MOCATRIZ execution reaches an authority boundary and creates a Human Task. The conversational/process context is then assumed lost. A later session must recover the task from durable persistence, accept only a correctly correlated human response, re-enter through UNDERSTAND, and continue from the persisted resume point.
+
+Expected:
+- Persist Objective ID, Execution ID, Human Task ID, Correlation ID, reason, question, evidence and resume point before waiting.
+- Recover WAITING_HUMAN without relying on conversational memory.
+- Persist the human response as a separate append-only record.
+- Reject a response whose four-part correlation does not match the durable task.
+- Reconstruct the resumed execution from durable state.
+- Resume through UNDERSTAND so the response becomes evidence rather than an isolated command.
+- Persist the resumed operational state as a new version; never mutate the historical WAITING_HUMAN record.
+- The test must run against disposable PostgreSQL in CI and must not mutate Azure or a live database.
+
+Status: ACTIVE / TESTABLE by tests/test_a2_persistence_contract.py.

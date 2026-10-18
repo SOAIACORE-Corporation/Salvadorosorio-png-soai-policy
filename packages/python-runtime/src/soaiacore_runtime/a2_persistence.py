@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import json
 import hashlib
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,11 @@ A2_REQUIRED_RELATIONS = (
     "soa_decision.decision_ledger",
 )
 
+A2_HUMAN_TASK_RELATIONS = (
+    "soa_memory.human_tasks",
+    "soa_memory.human_task_responses",
+)
+
 A2_REQUIRED_FUNCTIONS = (
     "soa_memory.canonical_memory_as_of(text,timestamp with time zone,timestamp with time zone)",
     "soa_memory.episodic_memory_as_of(text,timestamp with time zone,timestamp with time zone)",
@@ -34,6 +40,11 @@ A2_REQUIRED_TRIGGERS = (
     ("soa_memory", "operational_state", "trg_a2_operational_state_append_only"),
     ("soa_decision", "decision_ledger", "trg_a2_decision_transition"),
     ("soa_decision", "decision_ledger", "trg_a2_decision_ledger_append_only"),
+)
+
+A2_HUMAN_TASK_TRIGGERS = (
+    ("soa_memory", "human_tasks", "trg_a2_human_tasks_append_only"),
+    ("soa_memory", "human_task_responses", "trg_a2_human_task_responses_append_only"),
 )
 
 
@@ -118,6 +129,21 @@ def _overlay_objects_present(connection) -> bool:
     )
 
 
+def _human_task_objects_present(connection) -> bool:
+    return (
+        all(_relation_exists(connection, name) for name in A2_HUMAN_TASK_RELATIONS)
+        and all(_trigger_exists(connection, *spec) for spec in A2_HUMAN_TASK_TRIGGERS)
+    )
+
+
+def _migration_objects_present(connection, path: Path) -> bool:
+    if path.name.startswith("1001_"):
+        return _overlay_objects_present(connection)
+    if path.name.startswith("1002_"):
+        return _human_task_objects_present(connection)
+    return False
+
+
 def _overlay_registry_row(connection, path: Path):
     return connection.execute(
         """
@@ -192,7 +218,7 @@ def apply_a2_persistence(
                         "MIGRATE",
                         status_code=500,
                     )
-                if not _overlay_objects_present(connection):
+                if not _migration_objects_present(connection, path):
                     raise contract_error(
                         "A2_MIGRATION_OBJECTS_MISSING",
                         f"Registered A2 migration {path.name} is incomplete",
@@ -201,14 +227,14 @@ def apply_a2_persistence(
                     )
                 continue
 
-            if _overlay_objects_present(connection):
+            if _migration_objects_present(connection, path):
                 _record_overlay(connection, path, checksum, baselined=True)
                 overlay_applied.append(f"{path.name}:BASELINED")
                 continue
 
             sql = path.read_text(encoding="utf-8")
             connection.execute(sql, prepare=False)
-            if not _overlay_objects_present(connection):
+            if not _migration_objects_present(connection, path):
                 raise contract_error(
                     "A2_MIGRATION_VERIFICATION_FAILED",
                     f"A2 migration {path.name} did not create required objects",
@@ -253,6 +279,13 @@ def verify_a2_persistence(
                 "PRECHECK",
                 status_code=503,
             )
+        if not _human_task_objects_present(connection):
+            raise contract_error(
+                "A2_HUMAN_TASK_OBJECTS_MISSING",
+                "Durable Human Task persistence objects are absent",
+                "PRECHECK",
+                status_code=503,
+            )
         for path in files:
             checksum = _checksum(path)
             row = _overlay_registry_row(connection, path)
@@ -269,9 +302,9 @@ def verify_a2_persistence(
         vector_installed=True,
         base_migrations=base,
         overlay_migrations=overlay,
-        relations=A2_REQUIRED_RELATIONS,
+        relations=A2_REQUIRED_RELATIONS + A2_HUMAN_TASK_RELATIONS,
         functions=A2_REQUIRED_FUNCTIONS,
-        triggers=A2_REQUIRED_TRIGGERS,
+        triggers=A2_REQUIRED_TRIGGERS + A2_HUMAN_TASK_TRIGGERS,
         working_assumption_enabled=True,
     )
 
@@ -313,3 +346,92 @@ def decision_state_as_of(
             (scope, valid_at, recorded_at),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def persist_human_task(
+    database: Database,
+    *,
+    project_scope: str,
+    task: dict[str, Any],
+    observed_time: datetime,
+) -> None:
+    """Persist a WAITING_HUMAN task durably without changing its authority semantics."""
+    scope = _require_scope(project_scope)
+    if task.get("status") != "WAITING_HUMAN":
+        raise ValueError("only WAITING_HUMAN tasks may be persisted by this contract")
+    with database.connect(autocommit=True) as connection:
+        connection.execute(
+            """
+            INSERT INTO soa_memory.human_tasks(
+              human_task_id, objective_id, execution_id, correlation_id, project_scope,
+              status, reason, question, evidence_refs, resume_from, observed_time
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s)
+            """,
+            (
+                task["human_task_id"], task["objective_id"], task["execution_id"],
+                task["correlation_id"], scope, task["status"], task["reason"],
+                task["question"], json.dumps(task.get("evidence", [])),
+                task["resume_from"], observed_time,
+            ),
+            prepare=False,
+        )
+
+
+def persist_human_response(
+    database: Database,
+    *,
+    project_scope: str,
+    response_id: str,
+    response: dict[str, Any],
+    received_time: datetime,
+) -> None:
+    """Persist a human response only when its four-part correlation matches a durable task."""
+    scope = _require_scope(project_scope)
+    with database.connect(autocommit=True) as connection:
+        connection.execute(
+            """
+            INSERT INTO soa_memory.human_task_responses(
+              response_id, objective_id, execution_id, human_task_id, correlation_id,
+              project_scope, answer, received_time
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s)
+            """,
+            (
+                response_id, response["objective_id"], response["execution_id"],
+                response["human_task_id"], response["correlation_id"], scope,
+                json.dumps(response.get("answer")), received_time,
+            ),
+            prepare=False,
+        )
+
+
+def load_human_task_bundle(
+    database: Database,
+    *,
+    project_scope: str,
+    human_task_id: str,
+) -> dict[str, Any]:
+    """Recover a persisted Human Task and its latest matching response."""
+    scope = _require_scope(project_scope)
+    with database.connect(autocommit=True) as connection:
+        task = connection.execute(
+            """
+            SELECT human_task_id, objective_id, execution_id, correlation_id, status,
+                   reason, question, evidence_refs AS evidence, resume_from
+            FROM soa_memory.human_tasks
+            WHERE project_scope=%s AND human_task_id=%s
+            """,
+            (scope, human_task_id),
+        ).fetchone()
+        if not task:
+            raise ValueError("human task not found")
+        response = connection.execute(
+            """
+            SELECT objective_id, execution_id, human_task_id, correlation_id, answer
+            FROM soa_memory.human_task_responses
+            WHERE project_scope=%s AND human_task_id=%s
+            ORDER BY received_time DESC, recorded_time DESC
+            LIMIT 1
+            """,
+            (scope, human_task_id),
+        ).fetchone()
+    return {"task": dict(task), "response": dict(response) if response else None}
