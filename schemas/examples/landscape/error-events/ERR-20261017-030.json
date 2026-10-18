@@ -3,19 +3,22 @@
   "detected_at": "2026-10-17",
   "class": "SCENARIO_ID_SEMANTIC_COLLISION",
   "phase": "knowledge-consolidation",
-  "symptom": "The precursor-thread proposal used SCN-023 for Avoidable Human Iteration / Incomplete Preflight, while the canonical Scenario Pack later assigned SCN-023 to the Terraform State HOLD_NETWORK case.",
-  "root_cause": "Scenario numbering evolved without preserving an explicit lineage map from proposed identifiers to canonical identifiers.",
+  "symptom": "The precursor-thread proposal used SCN-023 for Avoidable Human Iteration / Incomplete Preflight; later the canonical pack used SCN-023 for HOLD_NETWORK, and the repository already had SCN-027 and SCN-028 as distinct scenario files.",
+  "root_cause": "Scenario numbering evolved across conversational and repository artifacts without a single collision-aware canonical registry.",
   "early_signals": [
     "The precursor text explicitly names SCN-023 as Avoidable Human Iteration / Incomplete Preflight",
-    "The current Scenario Pack explicitly names SCN-023 as Azure/GitHub visible with Terraform State blocked by network"
+    "The current Scenario Pack names SCN-023 as the Terraform State network visibility case",
+    "docs/landscape-intelligence/scenarios already contains SCN-027 and SCN-028 as independent scenarios"
   ],
   "human_cost": "Potential ambiguity during retrospective consolidation and risk of believing the preflight scenario was already implemented when only its policy existed.",
   "avoidable": true,
-  "prevention_rule": "Never reuse a canonical scenario ID for a different semantic case; when a historical proposal conflicts, retain the historical label as lineage metadata and allocate the next free canonical ID.",
-  "automated_detection": "SCN-027 records the historical proposed ID and regression tests exercise the missing preflight behavior.",
+  "prevention_rule": "Never reuse a canonical scenario ID for a different semantic case. Resolve IDs against the repository-wide scenario registry before assignment; preserve historical aliases as lineage metadata.",
+  "automated_detection": "SCN-029 records historical aliases; repository documentation requires collision-aware scenario registration.",
   "evidence_refs": [
     "precursor-thread:SCN-023-Avoidable-Human-Iteration",
-    "docs/landscape-intelligence/SCENARIO_PACK_v0.1.md"
+    "docs/landscape-intelligence/SCENARIO_PACK_v0.1.md",
+    "docs/landscape-intelligence/scenarios/SCN-027-source-outcome-evidence-quality.md",
+    "docs/landscape-intelligence/scenarios/SCN-028-contextual-intent.md"
   ],
   "control_status": "CONTROLLED",
   "regression_test": "test_incomplete_preflight_fails_and_counts_avoidable_human_iteration"

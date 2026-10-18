@@ -258,7 +258,7 @@ The pack is successful when the system can:
 9. explain why a case exists,
 10. produce a committee-ready Decision Case without choosing for the committee.
 
-#### SCN-027 · Avoidable Human Iteration / Incomplete Preflight
+#### SCN-029 · Avoidable Human Iteration / Incomplete Preflight
 Historical origin: proposed in the precursor thread as "SCN-023 · Avoidable Human Iteration / Incomplete Preflight"; renumbered here because SCN-023 is already canonically assigned to the Terraform State network visibility case.
 
 Five prerequisites are machine-verifiable through available read-only evidence. The system validates only three, requests a material human action, then discovers the fourth prerequisite and requires another human iteration; the fifth prerequisite is discovered only afterward.
