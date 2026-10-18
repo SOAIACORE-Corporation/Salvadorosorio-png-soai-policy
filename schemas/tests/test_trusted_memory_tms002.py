@@ -7,6 +7,7 @@ sys.path.insert(0, str(ROOT / "tools" / "landscape"))
 
 from trusted_memory import (  # noqa: E402
     compare_snapshot_versions,
+    fidelity_score,
     reconstruct_from_snapshot,
     recovery_decision,
     validate_evidence_inventory,
@@ -74,3 +75,35 @@ def test_diff_records_first_real_temporal_evolution():
     assert generated["previous_snapshot_id"] == t1["snapshot_id"]
     assert generated["current_snapshot_id"] == t2["snapshot_id"]
     assert "error_matrix" in generated["changed_fields"]
+
+
+def test_tms2_blind_recovery_preserves_task_continuity_without_chat_context():
+    """Recover only from frozen durable artifacts and preserve the resumable task."""
+    t2, m2, e2 = _load(TMS2), _load(M2), _load(E2)
+    recovered = reconstruct_from_snapshot(t2, m2, e2)
+    result = fidelity_score(t2, recovered)
+
+    assert result["result"] == "PASS"
+    assert result["total_score"] == 100
+    assert result["invalidating_conditions"] == []
+    assert result["critical_fields_preserved"] is True
+
+    assert recovered["objective"]["objective_id"] == t2["objective"]["objective_id"]
+    assert recovered["objective"]["scope_status"] == "COMPLETED_WITH_EXCEPTIONS"
+    assert recovered["checkpoint"]["head"] == t2["checkpoint"]["head"]
+    assert recovered["error_matrix"]["accepted_gap_ids"] == t2["error_matrix"]["accepted_gap_ids"]
+    assert recovered["pending_and_exceptions"] == t2["pending_and_exceptions"]
+    assert recovered["resume_point"] == t2["resume_point"]
+    assert recovered["recovery_status"] == "RECOVERABLE_WITH_EXCEPTIONS"
+
+
+def test_tms2_bitemporal_projection_links_only_real_trusted_memory_predecessors():
+    t1, t2 = _load(TMS1), _load(TMS2)
+    from trusted_memory import postgres_projection
+
+    p1 = postgres_projection(t1)["canonical_memory"]
+    p2 = postgres_projection(t2)["canonical_memory"]
+
+    assert p1["supersedes_memory_id"] is None
+    assert p1["metadata"]["source_predecessor_ref"] == "CHK-MOCATRIZ-02-CLOSURE-20260926"
+    assert p2["supersedes_memory_id"] == t1["snapshot_id"]

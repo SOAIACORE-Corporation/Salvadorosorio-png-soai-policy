@@ -135,5 +135,7 @@ def test_bitemporal_projection_reuses_existing_a2_contract():
     assert memory["logical_memory_id"]=="SOAIACORE-MOCATRIZ-TRUSTED-MEMORY"
     assert memory["epistemic_class"]=="CONFIRMED_CONTEXT"
     assert memory["admission_state"]=="ADMITTED"
+    assert memory["supersedes_memory_id"] is None
+    assert memory["metadata"]["source_predecessor_ref"]=="CHK-MOCATRIZ-02-CLOSURE-20260926"
     assert state["status"]=="COMPLETED_WITH_EXCEPTIONS"
     assert state["source_authority"]=="TRUSTED_MEMORY_SNAPSHOT"

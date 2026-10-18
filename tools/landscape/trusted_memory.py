@@ -463,6 +463,13 @@ def postgres_projection(snapshot: dict[str, Any]) -> dict[str, Any]:
     if not validation["valid"]:
         raise ValueError("cannot project invalid trusted snapshot")
 
+    previous_snapshot_id = snapshot.get("previous_snapshot_id")
+    previous_memory_id = (
+        previous_snapshot_id
+        if isinstance(previous_snapshot_id, str) and previous_snapshot_id.startswith("TMS-")
+        else None
+    )
+
     return {
         "canonical_memory": {
             "memory_id": snapshot["snapshot_id"],
@@ -482,11 +489,12 @@ def postgres_projection(snapshot: dict[str, Any]) -> dict[str, Any]:
             "observed_time": snapshot["created_at"],
             "valid_from": snapshot["valid_from"],
             "valid_until": snapshot.get("valid_until"),
-            "supersedes_memory_id": snapshot.get("previous_snapshot_id"),
+            "supersedes_memory_id": previous_memory_id,
             "receipt_ref": snapshot.get("metadata", {}).get("receipt_ref"),
             "metadata": {
                 "content_sha256": snapshot["content_sha256"],
                 "checkpoint_head": snapshot["checkpoint"]["head"],
+                "source_predecessor_ref": previous_snapshot_id,
             },
         },
         "operational_state": {
@@ -503,9 +511,7 @@ def postgres_projection(snapshot: dict[str, Any]) -> dict[str, Any]:
             "valid_from": snapshot["valid_from"],
             "valid_until": snapshot.get("valid_until"),
             "supersedes_state_id": (
-                snapshot.get("previous_snapshot_id") + ":state"
-                if snapshot.get("previous_snapshot_id")
-                else None
+                previous_memory_id + ":state" if previous_memory_id else None
             ),
             "receipt_ref": snapshot.get("metadata", {}).get("receipt_ref"),
             "metadata": {
