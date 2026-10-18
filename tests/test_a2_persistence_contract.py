@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from inspect import signature
+import json
+import sys
 from pathlib import Path
 
 import psycopg
@@ -16,6 +18,8 @@ from soaiacore_runtime.a2_persistence import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools" / "landscape"))
+from trusted_memory import postgres_projection  # noqa: E402
 A2_MIGRATION = ROOT / "db" / "a2_migrations" / "1001_memory_decision_bitemporal.sql"
 A2_RUNNER = ROOT / "packages" / "python-runtime" / "src" / "soaiacore_runtime" / "a2_persistence.py"
 WORKER_MAIN = ROOT / "apps" / "worker" / "src" / "soaiacore_worker" / "__main__.py"
@@ -250,3 +254,88 @@ def test_postgres_semantics_block_t2_leak_and_illegal_decision_authority(databas
             "soa_decision.decision_ledger RESTART IDENTITY CASCADE",
             prepare=False,
         )
+
+
+def test_tms002_round_trips_through_ephemeral_bitemporal_postgres(database) -> None:
+    """Persist TMS-001 -> TMS-002 in CI Postgres and read TMS-002 back bitemporally.
+
+    This is intentionally limited to the disposable GitHub Actions service database.
+    It demonstrates real SQL write/read-back without mutating Azure or any live database.
+    """
+    apply_a2_persistence(
+        database,
+        base_migration_dir=ROOT / "db" / "migrations",
+        a2_migration_dir=ROOT / "db" / "a2_migrations",
+    )
+
+    tms1_path = (
+        ROOT
+        / "Trusted_Memory"
+        / "01_Snapshots"
+        / "TMS-SOAIACORE-MOCATRIZ-20260926-001_v1.0.0_FROZEN.yaml"
+    )
+    tms2_path = (
+        ROOT
+        / "Trusted_Memory"
+        / "01_Snapshots"
+        / "TMS-SOAIACORE-MOCATRIZ-20260928-002_v1.1.0_FROZEN.yaml"
+    )
+    tms1 = json.loads(tms1_path.read_text(encoding="utf-8"))
+    tms2 = json.loads(tms2_path.read_text(encoding="utf-8"))
+    p1 = postgres_projection(tms1)["canonical_memory"]
+    p2 = postgres_projection(tms2)["canonical_memory"]
+
+    with database.connect(autocommit=True) as connection:
+        connection.execute(
+            "TRUNCATE soa_memory.memory_claim_lineage, soa_memory.canonical_memory, "
+            "soa_memory.episodic_temporal_memory, soa_memory.operational_state, "
+            "soa_decision.decision_ledger RESTART IDENTITY CASCADE",
+            prepare=False,
+        )
+        for row in (p1, p2):
+            connection.execute(
+                """
+                INSERT INTO soa_memory.canonical_memory(
+                  memory_id, logical_memory_id, version_no, project_scope, subject_ref,
+                  content, epistemic_class, admission_state, observed_time, valid_from,
+                  valid_until, supersedes_memory_id, receipt_ref, metadata
+                ) VALUES (
+                  %s, %s, %s, %s, %s,
+                  %s::jsonb, %s, %s, %s, %s,
+                  %s, %s, %s, %s::jsonb
+                )
+                """,
+                (
+                    row["memory_id"],
+                    row["logical_memory_id"],
+                    row["version_no"],
+                    row["project_scope"],
+                    row["subject_ref"],
+                    json.dumps(row["content"], ensure_ascii=False),
+                    row["epistemic_class"],
+                    row["admission_state"],
+                    row["observed_time"],
+                    row["valid_from"],
+                    row["valid_until"],
+                    row["supersedes_memory_id"],
+                    row["receipt_ref"],
+                    json.dumps(row["metadata"], ensure_ascii=False),
+                ),
+                prepare=False,
+            )
+
+    recovered = canonical_memory_as_of(
+        database,
+        project_scope=tms2["project"]["name"],
+        valid_at=datetime.fromisoformat(tms2["valid_from"].replace("Z", "+00:00")),
+        recorded_at=datetime.now(timezone.utc),
+    )
+
+    assert len(recovered) == 1
+    row = recovered[0]
+    assert row["memory_id"] == tms2["snapshot_id"]
+    assert row["logical_memory_id"] == tms2["logical_snapshot_id"]
+    assert row["version_no"] == 2
+    assert row["content"] == p2["content"]
+    assert row["metadata"]["content_sha256"] == tms2["content_sha256"]
+    assert row["content"]["resume_point"]["next_objective"].startswith("Ejecutar PostgreSQL")
