@@ -257,3 +257,17 @@ The pack is successful when the system can:
 8. catch simple governance omissions that humans often miss,
 9. explain why a case exists,
 10. produce a committee-ready Decision Case without choosing for the committee.
+
+#### SCN-027 · Avoidable Human Iteration / Incomplete Preflight
+Historical origin: proposed in the precursor thread as "SCN-023 · Avoidable Human Iteration / Incomplete Preflight"; renumbered here because SCN-023 is already canonically assigned to the Terraform State network visibility case.
+
+Five prerequisites are machine-verifiable through available read-only evidence. The system validates only three, requests a material human action, then discovers the fourth prerequisite and requires another human iteration; the fifth prerequisite is discovered only afterward.
+
+Expected:
+- `FAIL_PRECHECK_MISS` when any machine-verifiable prerequisite remained unchecked before the first human action.
+- Record the missed prerequisite IDs explicitly.
+- Count the premature/rework handoff as an avoidable human interaction.
+- Preserve any genuinely authority-bound action as necessary rather than trying to automate it.
+- `Avoidable Human Interaction Rate` must be greater than 0 for the defective run.
+- A corrected run that validates all machine-verifiable prerequisites first and requests only the authority-bound action must PASS with avoidable interaction rate 0%.
+- Zero human actions must be reported as `NOT_EXERCISED`, never as an artificial 100% efficiency.

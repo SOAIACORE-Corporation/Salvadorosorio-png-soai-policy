@@ -1,0 +1,22 @@
+{
+  "error_id": "ERR-20261017-030",
+  "detected_at": "2026-10-17",
+  "class": "SCENARIO_ID_SEMANTIC_COLLISION",
+  "phase": "knowledge-consolidation",
+  "symptom": "The precursor-thread proposal used SCN-023 for Avoidable Human Iteration / Incomplete Preflight, while the canonical Scenario Pack later assigned SCN-023 to the Terraform State HOLD_NETWORK case.",
+  "root_cause": "Scenario numbering evolved without preserving an explicit lineage map from proposed identifiers to canonical identifiers.",
+  "early_signals": [
+    "The precursor text explicitly names SCN-023 as Avoidable Human Iteration / Incomplete Preflight",
+    "The current Scenario Pack explicitly names SCN-023 as Azure/GitHub visible with Terraform State blocked by network"
+  ],
+  "human_cost": "Potential ambiguity during retrospective consolidation and risk of believing the preflight scenario was already implemented when only its policy existed.",
+  "avoidable": true,
+  "prevention_rule": "Never reuse a canonical scenario ID for a different semantic case; when a historical proposal conflicts, retain the historical label as lineage metadata and allocate the next free canonical ID.",
+  "automated_detection": "SCN-027 records the historical proposed ID and regression tests exercise the missing preflight behavior.",
+  "evidence_refs": [
+    "precursor-thread:SCN-023-Avoidable-Human-Iteration",
+    "docs/landscape-intelligence/SCENARIO_PACK_v0.1.md"
+  ],
+  "control_status": "CONTROLLED",
+  "regression_test": "test_incomplete_preflight_fails_and_counts_avoidable_human_iteration"
+}
