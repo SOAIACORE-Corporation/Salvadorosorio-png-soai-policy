@@ -125,7 +125,7 @@ def test_application_read_contract_requires_recorded_at_and_project_scope() -> N
 
 def test_overlay_runner_is_crash_safe_and_verifies_semantic_guards() -> None:
     runner = A2_RUNNER.read_text(encoding="utf-8")
-    assert "if _overlay_objects_present(connection):" in runner
+    assert "if _migration_objects_present(connection, path):" in runner
     assert ":BASELINED" in runner
     assert "baselined=True" in runner
     assert "A2_REQUIRED_TRIGGERS" in runner
