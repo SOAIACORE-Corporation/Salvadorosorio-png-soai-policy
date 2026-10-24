@@ -30,6 +30,7 @@ A2_HUMAN_TASK_MIGRATION = ROOT / "db" / "a2_migrations" / "1002_mocatriz_human_t
 A2_HUMAN_RESPONSE_GUARD_MIGRATION = ROOT / "db" / "a2_migrations" / "1003_mocatriz_human_response_replay_guard.sql"
 A2_HUMAN_TASK_LIFECYCLE_MIGRATION = ROOT / "db" / "a2_migrations" / "1004_mocatriz_human_task_lifecycle_guard.sql"
 A2_HUMAN_TASK_SCOPE_MIGRATION = ROOT / "db" / "a2_migrations" / "1005_mocatriz_human_task_project_scope_guard.sql"
+A2_HUMAN_TASK_AUTHORITY_MIGRATION = ROOT / "db" / "a2_migrations" / "1006_mocatriz_human_task_authority_asof.sql"
 A2_RUNNER = ROOT / "packages" / "python-runtime" / "src" / "soaiacore_runtime" / "a2_persistence.py"
 WORKER_MAIN = ROOT / "apps" / "worker" / "src" / "soaiacore_worker" / "__main__.py"
 WORKER_DOCKERFILE = ROOT / "apps" / "worker" / "Dockerfile"
@@ -45,6 +46,7 @@ def test_a2_overlay_is_separate_from_p0_migration_directory() -> None:
     assert A2_HUMAN_RESPONSE_GUARD_MIGRATION.is_file()
     assert A2_HUMAN_TASK_LIFECYCLE_MIGRATION.is_file()
     assert A2_HUMAN_TASK_SCOPE_MIGRATION.is_file()
+    assert A2_HUMAN_TASK_AUTHORITY_MIGRATION.is_file()
     assert A2_MIGRATION.parent.name == "a2_migrations"
     assert A2_MIGRATION.parent != ROOT / "db" / "migrations"
 
@@ -361,6 +363,7 @@ def test_overlay_runner_verifies_each_migration_semantically() -> None:
     assert 'path.name.startswith("1003_")' in runner
     assert 'path.name.startswith("1004_")' in runner
     assert 'path.name.startswith("1005_")' in runner
+    assert 'path.name.startswith("1006_")' in runner
     assert "A2_HUMAN_TASK_RELATIONS" in runner
     assert "A2_HUMAN_TASK_TRIGGERS" in runner
     assert "A2_HUMAN_TASK_RESPONSE_INDEXES" in runner
@@ -659,3 +662,88 @@ def test_cross_project_human_authority_is_rejected(database) -> None:
         human_task_id=task["human_task_id"],
     )
     assert recovered["response"] is None
+
+
+def test_late_recorded_backdated_revocation_invalidates_prior_response(database) -> None:
+    """SCN-034: later knowledge can invalidate an earlier response without deleting history."""
+    apply_a2_persistence(
+        database,
+        base_migration_dir=ROOT / "db" / "migrations",
+        a2_migration_dir=ROOT / "db" / "a2_migrations",
+    )
+
+    task = create_human_task(
+        objective_id="OBJ-MOCATRIZ-006",
+        execution_id="EXE-MOCATRIZ-006-01",
+        human_task_id="HT-MOCATRIZ-006-01",
+        correlation_id="CORR-MOCATRIZ-006-01",
+        reason="Authority is requested while checkpoint A appears current.",
+        question="Authorize checkpoint A?",
+        evidence=["SCN-034", "checkpoint:A"],
+        resume_from="UNDERSTAND-CHECKPOINT-A",
+    )
+    persist_human_task(
+        database,
+        project_scope="SOAiaCore",
+        task=task,
+        observed_time=datetime(2026, 10, 24, 15, 0, tzinfo=timezone.utc),
+    )
+    response = {
+        "objective_id": task["objective_id"],
+        "execution_id": task["execution_id"],
+        "human_task_id": task["human_task_id"],
+        "correlation_id": task["correlation_id"],
+        "answer": {"decision": "AUTHORIZED_FOR_CHECKPOINT_A"},
+    }
+    persist_human_response(
+        database,
+        project_scope="SOAiaCore",
+        response_id="HR-MOCATRIZ-006-01",
+        response=response,
+        received_time=datetime(2026, 10, 24, 15, 10, tzinfo=timezone.utc),
+    )
+
+    with database.connect(autocommit=True) as connection:
+        response_recorded = connection.execute(
+            """
+            SELECT recorded_time
+            FROM soa_memory.human_task_responses
+            WHERE response_id='HR-MOCATRIZ-006-01'
+            """
+        ).fetchone()["recorded_time"]
+
+    before_new_evidence = load_human_task_bundle(
+        database,
+        project_scope="SOAiaCore",
+        human_task_id=task["human_task_id"],
+        recorded_at=response_recorded,
+    )
+    assert before_new_evidence["authority_state"] == "AUTHORITATIVE"
+    assert before_new_evidence["response"] is not None
+
+    # Later we learn that checkpoint A had already been superseded before the answer arrived.
+    persist_human_task_lifecycle_event(
+        database,
+        project_scope="SOAiaCore",
+        event_id="HTLE-MOCATRIZ-006-LATE-FACT",
+        task=task,
+        lifecycle_state="SUPERSEDED",
+        effective_time=datetime(2026, 10, 24, 15, 5, tzinfo=timezone.utc),
+        reason="Late-arriving evidence shows checkpoint B superseded A at 15:05.",
+    )
+
+    after_new_evidence = load_human_task_bundle(
+        database,
+        project_scope="SOAiaCore",
+        human_task_id=task["human_task_id"],
+    )
+    assert after_new_evidence["authority_state"] == "INVALIDATED"
+    assert after_new_evidence["response"] is None
+    assert after_new_evidence["invalidated_response"]["answer"]["decision"] == "AUTHORIZED_FOR_CHECKPOINT_A"
+    assert after_new_evidence["invalidating_lifecycle"]["lifecycle_state"] == "SUPERSEDED"
+
+    with database.connect(autocommit=True) as connection:
+        stored = connection.execute(
+            "SELECT count(*) AS n FROM soa_memory.human_task_responses WHERE response_id='HR-MOCATRIZ-006-01'"
+        ).fetchone()["n"]
+    assert stored == 1

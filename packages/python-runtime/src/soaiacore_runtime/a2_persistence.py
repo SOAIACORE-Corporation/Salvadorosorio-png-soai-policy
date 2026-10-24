@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import hashlib
 from pathlib import Path
@@ -62,6 +62,10 @@ A2_HUMAN_TASK_LIFECYCLE_TRIGGERS = (
 
 A2_HUMAN_TASK_LIFECYCLE_FUNCTIONS = (
     "soa_memory.reject_stale_human_response()",
+)
+
+A2_HUMAN_TASK_AUTHORITY_FUNCTIONS = (
+    "soa_memory.human_task_response_authority(text,text,timestamp with time zone)",
 )
 
 A2_HUMAN_TASK_SCOPE_CONSTRAINTS = (
@@ -204,6 +208,10 @@ def _human_task_scope_guards_present(connection) -> bool:
     return all(_constraint_exists(connection, *spec) for spec in A2_HUMAN_TASK_SCOPE_CONSTRAINTS)
 
 
+def _human_task_authority_function_present(connection) -> bool:
+    return all(_function_exists(connection, signature) for signature in A2_HUMAN_TASK_AUTHORITY_FUNCTIONS)
+
+
 def _migration_objects_present(connection, path: Path) -> bool:
     if path.name.startswith("1001_"):
         return _overlay_objects_present(connection)
@@ -215,6 +223,8 @@ def _migration_objects_present(connection, path: Path) -> bool:
         return _human_task_lifecycle_present(connection)
     if path.name.startswith("1005_"):
         return _human_task_scope_guards_present(connection)
+    if path.name.startswith("1006_"):
+        return _human_task_authority_function_present(connection)
     return False
 
 
@@ -381,6 +391,13 @@ def verify_a2_persistence(
                 "PRECHECK",
                 status_code=503,
             )
+        if not _human_task_authority_function_present(connection):
+            raise contract_error(
+                "A2_HUMAN_TASK_AUTHORITY_RESOLVER_MISSING",
+                "Bitemporal Human Task authority resolver is absent",
+                "PRECHECK",
+                status_code=503,
+            )
         for path in files:
             checksum = _checksum(path)
             row = _overlay_registry_row(connection, path)
@@ -398,7 +415,7 @@ def verify_a2_persistence(
         base_migrations=base,
         overlay_migrations=overlay,
         relations=A2_REQUIRED_RELATIONS + A2_HUMAN_TASK_RELATIONS + A2_HUMAN_TASK_LIFECYCLE_RELATIONS,
-        functions=A2_REQUIRED_FUNCTIONS + A2_HUMAN_TASK_LIFECYCLE_FUNCTIONS,
+        functions=A2_REQUIRED_FUNCTIONS + A2_HUMAN_TASK_LIFECYCLE_FUNCTIONS + A2_HUMAN_TASK_AUTHORITY_FUNCTIONS,
         triggers=A2_REQUIRED_TRIGGERS + A2_HUMAN_TASK_TRIGGERS + A2_HUMAN_TASK_LIFECYCLE_TRIGGERS,
         working_assumption_enabled=True,
     )
@@ -504,9 +521,15 @@ def load_human_task_bundle(
     *,
     project_scope: str,
     human_task_id: str,
+    recorded_at: datetime | None = None,
 ) -> dict[str, Any]:
-    """Recover a persisted Human Task and its latest matching response."""
+    """Recover a Human Task and resolve whether its persisted response is still authoritative.
+
+    A later-recorded lifecycle fact may invalidate an earlier response without deleting
+    that response from history. recorded_at preserves the bitemporal knowledge boundary.
+    """
     scope = _require_scope(project_scope)
+    at = recorded_at or datetime.now(timezone.utc)
     with database.connect(autocommit=True) as connection:
         task = connection.execute(
             """
@@ -519,18 +542,45 @@ def load_human_task_bundle(
         ).fetchone()
         if not task:
             raise ValueError("human task not found")
-        response = connection.execute(
-            """
-            SELECT objective_id, execution_id, human_task_id, correlation_id, answer
-            FROM soa_memory.human_task_responses
-            WHERE project_scope=%s AND human_task_id=%s
-            ORDER BY received_time DESC, recorded_time DESC
-            LIMIT 1
-            """,
-            (scope, human_task_id),
+        authority = connection.execute(
+            "SELECT * FROM soa_memory.human_task_response_authority(%s,%s,%s)",
+            (scope, human_task_id, at),
         ).fetchone()
-    return {"task": dict(task), "response": dict(response) if response else None}
 
+    if not authority:
+        return {
+            "task": dict(task),
+            "response": None,
+            "invalidated_response": None,
+            "authority_state": "WAITING_HUMAN",
+            "invalidating_lifecycle": None,
+        }
+
+    row = dict(authority)
+    response = {
+        "objective_id": row["objective_id"],
+        "execution_id": row["execution_id"],
+        "human_task_id": row["human_task_id"],
+        "correlation_id": row["correlation_id"],
+        "answer": row["answer"],
+    }
+    invalidator = None
+    if row["invalidating_lifecycle_event_id"]:
+        invalidator = {
+            "lifecycle_event_id": row["invalidating_lifecycle_event_id"],
+            "lifecycle_state": row["invalidating_lifecycle_state"],
+            "effective_time": row["invalidating_effective_time"],
+            "recorded_time": row["invalidating_recorded_time"],
+        }
+
+    authoritative = bool(row["authoritative"])
+    return {
+        "task": dict(task),
+        "response": response if authoritative else None,
+        "invalidated_response": None if authoritative else response,
+        "authority_state": "AUTHORITATIVE" if authoritative else "INVALIDATED",
+        "invalidating_lifecycle": invalidator,
+    }
 
 def persist_human_task_lifecycle_event(
     database: Database,

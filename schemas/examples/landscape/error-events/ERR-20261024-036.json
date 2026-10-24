@@ -1,0 +1,24 @@
+{
+  "error_id": "ERR-20261024-036",
+  "detected_at": "2026-10-24",
+  "class": "LATE_RECORDED_BACKDATED_AUTHORITY_INVALIDATION",
+  "phase": "human-task-recovery",
+  "symptom": "A response already persisted as authoritative remained resume-eligible even if later-recorded evidence established that its Human Task had been superseded before response receipt.",
+  "root_cause": "Response validity was checked only at insert time. Recovery did not recompute authority against lifecycle facts visible at the requested recorded-time boundary.",
+  "early_signals": [
+    "reject_stale_human_response only evaluates lifecycle rows present before response INSERT",
+    "load_human_task_bundle previously returned the latest response without lifecycle adjudication",
+    "Trusted Memory already models valid time and recorded time separately"
+  ],
+  "human_cost": "No human intervention required to detect or remediate. Without the control, late-arriving evidence could leave an obsolete authorization executable.",
+  "avoidable": true,
+  "prevention_rule": "Resolve Human Task response authority bitemporally at recovery time; preserve invalidated responses as history but exclude them from resume.",
+  "automated_detection": "SCN-034 PostgreSQL late-recorded backdated revocation regression test.",
+  "evidence_refs": [
+    "db/a2_migrations/1004_mocatriz_human_task_lifecycle_guard.sql",
+    "packages/python-runtime/src/soaiacore_runtime/a2_persistence.py",
+    "Trusted Memory bitemporal semantics"
+  ],
+  "control_status": "OPEN",
+  "regression_test": "SCN-034:test_late_recorded_backdated_revocation_invalidates_prior_response"
+}
