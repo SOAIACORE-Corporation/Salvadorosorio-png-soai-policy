@@ -409,6 +409,125 @@ def fidelity_score(reference: dict[str, Any], recovered: dict[str, Any]) -> dict
     }
 
 
+def select_authoritative_snapshot(
+    snapshots: list[dict[str, Any]],
+    *,
+    logical_snapshot_id: str,
+    as_of: str,
+) -> dict[str, Any]:
+    """Resolve one trusted snapshot by lineage and temporal authority.
+
+    Authority is never inferred from narrative completeness, field count, raw
+    timestamp recency, or version number alone. Only valid FROZEN/CANONICAL
+    snapshots in one non-ambiguous temporal lineage are eligible.
+    """
+    as_of_dt = _parse_ts(as_of)
+
+    trusted: list[dict[str, Any]] = []
+    for snapshot in snapshots:
+        if snapshot.get("logical_snapshot_id") != logical_snapshot_id:
+            continue
+        validation = validate_snapshot(snapshot)
+        if not validation["valid"]:
+            raise ValueError(
+                "snapshot_invalid:" + snapshot.get("snapshot_id", "<unknown>")
+                + ":" + ",".join(validation["errors"])
+            )
+        if snapshot.get("status") not in {"FROZEN", "CANONICAL"}:
+            continue
+        trusted.append(snapshot)
+
+    if not trusted:
+        raise ValueError("no_trusted_snapshot_candidates")
+
+    eligible: list[dict[str, Any]] = []
+    for snapshot in trusted:
+        valid_from = _parse_ts(snapshot.get("valid_from") or snapshot["created_at"])
+        valid_until_raw = snapshot.get("valid_until")
+        valid_until = _parse_ts(valid_until_raw) if valid_until_raw else None
+        if valid_from <= as_of_dt and (valid_until is None or as_of_dt < valid_until):
+            eligible.append(snapshot)
+
+    if not eligible:
+        raise ValueError("no_temporally_eligible_snapshot")
+
+    by_id = {snapshot["snapshot_id"]: snapshot for snapshot in eligible}
+    if len(by_id) != len(eligible):
+        raise ValueError("duplicate_snapshot_id")
+
+    by_version: dict[int, str] = {}
+    for snapshot in eligible:
+        version_no = snapshot["version_no"]
+        existing = by_version.get(version_no)
+        if existing is not None and existing != snapshot["snapshot_id"]:
+            raise ValueError(f"snapshot_version_conflict:{version_no}")
+        by_version[version_no] = snapshot["snapshot_id"]
+
+    children: dict[str, list[str]] = {}
+    referenced_predecessors: set[str] = set()
+    for snapshot in eligible:
+        predecessor = snapshot.get("previous_snapshot_id")
+        if isinstance(predecessor, str) and predecessor.startswith("TMS-"):
+            if predecessor not in by_id:
+                raise ValueError(
+                    f"snapshot_lineage_gap:{snapshot['snapshot_id']}:{predecessor}"
+                )
+            referenced_predecessors.add(predecessor)
+            children.setdefault(predecessor, []).append(snapshot["snapshot_id"])
+
+    forks = {
+        predecessor: sorted(child_ids)
+        for predecessor, child_ids in children.items()
+        if len(child_ids) > 1
+    }
+    if forks:
+        detail = ";".join(
+            f"{predecessor}=>{','.join(child_ids)}"
+            for predecessor, child_ids in sorted(forks.items())
+        )
+        raise ValueError("snapshot_lineage_fork:" + detail)
+
+    heads = [
+        snapshot
+        for snapshot in eligible
+        if snapshot["snapshot_id"] not in referenced_predecessors
+    ]
+    if len(heads) != 1:
+        raise ValueError(
+            "snapshot_authority_ambiguous:"
+            + ",".join(sorted(snapshot["snapshot_id"] for snapshot in heads))
+        )
+
+    head = heads[0]
+    current = head
+    seen: set[str] = set()
+    while True:
+        current_id = current["snapshot_id"]
+        if current_id in seen:
+            raise ValueError("snapshot_lineage_cycle:" + current_id)
+        seen.add(current_id)
+
+        predecessor = current.get("previous_snapshot_id")
+        if not (isinstance(predecessor, str) and predecessor.startswith("TMS-")):
+            break
+
+        previous = by_id[predecessor]
+        if current["version_no"] != previous["version_no"] + 1:
+            raise ValueError(
+                f"snapshot_version_lineage_gap:{current_id}:{predecessor}"
+            )
+
+        current_valid_from = _parse_ts(current.get("valid_from") or current["created_at"])
+        previous_valid_from = _parse_ts(previous.get("valid_from") or previous["created_at"])
+        if current_valid_from < previous_valid_from:
+            raise ValueError(
+                f"snapshot_temporal_lineage_inversion:{current_id}:{predecessor}"
+            )
+        current = previous
+
+    return deepcopy(head)
+
+
 def compare_snapshot_versions(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
     if previous.get("snapshot_id") == current.get("snapshot_id"):
         raise ValueError("snapshot versions must have distinct immutable IDs")
