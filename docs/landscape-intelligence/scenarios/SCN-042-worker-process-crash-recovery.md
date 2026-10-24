@@ -1,7 +1,7 @@
 # SCN-042 · Recovery after Worker / Process Crash
 
 **Class:** MOCATRIZ durable recovery / process-loss continuity  
-**Status:** ACTIVE / TESTABLE  
+**Status:** PASS / CAPABILITY VALIDATED  
 **Created:** 2026-10-24
 
 ## Problem
