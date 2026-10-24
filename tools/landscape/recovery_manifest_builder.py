@@ -47,9 +47,11 @@ def _validate_evidence(evidence: list[dict[str, Any]]) -> None:
             raise ValueError("fresh must be boolean or null")
 
 def _derive_status(requirement: dict[str, Any], evidence: list[dict[str, Any]]) -> str:
+    if not evidence:
+        return "MISSING"
     available=[item for item in evidence if item["available"]]
     if not available:
-        return "MISSING"
+        return "UNKNOWN"
     statuses={item.get("validation_status","UNKNOWN") for item in available}
     if "UNKNOWN" in statuses:
         return "UNKNOWN"
@@ -85,6 +87,14 @@ def build_recovery_manifest(
         record["status"]=_derive_status(requirement,matched)
         record["evidence_ids"]=sorted(item["evidence_id"] for item in matched if item["available"])
         record["source_refs"]=sorted({str(item["source_ref"]) for item in matched if item["available"] and item.get("source_ref")})
+        record["unavailable_evidence_ids"]=sorted(
+            item["evidence_id"] for item in matched if not item["available"]
+        )
+        record["unavailable_source_refs"]=sorted({
+            str(item["source_ref"])
+            for item in matched
+            if not item["available"] and item.get("source_ref")
+        })
         generated.append(record)
     return {
         "recovery_manifest_version":"0.2",
@@ -95,7 +105,8 @@ def build_recovery_manifest(
         "evidence_inventory_ids":sorted(item["evidence_id"] for item in evidence),
         "semantics":{
             "policy_rule":"Requirements define what must exist; observed evidence cannot redefine obligations.",
-            "absence_rule":"No available evidence for a required item becomes MISSING.",
+            "absence_rule":"No evidence record for a required item becomes MISSING.",
+            "unavailability_rule":"Declared evidence that cannot currently be retrieved remains UNKNOWN and preserves unavailable provenance.",
             "freshness_rule":"Stale evidence remains visible as STALE and is never promoted to current.",
             "authority_rule":"Generated status never grants execution or exception authority.",
         },
