@@ -1,0 +1,14 @@
+{
+  "validation_id": "VAL-ERR-032",
+  "error_id": "ERR-20261024-032",
+  "effective_status": "CONTROLLED",
+  "validated_at": "2026-10-24",
+  "evidence_refs": [
+    "github-actions:40078102781",
+    "github-actions:40078102788",
+    "commit:234f26faf784d643d986f2c2a77c4b2f74909fe0",
+    "SCN-031"
+  ],
+  "regression_test": "tests/test_a2_persistence_contract.py::test_human_task_rejects_replay_or_conflicting_second_response",
+  "rationale": "PostgreSQL A2 contract tests passed with a unique persistence guard that rejects a second differently identified response for the same four-part Human Task correlation. The first authoritative response remains the recoverable response."
+}
