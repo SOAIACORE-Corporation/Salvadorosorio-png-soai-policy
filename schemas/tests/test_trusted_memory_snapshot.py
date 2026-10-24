@@ -12,8 +12,10 @@ from trusted_memory import (  # noqa: E402
     postgres_projection,
     reconstruct_from_snapshot,
     recovery_decision,
+    seal_fidelity_receipt,
     select_authoritative_snapshot,
     validate_evidence_inventory,
+    validate_fidelity_receipt,
     seal_snapshot,
     sha256_hex,
     validate_manifest,
@@ -97,11 +99,115 @@ def _manifest(snapshot):
     return manifest
 
 
+def _receipt_bound_bundle():
+    snapshot = _snapshot()
+    inventory = _evidence_inventory()
+    manifest = _manifest(snapshot)
+    receipt = seal_fidelity_receipt({
+        "receipt_id":"FR-TEST-001",
+        "snapshot_id":snapshot["snapshot_id"],
+        "snapshot_hash":snapshot["content_sha256"],
+        "evidence_inventory_hash":inventory["content_sha256"],
+        "decision":{"result":"PASS","recovery_status":"RECOVERABLE_WITH_EXCEPTIONS"},
+    })
+    manifest["fidelity_receipt"] = {
+        "receipt_id":receipt["receipt_id"],
+        "expected_hash":receipt["content_sha256"],
+    }
+    manifest["content_sha256"] = sha256_hex({
+        k:v for k,v in manifest.items() if k!="content_sha256"
+    })
+    receipt["manifest_hash"] = manifest["content_sha256"]
+    return snapshot, manifest, inventory, receipt
+
+
 def test_snapshot_seal_and_validate():
     snapshot=_snapshot()
     result=validate_snapshot(snapshot)
     assert result["valid"] is True
     assert result["actual_content_sha256"] == snapshot["content_sha256"]
+
+
+def test_sealed_fidelity_receipt_validates_against_bound_artifacts():
+    snapshot, manifest, inventory, receipt = _receipt_bound_bundle()
+    result = validate_fidelity_receipt(
+        receipt,
+        snapshot=snapshot,
+        manifest=manifest,
+        evidence_inventory=inventory,
+    )
+    assert result["valid"] is True
+    recovered = reconstruct_from_snapshot(
+        snapshot,
+        manifest,
+        inventory,
+        fidelity_receipt=receipt,
+    )
+    assert recovered["snapshot_id"] == snapshot["snapshot_id"]
+
+
+def test_sealed_fidelity_receipt_tampering_blocks_recovery():
+    snapshot, manifest, inventory, receipt = _receipt_bound_bundle()
+    receipt["decision"]["result"] = "FAIL"
+    try:
+        reconstruct_from_snapshot(snapshot,manifest,inventory,fidelity_receipt=receipt)
+    except ValueError as exc:
+        assert "fidelity_receipt_hash_mismatch" in str(exc)
+    else:
+        raise AssertionError("tampered fidelity receipt must invalidate recovery")
+
+
+def test_receipt_bound_manifest_tampering_blocks_recovery():
+    snapshot, manifest, inventory, receipt = _receipt_bound_bundle()
+    manifest["requirements"][1]["status"] = "CONFIRMED"
+    try:
+        reconstruct_from_snapshot(snapshot,manifest,inventory,fidelity_receipt=receipt)
+    except ValueError as exc:
+        assert "manifest_hash_mismatch" in str(exc)
+    else:
+        raise AssertionError("tampered manifest must invalidate recovery")
+
+
+def test_receipt_bound_snapshot_tampering_blocks_recovery():
+    snapshot, manifest, inventory, receipt = _receipt_bound_bundle()
+    snapshot["objective"]["statement"] = "tampered objective"
+    try:
+        reconstruct_from_snapshot(snapshot,manifest,inventory,fidelity_receipt=receipt)
+    except ValueError as exc:
+        assert "content_hash_mismatch" in str(exc)
+    else:
+        raise AssertionError("tampered snapshot must invalidate recovery")
+
+
+def test_different_valid_receipt_cannot_substitute_for_manifest_bound_receipt():
+    snapshot, manifest, inventory, receipt = _receipt_bound_bundle()
+    substitute = seal_fidelity_receipt({
+        "receipt_id":"FR-TEST-SUBSTITUTE",
+        "snapshot_id":snapshot["snapshot_id"],
+        "snapshot_hash":snapshot["content_sha256"],
+        "evidence_inventory_hash":inventory["content_sha256"],
+        "decision":{"result":"PASS","recovery_status":"RECOVERABLE_WITH_EXCEPTIONS"},
+    })
+    substitute["manifest_hash"] = manifest["content_sha256"]
+    try:
+        reconstruct_from_snapshot(snapshot,manifest,inventory,fidelity_receipt=substitute)
+    except ValueError as exc:
+        assert (
+            "fidelity_receipt_id_mismatch" in str(exc)
+            or "fidelity_receipt_expected_hash_mismatch" in str(exc)
+        )
+    else:
+        raise AssertionError("valid but unbound receipt must not substitute for bound receipt")
+
+
+def test_receipt_bound_recovery_requires_receipt_presence():
+    snapshot, manifest, inventory, _ = _receipt_bound_bundle()
+    try:
+        reconstruct_from_snapshot(snapshot,manifest,inventory)
+    except ValueError as exc:
+        assert "fidelity_receipt_missing" in str(exc)
+    else:
+        raise AssertionError("manifest-bound receipt must be present for trusted recovery")
 
 
 def test_hash_mismatch_fails_validation():
