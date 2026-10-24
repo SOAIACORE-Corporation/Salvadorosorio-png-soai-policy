@@ -114,9 +114,12 @@ def determine_final_status(
     showstopper: bool = False,
     blocked: bool = False,
     accepted_exceptions: bool = False,
+    stop_assessment: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     completion = objective_completion(criteria)
     if showstopper:
+        if not stop_assessment or stop_assessment.get("showstopper_justified") is not True:
+            raise ValueError("SHOWSTOPPER requires evidence-backed stop assessment")
         status = "SHOWSTOPPER"
     elif waiting_human:
         status = "WAITING_HUMAN"
@@ -263,6 +266,110 @@ def assess_strategy_adaptation(events: list[dict[str, Any]]) -> dict[str, Any]:
         "objective_id": active_objective,
     }
 
+
+
+def assess_stop_decision(events: list[dict[str, Any]]) -> dict[str, Any]:
+    """Determine whether continuing, waiting for a human, blocking, or SHOWSTOPPER is justified.
+
+    This intentionally avoids a fixed number of recovery attempts. It evaluates the
+    evidence actually present: failed/partial recovery attempts, viable alternatives,
+    human-resolvable dependencies, and material irreducible blockers.
+    """
+    recovery_attempts: list[dict[str, Any]] = []
+    alternatives: list[dict[str, Any]] = []
+    human_dependencies: list[dict[str, Any]] = []
+    blockers: list[dict[str, Any]] = []
+
+    for event in events:
+        event_type = event.get("type")
+        evidence = event.get("evidence", [])
+        if not isinstance(evidence, list) or not all(isinstance(x, str) and x for x in evidence):
+            raise ValueError("stop-decision evidence must be a list of non-empty strings")
+
+        if event_type == "recovery_attempt":
+            if event.get("result") not in {"SUCCESS", "FAILED", "PARTIAL", "IN_PROGRESS"}:
+                raise ValueError("recovery_attempt result is invalid")
+            recovery_attempts.append(event)
+        elif event_type == "alternative":
+            if event.get("status") not in {"VIABLE_UNTRIED", "FAILED", "BLOCKED"}:
+                raise ValueError("alternative status is invalid")
+            alternatives.append(event)
+        elif event_type == "human_dependency":
+            if not isinstance(event.get("required"), bool) or not isinstance(event.get("available"), bool):
+                raise ValueError("human_dependency requires boolean required and available")
+            human_dependencies.append(event)
+        elif event_type == "blocker":
+            if not isinstance(event.get("material"), bool) or not isinstance(event.get("resolvable"), bool):
+                raise ValueError("blocker requires boolean material and resolvable")
+            blockers.append(event)
+        else:
+            raise ValueError(f"unsupported stop-decision event type: {event_type}")
+
+    if any(item["result"] == "SUCCESS" for item in recovery_attempts):
+        return {
+            "recommended_status": "CONTINUE",
+            "showstopper_justified": False,
+            "reason": "RECOVERY_SUCCEEDED",
+        }
+
+    if any(item["result"] == "IN_PROGRESS" for item in recovery_attempts):
+        return {
+            "recommended_status": "CONTINUE",
+            "showstopper_justified": False,
+            "reason": "RECOVERY_IN_PROGRESS",
+        }
+
+    if any(item["required"] and item["available"] for item in human_dependencies):
+        return {
+            "recommended_status": "WAITING_HUMAN",
+            "showstopper_justified": False,
+            "reason": "HUMAN_DEPENDENCY_AVAILABLE",
+        }
+
+    viable = [item for item in alternatives if item["status"] == "VIABLE_UNTRIED"]
+    if viable:
+        return {
+            "recommended_status": "CONTINUE",
+            "showstopper_justified": False,
+            "reason": "VIABLE_ALTERNATIVE_REMAINS",
+            "viable_alternative_ids": [str(item.get("alternative_id")) for item in viable],
+        }
+
+    failed_recovery = [
+        item for item in recovery_attempts
+        if item["result"] in {"FAILED", "PARTIAL"} and item["evidence"]
+    ]
+    alternatives_exhausted = bool(alternatives) and all(
+        item["status"] in {"FAILED", "BLOCKED"} and bool(item["evidence"])
+        for item in alternatives
+    )
+    irreducible_blockers = [
+        item for item in blockers
+        if item["material"] is True and item["resolvable"] is False and item["evidence"]
+    ]
+
+    if failed_recovery and alternatives_exhausted and irreducible_blockers:
+        return {
+            "recommended_status": "SHOWSTOPPER",
+            "showstopper_justified": True,
+            "reason": "RECOVERY_AND_KNOWN_ALTERNATIVES_EXHAUSTED_WITH_IRREDUCIBLE_BLOCKER",
+            "failed_recovery_count": len(failed_recovery),
+            "alternative_count": len(alternatives),
+            "blocker_count": len(irreducible_blockers),
+        }
+
+    if irreducible_blockers:
+        return {
+            "recommended_status": "BLOCKED",
+            "showstopper_justified": False,
+            "reason": "BLOCKER_PRESENT_BUT_EXHAUSTION_NOT_DEMONSTRATED",
+        }
+
+    return {
+        "recommended_status": "CONTINUE",
+        "showstopper_justified": False,
+        "reason": "INSUFFICIENT_EVIDENCE_TO_STOP",
+    }
 
 def methodology_telemetry(events: list[dict[str, Any]]) -> dict[str, Any]:
     counts = {

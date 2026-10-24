@@ -5,6 +5,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "landscape"))
 
 from mocatriz_execution import (  # noqa: E402
+    assess_stop_decision,
     assess_strategy_adaptation,
     correlate_human_response,
     create_human_task,
@@ -160,3 +161,63 @@ def test_zero_denominator_telemetry_is_not_applicable():
     assert result["recovery_efficiency_applicable"] is False
     assert result["resume_success_applicable"] is False
     assert result["correlation_integrity_applicable"] is False
+
+
+def test_showstopper_requires_evidence_backed_stop_assessment():
+    criteria = [{"criterion_id":"C1","satisfied":False,"material":True}]
+    try:
+        determine_final_status(criteria, showstopper=True)
+    except ValueError as exc:
+        assert "evidence-backed stop assessment" in str(exc)
+    else:
+        raise AssertionError("SHOWSTOPPER must not be caller-declared without evidence")
+
+
+def test_viable_untried_alternative_prevents_showstopper():
+    assessment = assess_stop_decision([
+        {"type":"recovery_attempt","result":"FAILED","evidence":["EV-FAIL-A"]},
+        {"type":"alternative","alternative_id":"B","status":"VIABLE_UNTRIED","evidence":["EV-B-VIABLE"]},
+        {"type":"blocker","material":True,"resolvable":False,"evidence":["EV-BLOCKER"]},
+    ])
+    assert assessment["recommended_status"] == "CONTINUE"
+    assert assessment["showstopper_justified"] is False
+    assert assessment["reason"] == "VIABLE_ALTERNATIVE_REMAINS"
+
+
+def test_available_human_dependency_is_waiting_human_not_showstopper():
+    assessment = assess_stop_decision([
+        {"type":"recovery_attempt","result":"FAILED","evidence":["EV-FAIL-A"]},
+        {"type":"alternative","alternative_id":"A","status":"BLOCKED","evidence":["EV-A-BLOCKED"]},
+        {"type":"human_dependency","required":True,"available":True,"evidence":["EV-AUTHORITY-GATE"]},
+        {"type":"blocker","material":True,"resolvable":False,"evidence":["EV-BLOCKER"]},
+    ])
+    assert assessment["recommended_status"] == "WAITING_HUMAN"
+    assert assessment["showstopper_justified"] is False
+
+
+def test_showstopper_requires_failed_recovery_exhausted_alternatives_and_irreducible_blocker():
+    criteria = [{"criterion_id":"C1","satisfied":False,"material":True}]
+    assessment = assess_stop_decision([
+        {"type":"recovery_attempt","result":"FAILED","evidence":["EV-FAIL-A"]},
+        {"type":"recovery_attempt","result":"PARTIAL","evidence":["EV-PARTIAL-B"]},
+        {"type":"alternative","alternative_id":"A","status":"FAILED","evidence":["EV-A-FAILED"]},
+        {"type":"alternative","alternative_id":"B","status":"BLOCKED","evidence":["EV-B-BLOCKED"]},
+        {"type":"human_dependency","required":True,"available":False,"evidence":["EV-HUMAN-UNAVAILABLE"]},
+        {"type":"blocker","material":True,"resolvable":False,"evidence":["EV-IRREDUCIBLE"]},
+    ])
+    assert assessment["recommended_status"] == "SHOWSTOPPER"
+    assert assessment["showstopper_justified"] is True
+    result = determine_final_status(
+        criteria,
+        showstopper=True,
+        stop_assessment=assessment,
+    )
+    assert result["final_status"] == "SHOWSTOPPER"
+
+
+def test_material_blocker_without_exhaustion_is_blocked_not_showstopper():
+    assessment = assess_stop_decision([
+        {"type":"blocker","material":True,"resolvable":False,"evidence":["EV-BLOCKER"]},
+    ])
+    assert assessment["recommended_status"] == "BLOCKED"
+    assert assessment["showstopper_justified"] is False

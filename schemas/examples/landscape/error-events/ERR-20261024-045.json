@@ -1,0 +1,24 @@
+{
+  "error_id": "ERR-20261024-045",
+  "detected_at": "2026-10-24",
+  "class": "PREMATURE_SHOWSTOPPER",
+  "phase": "self-regulation",
+  "symptom": "determine_final_status accepted showstopper=True as a caller assertion without requiring evidence of failed recovery, exhausted alternatives, or an irreducible blocker.",
+  "root_cause": "The closure primitive modeled SHOWSTOPPER as a boolean input before modeling evidence-backed stop-decision integrity.",
+  "early_signals": [
+    "MOCATRIZ canon requires reasonable recovery attempts before SHOWSTOPPER",
+    "determine_final_status previously trusted showstopper=True directly",
+    "no test distinguished viable alternative, WAITING_HUMAN, BLOCKED and justified SHOWSTOPPER"
+  ],
+  "human_cost": "A premature terminal decision can unnecessarily transfer unresolved work to the user or abandon a recoverable objective.",
+  "avoidable": true,
+  "prevention_rule": "SHOWSTOPPER requires a stop assessment proving failed/partial recovery, exhaustion of known viable alternatives, no available human resolution, and a material irreducible blocker.",
+  "automated_detection": "SCN-046 self-regulation regression tests in schemas/tests/test_mocatriz_execution.py.",
+  "evidence_refs": [
+    "tools/landscape/mocatriz_execution.py",
+    "docs/landscape-intelligence/MOCATRIZ_ADAPTIVE_EXECUTION_v1.md",
+    "schemas/tests/test_mocatriz_execution.py"
+  ],
+  "control_status": "OPEN",
+  "regression_test": "SCN-046:test_showstopper_requires_failed_recovery_exhausted_alternatives_and_irreducible_blocker"
+}
