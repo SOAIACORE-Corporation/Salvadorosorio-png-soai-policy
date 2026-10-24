@@ -1,7 +1,7 @@
 # SCN-039 · Source Authority Unavailable
 
 **Class:** MOCATRIZ source authority / epistemic availability  
-**Status:** ACTIVE / TESTABLE  
+**Status:** PASS / CONTROLLED  
 **Created:** 2026-10-24
 
 ## Problem
