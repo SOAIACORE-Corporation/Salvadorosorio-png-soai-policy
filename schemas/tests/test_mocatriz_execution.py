@@ -5,6 +5,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "landscape"))
 
 from mocatriz_execution import (  # noqa: E402
+    assess_strategy_adaptation,
     correlate_human_response,
     create_human_task,
     detect_false_completion,
@@ -98,6 +99,40 @@ def test_waiting_human_is_normal_execution_state():
     criteria = [{"criterion_id":"C1","satisfied":False,"material":True}]
     result = determine_final_status(criteria, waiting_human=True)
     assert result["final_status"] == "WAITING_HUMAN"
+
+
+def test_three_failed_routes_can_drive_evidence_based_strategy_mutation_without_drift():
+    result = assess_strategy_adaptation([
+        {"type":"strategy_attempt","objective_id":"OBJ-1","strategy_id":"A","result":"FAILED","evidence":["EV-A"]},
+        {"type":"strategy_change","objective_id":"OBJ-1","from_strategy":"A","to_strategy":"B","basis_evidence":["EV-A"]},
+        {"type":"strategy_attempt","objective_id":"OBJ-1","strategy_id":"B","result":"FAILED","evidence":["EV-B"]},
+        {"type":"strategy_change","objective_id":"OBJ-1","from_strategy":"B","to_strategy":"C","basis_evidence":["EV-B"]},
+        {"type":"strategy_attempt","objective_id":"OBJ-1","strategy_id":"C","result":"FAILED","evidence":["EV-C"]},
+        {"type":"strategy_change","objective_id":"OBJ-1","from_strategy":"C","to_strategy":"D","basis_evidence":["EV-C"]},
+    ])
+    assert result["adaptive_mutation_count"] == 3
+    assert result["drift_count"] == 0
+
+
+def test_revisit_without_new_evidence_is_drift():
+    result = assess_strategy_adaptation([
+        {"type":"strategy_attempt","objective_id":"OBJ-1","strategy_id":"A","result":"FAILED","evidence":["EV-A"]},
+        {"type":"strategy_change","objective_id":"OBJ-1","from_strategy":"A","to_strategy":"B","basis_evidence":["EV-A"]},
+        {"type":"strategy_attempt","objective_id":"OBJ-1","strategy_id":"B","result":"FAILED","evidence":["EV-B"]},
+        {"type":"strategy_change","objective_id":"OBJ-1","from_strategy":"B","to_strategy":"A","basis_evidence":[]},
+    ])
+    assert result["drift_count"] == 1
+    assert "NO_BASIS_EVIDENCE" in result["classifications"][-1]["reason"]
+
+
+def test_strategy_change_that_departs_objective_is_drift():
+    result = assess_strategy_adaptation([
+        {"type":"strategy_attempt","objective_id":"OBJ-1","strategy_id":"A","result":"FAILED","evidence":["EV-A"]},
+        {"type":"strategy_change","objective_id":"OBJ-2","from_strategy":"A","to_strategy":"B","basis_evidence":["EV-A"]},
+    ])
+    assert result["adaptive_mutation_count"] == 0
+    assert result["drift_count"] == 1
+    assert "OBJECTIVE_DEPARTURE" in result["classifications"][-1]["reason"]
 
 
 def test_methodology_telemetry_measures_recovery_resume_and_correlation():
