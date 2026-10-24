@@ -23,6 +23,28 @@ def test_failed_completed_ci_is_valid_evidence_not_success():
     assert evidence["source_outcome"] == "failure"
 
 
+def test_unretrieved_source_remains_unknown_through_manifest_build():
+    evidence = adapt_source({
+        "source_kind":"decision",
+        "source_id":"decision:unavailable",
+        "requirement_id":"decision-authority",
+        "decision_id":"D-UNAVAILABLE",
+        "retrieved":False,
+        "source_ref":"authority:upstream",
+    })
+    assert evidence["available"] is False
+    assert evidence["validation_status"] == "UNKNOWN"
+
+    manifest = build_recovery_manifest([evidence])
+    authority = next(
+        item for item in manifest["requirements"]
+        if item["requirement_id"] == "decision-authority"
+    )
+    assert authority["status"] == "UNKNOWN"
+    assert authority["unavailable_evidence_ids"] == ["decision:unavailable"]
+    assert authority["unavailable_source_refs"] == ["authority:upstream"]
+
+
 def test_in_progress_ci_is_partial_evidence():
     evidence = adapt_source({
         "source_kind":"ci_run",
