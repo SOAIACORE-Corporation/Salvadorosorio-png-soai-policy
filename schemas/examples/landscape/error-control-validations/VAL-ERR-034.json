@@ -1,0 +1,15 @@
+{
+  "validation_id": "VAL-ERR-034",
+  "error_id": "ERR-20261024-034",
+  "status": "CONTROLLED",
+  "observed_at": "2026-10-24",
+  "evidence_refs": [
+    "github-actions:40080902343",
+    "github-actions:40080902341",
+    "commit:34cbf44d6de17d93ac23f06079355ee4459b0607",
+    "SCN-033"
+  ],
+  "human_required": false,
+  "regression_test": "tests/test_a2_persistence_contract.py::test_cross_project_human_authority_is_rejected",
+  "rationale": "A2 Persistence #78 passed scoped foreign-key regression tests; Landscape #206 passed the governed artifact and error-control audit."
+}

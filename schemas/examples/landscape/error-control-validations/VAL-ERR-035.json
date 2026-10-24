@@ -1,0 +1,14 @@
+{
+  "validation_id": "VAL-ERR-035",
+  "error_id": "ERR-20261024-035",
+  "status": "CONTROLLED",
+  "observed_at": "2026-10-24",
+  "evidence_refs": [
+    "github-actions:40080791833",
+    "github-actions:40080902341",
+    "commit:34cbf44d6de17d93ac23f06079355ee4459b0607"
+  ],
+  "human_required": false,
+  "regression_test": "Landscape Intelligence Schema / error-control audit",
+  "rationale": "Landscape #205 exposed the validation contract mismatch; records were normalized to canonical status/observed_at fields and Landscape #206 passed all error-control audit tests."
+}
