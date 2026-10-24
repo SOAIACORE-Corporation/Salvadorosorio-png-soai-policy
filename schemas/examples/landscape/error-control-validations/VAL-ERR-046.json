@@ -1,0 +1,13 @@
+{
+  "validation_id": "VAL-ERR-046",
+  "error_id": "ERR-20261024-046",
+  "status": "CONTROLLED",
+  "observed_at": "2026-10-24",
+  "evidence_refs": [
+    "commit:74f4a34470cb495560cdfdb4269a850030be5600",
+    "github-actions:40086427790",
+    "SCN-047"
+  ],
+  "human_required": false,
+  "rationale": "Landscape #267 and companion gates passed after reordering stop-decision semantics so an autonomous viable recovery route takes precedence over optional human escalation."
+}

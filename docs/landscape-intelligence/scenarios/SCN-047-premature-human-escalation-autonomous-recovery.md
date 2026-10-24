@@ -1,7 +1,7 @@
 # SCN-047 · Premature Human Escalation despite Autonomous Recovery
 
 **Class:** MOCATRIZ human-interaction efficiency / runtime recovery judgment  
-**Status:** ACTIVE / TESTABLE  
+**Status:** PASS / CONTROLLED  
 **Created:** 2026-10-24
 
 ## Problem
