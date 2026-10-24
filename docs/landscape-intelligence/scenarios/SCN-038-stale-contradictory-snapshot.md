@@ -1,7 +1,7 @@
 # SCN-038 · Stale / Contradictory Snapshot
 
 **Class:** MOCATRIZ trusted recovery / temporal lineage integrity  
-**Status:** ACTIVE / TESTABLE  
+**Status:** PASS / CONTROLLED  
 **Created:** 2026-10-24
 
 ## Problem
