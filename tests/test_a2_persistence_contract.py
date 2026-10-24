@@ -16,6 +16,7 @@ from soaiacore_runtime.a2_persistence import (
     load_human_task_bundle,
     persist_human_response,
     persist_human_task,
+    persist_human_task_lifecycle_event,
     verify_a2_persistence,
 )
 
@@ -27,6 +28,7 @@ from mocatriz_execution import create_human_task, correlate_human_response  # no
 A2_MIGRATION = ROOT / "db" / "a2_migrations" / "1001_memory_decision_bitemporal.sql"
 A2_HUMAN_TASK_MIGRATION = ROOT / "db" / "a2_migrations" / "1002_mocatriz_human_task_resume.sql"
 A2_HUMAN_RESPONSE_GUARD_MIGRATION = ROOT / "db" / "a2_migrations" / "1003_mocatriz_human_response_replay_guard.sql"
+A2_HUMAN_TASK_LIFECYCLE_MIGRATION = ROOT / "db" / "a2_migrations" / "1004_mocatriz_human_task_lifecycle_guard.sql"
 A2_RUNNER = ROOT / "packages" / "python-runtime" / "src" / "soaiacore_runtime" / "a2_persistence.py"
 WORKER_MAIN = ROOT / "apps" / "worker" / "src" / "soaiacore_worker" / "__main__.py"
 WORKER_DOCKERFILE = ROOT / "apps" / "worker" / "Dockerfile"
@@ -40,6 +42,7 @@ def test_a2_overlay_is_separate_from_p0_migration_directory() -> None:
     assert A2_MIGRATION.is_file()
     assert A2_HUMAN_TASK_MIGRATION.is_file()
     assert A2_HUMAN_RESPONSE_GUARD_MIGRATION.is_file()
+    assert A2_HUMAN_TASK_LIFECYCLE_MIGRATION.is_file()
     assert A2_MIGRATION.parent.name == "a2_migrations"
     assert A2_MIGRATION.parent != ROOT / "db" / "migrations"
 
@@ -354,6 +357,7 @@ def test_overlay_runner_verifies_each_migration_semantically() -> None:
     assert "_migration_objects_present(connection, path)" in runner
     assert 'path.name.startswith("1002_")' in runner
     assert 'path.name.startswith("1003_")' in runner
+    assert 'path.name.startswith("1004_")' in runner
     assert "A2_HUMAN_TASK_RELATIONS" in runner
     assert "A2_HUMAN_TASK_TRIGGERS" in runner
     assert "A2_HUMAN_TASK_RESPONSE_INDEXES" in runner
@@ -533,3 +537,62 @@ def test_human_task_rejects_replay_or_conflicting_second_response(database) -> N
         human_task_id=task["human_task_id"],
     )
     assert recovered["response"]["answer"]["decision"] == "AUTHORIZED_FOR_TEST_ONLY"
+
+
+def test_stale_human_authority_is_rejected_after_task_supersession(database) -> None:
+    """SCN-032: correct correlation is insufficient once the Human Task is stale."""
+    apply_a2_persistence(
+        database,
+        base_migration_dir=ROOT / "db" / "migrations",
+        a2_migration_dir=ROOT / "db" / "a2_migrations",
+    )
+
+    task = create_human_task(
+        objective_id="OBJ-MOCATRIZ-004",
+        execution_id="EXE-MOCATRIZ-004-01",
+        human_task_id="HT-MOCATRIZ-004-01",
+        correlation_id="CORR-MOCATRIZ-004-01",
+        reason="Authority is required against checkpoint A.",
+        question="Authorize continuation against checkpoint A?",
+        evidence=["checkpoint:A", "SCN-032"],
+        resume_from="UNDERSTAND-CHECKPOINT-A",
+    )
+    persist_human_task(
+        database,
+        project_scope="SOAiaCore",
+        task=task,
+        observed_time=datetime(2026, 10, 24, 13, 0, tzinfo=timezone.utc),
+    )
+
+    persist_human_task_lifecycle_event(
+        database,
+        project_scope="SOAiaCore",
+        event_id="HTLE-MOCATRIZ-004-01",
+        task=task,
+        lifecycle_state="SUPERSEDED",
+        effective_time=datetime(2026, 10, 24, 13, 5, tzinfo=timezone.utc),
+        reason="Checkpoint A was superseded by checkpoint B before the human answer arrived.",
+    )
+
+    stale_but_correlated = {
+        "objective_id": task["objective_id"],
+        "execution_id": task["execution_id"],
+        "human_task_id": task["human_task_id"],
+        "correlation_id": task["correlation_id"],
+        "answer": {"decision": "AUTHORIZED_FOR_CHECKPOINT_A"},
+    }
+    with pytest.raises(psycopg.Error):
+        persist_human_response(
+            database,
+            project_scope="SOAiaCore",
+            response_id="HR-MOCATRIZ-004-LATE",
+            response=stale_but_correlated,
+            received_time=datetime(2026, 10, 24, 13, 10, tzinfo=timezone.utc),
+        )
+
+    recovered = load_human_task_bundle(
+        database,
+        project_scope="SOAiaCore",
+        human_task_id=task["human_task_id"],
+    )
+    assert recovered["response"] is None

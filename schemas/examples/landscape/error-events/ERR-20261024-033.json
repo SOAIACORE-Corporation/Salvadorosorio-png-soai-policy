@@ -1,0 +1,24 @@
+{
+  "error_id": "ERR-20261024-033",
+  "detected_at": "2026-10-24",
+  "class": "STALE_HUMAN_AUTHORITY",
+  "phase": "human-task-resume",
+  "symptom": "A correctly correlated human response could be persisted even after the task's authorized checkpoint or decision context had been superseded.",
+  "root_cause": "The durable Human Task model had identity correlation and replay protection but no append-only lifecycle state capable of invalidating responses received after revocation, supersession, or expiry.",
+  "early_signals": [
+    "human_tasks status is immutable WAITING_HUMAN",
+    "persist_human_response validated correlation structurally but not temporal task validity",
+    "SCN-030/031 covered identity and replay but not authority freshness"
+  ],
+  "human_cost": "No additional human intervention required for detection or remediation; without the control, an obsolete authorization could resume an invalid execution branch.",
+  "avoidable": true,
+  "prevention_rule": "Before accepting a Human Task response, verify that no REVOKED, SUPERSEDED, or EXPIRED lifecycle event became effective before received_time.",
+  "automated_detection": "SCN-032 PostgreSQL stale-authority regression test plus BEFORE INSERT fail-closed trigger.",
+  "evidence_refs": [
+    "db/a2_migrations/1002_mocatriz_human_task_resume.sql",
+    "db/a2_migrations/1003_mocatriz_human_response_replay_guard.sql",
+    "packages/python-runtime/src/soaiacore_runtime/a2_persistence.py"
+  ],
+  "control_status": "OPEN",
+  "regression_test": "SCN-032:test_stale_human_authority_is_rejected_after_task_supersession"
+}

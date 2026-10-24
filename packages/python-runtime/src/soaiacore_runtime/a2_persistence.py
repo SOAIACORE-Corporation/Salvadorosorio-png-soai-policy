@@ -25,6 +25,10 @@ A2_HUMAN_TASK_RELATIONS = (
     "soa_memory.human_task_responses",
 )
 
+A2_HUMAN_TASK_LIFECYCLE_RELATIONS = (
+    "soa_memory.human_task_lifecycle",
+)
+
 A2_REQUIRED_FUNCTIONS = (
     "soa_memory.canonical_memory_as_of(text,timestamp with time zone,timestamp with time zone)",
     "soa_memory.episodic_memory_as_of(text,timestamp with time zone,timestamp with time zone)",
@@ -49,6 +53,15 @@ A2_HUMAN_TASK_TRIGGERS = (
 
 A2_HUMAN_TASK_RESPONSE_INDEXES = (
     ("soa_memory", "human_task_responses", "uq_a2_human_task_single_authoritative_response"),
+)
+
+A2_HUMAN_TASK_LIFECYCLE_TRIGGERS = (
+    ("soa_memory", "human_task_lifecycle", "trg_a2_human_task_lifecycle_append_only"),
+    ("soa_memory", "human_task_responses", "trg_a2_reject_stale_human_response"),
+)
+
+A2_HUMAN_TASK_LIFECYCLE_FUNCTIONS = (
+    "soa_memory.reject_stale_human_response()",
 )
 
 
@@ -158,6 +171,14 @@ def _human_response_guard_present(connection) -> bool:
     return all(_index_exists(connection, *spec) for spec in A2_HUMAN_TASK_RESPONSE_INDEXES)
 
 
+def _human_task_lifecycle_present(connection) -> bool:
+    return (
+        all(_relation_exists(connection, name) for name in A2_HUMAN_TASK_LIFECYCLE_RELATIONS)
+        and all(_function_exists(connection, signature) for signature in A2_HUMAN_TASK_LIFECYCLE_FUNCTIONS)
+        and all(_trigger_exists(connection, *spec) for spec in A2_HUMAN_TASK_LIFECYCLE_TRIGGERS)
+    )
+
+
 def _migration_objects_present(connection, path: Path) -> bool:
     if path.name.startswith("1001_"):
         return _overlay_objects_present(connection)
@@ -165,6 +186,8 @@ def _migration_objects_present(connection, path: Path) -> bool:
         return _human_task_objects_present(connection)
     if path.name.startswith("1003_"):
         return _human_response_guard_present(connection)
+    if path.name.startswith("1004_"):
+        return _human_task_lifecycle_present(connection)
     return False
 
 
@@ -317,6 +340,13 @@ def verify_a2_persistence(
                 "PRECHECK",
                 status_code=503,
             )
+        if not _human_task_lifecycle_present(connection):
+            raise contract_error(
+                "A2_HUMAN_TASK_LIFECYCLE_GUARD_MISSING",
+                "Human Task lifecycle / stale-authority guard is absent",
+                "PRECHECK",
+                status_code=503,
+            )
         for path in files:
             checksum = _checksum(path)
             row = _overlay_registry_row(connection, path)
@@ -333,9 +363,9 @@ def verify_a2_persistence(
         vector_installed=True,
         base_migrations=base,
         overlay_migrations=overlay,
-        relations=A2_REQUIRED_RELATIONS + A2_HUMAN_TASK_RELATIONS,
-        functions=A2_REQUIRED_FUNCTIONS,
-        triggers=A2_REQUIRED_TRIGGERS + A2_HUMAN_TASK_TRIGGERS,
+        relations=A2_REQUIRED_RELATIONS + A2_HUMAN_TASK_RELATIONS + A2_HUMAN_TASK_LIFECYCLE_RELATIONS,
+        functions=A2_REQUIRED_FUNCTIONS + A2_HUMAN_TASK_LIFECYCLE_FUNCTIONS,
+        triggers=A2_REQUIRED_TRIGGERS + A2_HUMAN_TASK_TRIGGERS + A2_HUMAN_TASK_LIFECYCLE_TRIGGERS,
         working_assumption_enabled=True,
     )
 
@@ -466,3 +496,36 @@ def load_human_task_bundle(
             (scope, human_task_id),
         ).fetchone()
     return {"task": dict(task), "response": dict(response) if response else None}
+
+
+def persist_human_task_lifecycle_event(
+    database: Database,
+    *,
+    project_scope: str,
+    event_id: str,
+    task: dict[str, Any],
+    lifecycle_state: str,
+    effective_time: datetime,
+    reason: str,
+) -> None:
+    """Append a lifecycle event that can invalidate later Human Task responses."""
+    scope = _require_scope(project_scope)
+    state = lifecycle_state.strip().upper()
+    if state not in {"REVOKED", "SUPERSEDED", "EXPIRED"}:
+        raise ValueError("lifecycle_state must be REVOKED, SUPERSEDED, or EXPIRED")
+    if not reason.strip():
+        raise ValueError("reason is required")
+    with database.connect(autocommit=True) as connection:
+        connection.execute(
+            """
+            INSERT INTO soa_memory.human_task_lifecycle(
+              lifecycle_event_id, objective_id, execution_id, human_task_id,
+              correlation_id, project_scope, lifecycle_state, effective_time, reason
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (
+                event_id, task["objective_id"], task["execution_id"], task["human_task_id"],
+                task["correlation_id"], scope, state, effective_time, reason.strip(),
+            ),
+            prepare=False,
+        )
