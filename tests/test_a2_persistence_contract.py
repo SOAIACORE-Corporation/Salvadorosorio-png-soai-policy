@@ -29,6 +29,7 @@ A2_MIGRATION = ROOT / "db" / "a2_migrations" / "1001_memory_decision_bitemporal.
 A2_HUMAN_TASK_MIGRATION = ROOT / "db" / "a2_migrations" / "1002_mocatriz_human_task_resume.sql"
 A2_HUMAN_RESPONSE_GUARD_MIGRATION = ROOT / "db" / "a2_migrations" / "1003_mocatriz_human_response_replay_guard.sql"
 A2_HUMAN_TASK_LIFECYCLE_MIGRATION = ROOT / "db" / "a2_migrations" / "1004_mocatriz_human_task_lifecycle_guard.sql"
+A2_HUMAN_TASK_SCOPE_MIGRATION = ROOT / "db" / "a2_migrations" / "1005_mocatriz_human_task_project_scope_guard.sql"
 A2_RUNNER = ROOT / "packages" / "python-runtime" / "src" / "soaiacore_runtime" / "a2_persistence.py"
 WORKER_MAIN = ROOT / "apps" / "worker" / "src" / "soaiacore_worker" / "__main__.py"
 WORKER_DOCKERFILE = ROOT / "apps" / "worker" / "Dockerfile"
@@ -43,6 +44,7 @@ def test_a2_overlay_is_separate_from_p0_migration_directory() -> None:
     assert A2_HUMAN_TASK_MIGRATION.is_file()
     assert A2_HUMAN_RESPONSE_GUARD_MIGRATION.is_file()
     assert A2_HUMAN_TASK_LIFECYCLE_MIGRATION.is_file()
+    assert A2_HUMAN_TASK_SCOPE_MIGRATION.is_file()
     assert A2_MIGRATION.parent.name == "a2_migrations"
     assert A2_MIGRATION.parent != ROOT / "db" / "migrations"
 
@@ -358,6 +360,7 @@ def test_overlay_runner_verifies_each_migration_semantically() -> None:
     assert 'path.name.startswith("1002_")' in runner
     assert 'path.name.startswith("1003_")' in runner
     assert 'path.name.startswith("1004_")' in runner
+    assert 'path.name.startswith("1005_")' in runner
     assert "A2_HUMAN_TASK_RELATIONS" in runner
     assert "A2_HUMAN_TASK_TRIGGERS" in runner
     assert "A2_HUMAN_TASK_RESPONSE_INDEXES" in runner
@@ -593,6 +596,66 @@ def test_stale_human_authority_is_rejected_after_task_supersession(database) -> 
     recovered = load_human_task_bundle(
         database,
         project_scope="SOAiaCore",
+        human_task_id=task["human_task_id"],
+    )
+    assert recovered["response"] is None
+
+
+def test_cross_project_human_authority_is_rejected(database) -> None:
+    """SCN-033: Human Task authority cannot cross project_scope boundaries."""
+    apply_a2_persistence(
+        database,
+        base_migration_dir=ROOT / "db" / "migrations",
+        a2_migration_dir=ROOT / "db" / "a2_migrations",
+    )
+
+    task = create_human_task(
+        objective_id="OBJ-MOCATRIZ-005",
+        execution_id="EXE-MOCATRIZ-005-01",
+        human_task_id="HT-MOCATRIZ-005-01",
+        correlation_id="CORR-MOCATRIZ-005-01",
+        reason="Human authority is required inside Project-A only.",
+        question="Authorize Project-A branch?",
+        evidence=["SCN-033"],
+        resume_from="UNDERSTAND-PROJECT-A",
+    )
+    persist_human_task(
+        database,
+        project_scope="Project-A",
+        task=task,
+        observed_time=datetime(2026, 10, 24, 14, 0, tzinfo=timezone.utc),
+    )
+
+    cross_scope_response = {
+        "objective_id": task["objective_id"],
+        "execution_id": task["execution_id"],
+        "human_task_id": task["human_task_id"],
+        "correlation_id": task["correlation_id"],
+        "answer": {"decision": "AUTHORIZED_BUT_WRONG_SCOPE"},
+    }
+    with pytest.raises(psycopg.Error):
+        persist_human_response(
+            database,
+            project_scope="Project-B",
+            response_id="HR-MOCATRIZ-005-CROSS-SCOPE",
+            response=cross_scope_response,
+            received_time=datetime(2026, 10, 24, 14, 1, tzinfo=timezone.utc),
+        )
+
+    with pytest.raises(psycopg.Error):
+        persist_human_task_lifecycle_event(
+            database,
+            project_scope="Project-B",
+            event_id="HTLE-MOCATRIZ-005-CROSS-SCOPE",
+            task=task,
+            lifecycle_state="REVOKED",
+            effective_time=datetime(2026, 10, 24, 14, 2, tzinfo=timezone.utc),
+            reason="Wrong project must not revoke Project-A Human Task.",
+        )
+
+    recovered = load_human_task_bundle(
+        database,
+        project_scope="Project-A",
         human_task_id=task["human_task_id"],
     )
     assert recovered["response"] is None

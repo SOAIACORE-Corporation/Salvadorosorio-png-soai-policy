@@ -1,0 +1,13 @@
+{
+  "validation_id": "VAL-ERR-033",
+  "error_id": "ERR-20261024-033",
+  "effective_status": "CONTROLLED",
+  "validated_at": "2026-10-24",
+  "evidence_refs": [
+    "github-actions:40080561849",
+    "commit:e300c0ff971f8e812fc6df3c143a008af9721853",
+    "SCN-032"
+  ],
+  "regression_test": "tests/test_a2_persistence_contract.py::test_stale_human_authority_is_rejected_after_task_supersession",
+  "rationale": "A2 Persistence #76 passed PostgreSQL contract tests proving that a task superseded before response receipt rejects the otherwise correctly correlated late answer."
+}

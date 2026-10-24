@@ -64,6 +64,11 @@ A2_HUMAN_TASK_LIFECYCLE_FUNCTIONS = (
     "soa_memory.reject_stale_human_response()",
 )
 
+A2_HUMAN_TASK_SCOPE_CONSTRAINTS = (
+    ("soa_memory", "human_task_responses", "fk_a2_human_response_project_scope"),
+    ("soa_memory", "human_task_lifecycle", "fk_a2_human_lifecycle_project_scope"),
+)
+
 
 @dataclass(frozen=True)
 class A2PersistenceVerification:
@@ -129,6 +134,22 @@ def _index_exists(connection, schema: str, table: str, index: str) -> bool:
     return bool(row and row["present"])
 
 
+def _constraint_exists(connection, schema: str, table: str, constraint: str) -> bool:
+    row = connection.execute(
+        """
+        SELECT EXISTS (
+          SELECT 1
+          FROM pg_constraint c
+          JOIN pg_class r ON r.oid = c.conrelid
+          JOIN pg_namespace n ON n.oid = r.relnamespace
+          WHERE n.nspname=%s AND r.relname=%s AND c.conname=%s
+        ) AS present
+        """,
+        (schema, table, constraint),
+    ).fetchone()
+    return bool(row and row["present"])
+
+
 def _working_assumption_enabled(connection) -> bool:
     row = connection.execute(
         """
@@ -179,6 +200,10 @@ def _human_task_lifecycle_present(connection) -> bool:
     )
 
 
+def _human_task_scope_guards_present(connection) -> bool:
+    return all(_constraint_exists(connection, *spec) for spec in A2_HUMAN_TASK_SCOPE_CONSTRAINTS)
+
+
 def _migration_objects_present(connection, path: Path) -> bool:
     if path.name.startswith("1001_"):
         return _overlay_objects_present(connection)
@@ -188,6 +213,8 @@ def _migration_objects_present(connection, path: Path) -> bool:
         return _human_response_guard_present(connection)
     if path.name.startswith("1004_"):
         return _human_task_lifecycle_present(connection)
+    if path.name.startswith("1005_"):
+        return _human_task_scope_guards_present(connection)
     return False
 
 
@@ -344,6 +371,13 @@ def verify_a2_persistence(
             raise contract_error(
                 "A2_HUMAN_TASK_LIFECYCLE_GUARD_MISSING",
                 "Human Task lifecycle / stale-authority guard is absent",
+                "PRECHECK",
+                status_code=503,
+            )
+        if not _human_task_scope_guards_present(connection):
+            raise contract_error(
+                "A2_HUMAN_TASK_SCOPE_GUARD_MISSING",
+                "Human Task project-scope correlation guard is absent",
                 "PRECHECK",
                 status_code=503,
             )
