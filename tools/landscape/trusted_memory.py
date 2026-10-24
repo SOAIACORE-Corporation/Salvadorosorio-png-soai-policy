@@ -271,15 +271,17 @@ def reconstruct_from_snapshot(
     sv = validate_snapshot(snapshot)
     mv = validate_manifest(manifest, snapshot)
     decision = recovery_decision(manifest)
-    ev = (
-        validate_evidence_inventory(
+    manifest_inventory = manifest.get("evidence_inventory")
+    if manifest_inventory and evidence_inventory is None:
+        ev = {"valid": False, "errors": ["evidence_inventory_missing"]}
+    elif evidence_inventory is not None:
+        ev = validate_evidence_inventory(
             manifest,
             evidence_inventory,
             objective_id=snapshot["objective"]["objective_id"],
         )
-        if evidence_inventory is not None
-        else {"valid": True, "errors": []}
-    )
+    else:
+        ev = {"valid": True, "errors": []}
     if (
         not sv["valid"]
         or not mv["valid"]
