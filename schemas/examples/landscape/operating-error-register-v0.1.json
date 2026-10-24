@@ -570,10 +570,14 @@
       "automated_detection": "SCN-043 regressions tamper snapshot, manifest and receipt independently and test valid-but-wrong receipt substitution.",
       "evidence_refs": [
         "SCN-043",
-        "tools/landscape/trusted_memory.py",
-        "Trusted_Memory/05_Receipts/FR-SOAIACORE-MOCATRIZ-20260926-001_v1.0.0.json"
+        "github-actions:40083521454",
+        "github-actions:40083521394",
+        "github-actions:40083521449",
+        "github-actions:40083521461",
+        "github-actions:40083521572",
+        "commit:02c5d26e024b822c8f49c795561198bf3ddf057a"
       ],
-      "control_status": "OPEN",
+      "control_status": "CONTROLLED",
       "regression_test": "test_sealed_fidelity_receipt_tampering_blocks_recovery"
     }
   ]
