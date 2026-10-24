@@ -1,0 +1,24 @@
+{
+  "error_id": "ERR-20261024-049",
+  "detected_at": "2026-10-24",
+  "class": "STALE_PREFLIGHT_TOCTOU",
+  "phase": "preflight-to-material-action",
+  "symptom": "Preflight Completeness proved that prerequisites were checked before human action but did not verify that material prerequisites remained current at execution time.",
+  "root_cause": "The preflight control modeled completeness but had no explicit freshness contract for immutable, time-bounded, or versioned evidence.",
+  "early_signals": [
+    "evaluate_preflight_completeness has no action-time input",
+    "preconditions contain no freshness semantics",
+    "a valid earlier check could be reused after authority expiry or version change"
+  ],
+  "human_cost": "Potential rework or unsafe material action based on stale evidence; detected autonomously during scenario-gap analysis.",
+  "avoidable": true,
+  "prevention_rule": "Every material precondition must declare an explicit freshness mode and be revalidated at action time when its validity window expired, its version changed, or freshness is unknown.",
+  "automated_detection": "SCN-049 regression tests in test_human_interaction_efficiency.py.",
+  "evidence_refs": [
+    "tools/landscape/human_interaction.py",
+    "schemas/tests/test_human_interaction_efficiency.py",
+    "SCN-029"
+  ],
+  "control_status": "OPEN",
+  "regression_test": "SCN-049:test_stale_preflight_blocks_material_action_until_revalidated"
+}
