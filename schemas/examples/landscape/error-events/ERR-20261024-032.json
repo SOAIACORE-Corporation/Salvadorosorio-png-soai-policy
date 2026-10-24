@@ -1,0 +1,24 @@
+{
+  "error_id": "ERR-20261024-032",
+  "detected_at": "2026-10-24",
+  "class": "HUMAN_RESPONSE_REPLAY_CONFLICT",
+  "phase": "human-task-resume",
+  "symptom": "The durable Human Task model allowed multiple differently identified responses for the same four-part task correlation, while recovery selected the latest response.",
+  "root_cause": "human_task_responses had only response_id uniqueness; no persistence invariant guaranteed a single authoritative response per Objective ID + Execution ID + Human Task ID + Correlation ID.",
+  "early_signals": [
+    "load_human_task_bundle orders responses by received_time DESC and takes LIMIT 1",
+    "human_task_responses allowed different response_id values for the same correlated Human Task",
+    "SCN-030 validated wrong-execution rejection but not same-task replay/conflict"
+  ],
+  "human_cost": "No human intervention required to detect or remediate in the feature branch; the defect could otherwise create ambiguous or silently replaced human authority.",
+  "avoidable": true,
+  "prevention_rule": "A durable Human Task accepts one authoritative response. A changed decision must create a new task or explicit decision event rather than a later conflicting response.",
+  "automated_detection": "SCN-031 PostgreSQL replay/conflict regression test plus unique persistence index.",
+  "evidence_refs": [
+    "db/a2_migrations/1002_mocatriz_human_task_resume.sql",
+    "packages/python-runtime/src/soaiacore_runtime/a2_persistence.py",
+    "tests/test_a2_persistence_contract.py"
+  ],
+  "control_status": "OPEN",
+  "regression_test": "SCN-031:test_human_task_rejects_replay_or_conflicting_second_response"
+}

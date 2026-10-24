@@ -47,6 +47,10 @@ A2_HUMAN_TASK_TRIGGERS = (
     ("soa_memory", "human_task_responses", "trg_a2_human_task_responses_append_only"),
 )
 
+A2_HUMAN_TASK_RESPONSE_INDEXES = (
+    ("soa_memory", "human_task_responses", "uq_a2_human_task_single_authoritative_response"),
+)
+
 
 @dataclass(frozen=True)
 class A2PersistenceVerification:
@@ -98,6 +102,20 @@ def _trigger_exists(connection, schema: str, table: str, trigger: str) -> bool:
     return bool(row and row["present"])
 
 
+def _index_exists(connection, schema: str, table: str, index: str) -> bool:
+    row = connection.execute(
+        """
+        SELECT EXISTS (
+          SELECT 1
+          FROM pg_indexes
+          WHERE schemaname=%s AND tablename=%s AND indexname=%s
+        ) AS present
+        """,
+        (schema, table, index),
+    ).fetchone()
+    return bool(row and row["present"])
+
+
 def _working_assumption_enabled(connection) -> bool:
     row = connection.execute(
         """
@@ -136,11 +154,17 @@ def _human_task_objects_present(connection) -> bool:
     )
 
 
+def _human_response_guard_present(connection) -> bool:
+    return all(_index_exists(connection, *spec) for spec in A2_HUMAN_TASK_RESPONSE_INDEXES)
+
+
 def _migration_objects_present(connection, path: Path) -> bool:
     if path.name.startswith("1001_"):
         return _overlay_objects_present(connection)
     if path.name.startswith("1002_"):
         return _human_task_objects_present(connection)
+    if path.name.startswith("1003_"):
+        return _human_response_guard_present(connection)
     return False
 
 
@@ -283,6 +307,13 @@ def verify_a2_persistence(
             raise contract_error(
                 "A2_HUMAN_TASK_OBJECTS_MISSING",
                 "Durable Human Task persistence objects are absent",
+                "PRECHECK",
+                status_code=503,
+            )
+        if not _human_response_guard_present(connection):
+            raise contract_error(
+                "A2_HUMAN_RESPONSE_GUARD_MISSING",
+                "Human Task single-authoritative-response guard is absent",
                 "PRECHECK",
                 status_code=503,
             )

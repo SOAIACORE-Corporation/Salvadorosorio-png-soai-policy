@@ -26,6 +26,7 @@ from trusted_memory import postgres_projection  # noqa: E402
 from mocatriz_execution import create_human_task, correlate_human_response  # noqa: E402
 A2_MIGRATION = ROOT / "db" / "a2_migrations" / "1001_memory_decision_bitemporal.sql"
 A2_HUMAN_TASK_MIGRATION = ROOT / "db" / "a2_migrations" / "1002_mocatriz_human_task_resume.sql"
+A2_HUMAN_RESPONSE_GUARD_MIGRATION = ROOT / "db" / "a2_migrations" / "1003_mocatriz_human_response_replay_guard.sql"
 A2_RUNNER = ROOT / "packages" / "python-runtime" / "src" / "soaiacore_runtime" / "a2_persistence.py"
 WORKER_MAIN = ROOT / "apps" / "worker" / "src" / "soaiacore_worker" / "__main__.py"
 WORKER_DOCKERFILE = ROOT / "apps" / "worker" / "Dockerfile"
@@ -38,6 +39,7 @@ def _sql() -> str:
 def test_a2_overlay_is_separate_from_p0_migration_directory() -> None:
     assert A2_MIGRATION.is_file()
     assert A2_HUMAN_TASK_MIGRATION.is_file()
+    assert A2_HUMAN_RESPONSE_GUARD_MIGRATION.is_file()
     assert A2_MIGRATION.parent.name == "a2_migrations"
     assert A2_MIGRATION.parent != ROOT / "db" / "migrations"
 
@@ -351,8 +353,10 @@ def test_overlay_runner_verifies_each_migration_semantically() -> None:
     runner = A2_RUNNER.read_text(encoding="utf-8")
     assert "_migration_objects_present(connection, path)" in runner
     assert 'path.name.startswith("1002_")' in runner
+    assert 'path.name.startswith("1003_")' in runner
     assert "A2_HUMAN_TASK_RELATIONS" in runner
     assert "A2_HUMAN_TASK_TRIGGERS" in runner
+    assert "A2_HUMAN_TASK_RESPONSE_INDEXES" in runner
 
 
 def test_human_task_cross_session_persists_correlates_and_resumes(database) -> None:
@@ -470,3 +474,62 @@ def test_human_task_cross_session_persists_correlates_and_resumes(database) -> N
             response=bad,
             received_time=datetime(2026, 10, 17, 23, 51, tzinfo=timezone.utc),
         )
+
+
+def test_human_task_rejects_replay_or_conflicting_second_response(database) -> None:
+    """SCN-031: one durable Human Task accepts one authoritative response."""
+    apply_a2_persistence(
+        database,
+        base_migration_dir=ROOT / "db" / "migrations",
+        a2_migration_dir=ROOT / "db" / "a2_migrations",
+    )
+
+    task = create_human_task(
+        objective_id="OBJ-MOCATRIZ-003",
+        execution_id="EXE-MOCATRIZ-003-01",
+        human_task_id="HT-MOCATRIZ-003-01",
+        correlation_id="CORR-MOCATRIZ-003-01",
+        reason="A single authority-bound decision is required.",
+        question="Authorize or reject this test branch?",
+        evidence=["SCN-031"],
+        resume_from="UNDERSTAND-AUTHORITY-RESULT",
+    )
+    persist_human_task(
+        database,
+        project_scope="SOAiaCore",
+        task=task,
+        observed_time=datetime(2026, 10, 24, 12, 0, tzinfo=timezone.utc),
+    )
+
+    base_response = {
+        "objective_id": task["objective_id"],
+        "execution_id": task["execution_id"],
+        "human_task_id": task["human_task_id"],
+        "correlation_id": task["correlation_id"],
+        "answer": {"decision": "AUTHORIZED_FOR_TEST_ONLY"},
+    }
+    persist_human_response(
+        database,
+        project_scope="SOAiaCore",
+        response_id="HR-MOCATRIZ-003-01",
+        response=base_response,
+        received_time=datetime(2026, 10, 24, 12, 1, tzinfo=timezone.utc),
+    )
+
+    conflicting = dict(base_response)
+    conflicting["answer"] = {"decision": "REJECTED_AFTER_THE_FACT"}
+    with pytest.raises(psycopg.Error):
+        persist_human_response(
+            database,
+            project_scope="SOAiaCore",
+            response_id="HR-MOCATRIZ-003-02",
+            response=conflicting,
+            received_time=datetime(2026, 10, 24, 12, 2, tzinfo=timezone.utc),
+        )
+
+    recovered = load_human_task_bundle(
+        database,
+        project_scope="SOAiaCore",
+        human_task_id=task["human_task_id"],
+    )
+    assert recovered["response"]["answer"]["decision"] == "AUTHORIZED_FOR_TEST_ONLY"
