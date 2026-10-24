@@ -551,6 +551,30 @@
       ],
       "control_status": "CONTROLLED",
       "regression_test": "test_three_failed_routes_can_drive_evidence_based_strategy_mutation_without_drift"
+    },
+    {
+      "error_id": "ERR-20261024-043",
+      "detected_at": "2026-10-24",
+      "class": "UNSEALED_FIDELITY_RECEIPT",
+      "phase": "trusted-memory-recovery",
+      "symptom": "Fidelity receipts could be referenced as confirmed evidence while lacking a self-hash and manifest-level expected receipt hash binding.",
+      "root_cause": "Snapshot, manifest and evidence inventory had canonical hash validation, but receipt integrity relied on descriptive cross-hashes and external CI rather than a first-class sealed receipt contract.",
+      "early_signals": [
+        "legacy fidelity receipt contains snapshot_hash/manifest_hash/evidence_inventory_hash but no content_sha256",
+        "legacy manifest contains fidelity_receipt_ref path but no expected receipt hash",
+        "trusted reconstruction does not consume or validate a fidelity receipt"
+      ],
+      "human_cost": "No operator action required; gap identified before expanding autonomous recovery reliance on receipts.",
+      "avoidable": true,
+      "prevention_rule": "New trusted-recovery manifests that use a fidelity receipt as authoritative evidence must bind its receipt ID and expected content hash; reconstruction must validate receipt self-hash and cross-artifact hashes fail-closed.",
+      "automated_detection": "SCN-043 regressions tamper snapshot, manifest and receipt independently and test valid-but-wrong receipt substitution.",
+      "evidence_refs": [
+        "SCN-043",
+        "tools/landscape/trusted_memory.py",
+        "Trusted_Memory/05_Receipts/FR-SOAIACORE-MOCATRIZ-20260926-001_v1.0.0.json"
+      ],
+      "control_status": "OPEN",
+      "regression_test": "test_sealed_fidelity_receipt_tampering_blocks_recovery"
     }
   ]
 }
