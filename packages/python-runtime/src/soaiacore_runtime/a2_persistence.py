@@ -29,6 +29,11 @@ A2_HUMAN_TASK_LIFECYCLE_RELATIONS = (
     "soa_memory.human_task_lifecycle",
 )
 
+A2_MATERIAL_ACTION_RELATIONS = (
+    "soa_ops.material_actions",
+    "soa_ops.material_action_events",
+)
+
 A2_REQUIRED_FUNCTIONS = (
     "soa_memory.canonical_memory_as_of(text,timestamp with time zone,timestamp with time zone)",
     "soa_memory.episodic_memory_as_of(text,timestamp with time zone,timestamp with time zone)",
@@ -79,6 +84,16 @@ A2_HUMAN_RESPONSE_PROVENANCE_FUNCTIONS = (
 A2_HUMAN_TASK_SCOPE_CONSTRAINTS = (
     ("soa_memory", "human_task_responses", "fk_a2_human_response_project_scope"),
     ("soa_memory", "human_task_lifecycle", "fk_a2_human_lifecycle_project_scope"),
+)
+
+A2_MATERIAL_ACTION_FUNCTIONS = (
+    "soa_ops.enforce_material_action_transition()",
+)
+
+A2_MATERIAL_ACTION_TRIGGERS = (
+    ("soa_ops", "material_actions", "trg_a2_material_actions_append_only"),
+    ("soa_ops", "material_action_events", "trg_a2_material_action_events_append_only"),
+    ("soa_ops", "material_action_events", "trg_a2_material_action_transition"),
 )
 
 
@@ -227,6 +242,14 @@ def _human_response_provenance_present(connection) -> bool:
     )
 
 
+def _material_action_ledger_present(connection) -> bool:
+    return (
+        all(_relation_exists(connection, name) for name in A2_MATERIAL_ACTION_RELATIONS)
+        and all(_function_exists(connection, signature) for signature in A2_MATERIAL_ACTION_FUNCTIONS)
+        and all(_trigger_exists(connection, *spec) for spec in A2_MATERIAL_ACTION_TRIGGERS)
+    )
+
+
 def _migration_objects_present(connection, path: Path) -> bool:
     if path.name.startswith("1001_"):
         return _overlay_objects_present(connection)
@@ -242,6 +265,8 @@ def _migration_objects_present(connection, path: Path) -> bool:
         return _human_task_authority_function_present(connection)
     if path.name.startswith("1007_"):
         return _human_response_provenance_present(connection)
+    if path.name.startswith("1008_"):
+        return _material_action_ledger_present(connection)
     return False
 
 
@@ -422,6 +447,13 @@ def verify_a2_persistence(
                 "PRECHECK",
                 status_code=503,
             )
+        if not _material_action_ledger_present(connection):
+            raise contract_error(
+                "A2_MATERIAL_ACTION_LEDGER_MISSING",
+                "Durable material-action idempotency ledger is absent",
+                "PRECHECK",
+                status_code=503,
+            )
         for path in files:
             checksum = _checksum(path)
             row = _overlay_registry_row(connection, path)
@@ -438,9 +470,9 @@ def verify_a2_persistence(
         vector_installed=True,
         base_migrations=base,
         overlay_migrations=overlay,
-        relations=A2_REQUIRED_RELATIONS + A2_HUMAN_TASK_RELATIONS + A2_HUMAN_TASK_LIFECYCLE_RELATIONS,
-        functions=A2_REQUIRED_FUNCTIONS + A2_HUMAN_TASK_LIFECYCLE_FUNCTIONS + A2_HUMAN_TASK_AUTHORITY_FUNCTIONS + A2_HUMAN_RESPONSE_PROVENANCE_FUNCTIONS,
-        triggers=A2_REQUIRED_TRIGGERS + A2_HUMAN_TASK_TRIGGERS + A2_HUMAN_TASK_LIFECYCLE_TRIGGERS + A2_HUMAN_RESPONSE_PROVENANCE_TRIGGERS,
+        relations=A2_REQUIRED_RELATIONS + A2_HUMAN_TASK_RELATIONS + A2_HUMAN_TASK_LIFECYCLE_RELATIONS + A2_MATERIAL_ACTION_RELATIONS,
+        functions=A2_REQUIRED_FUNCTIONS + A2_HUMAN_TASK_LIFECYCLE_FUNCTIONS + A2_HUMAN_TASK_AUTHORITY_FUNCTIONS + A2_HUMAN_RESPONSE_PROVENANCE_FUNCTIONS + A2_MATERIAL_ACTION_FUNCTIONS,
+        triggers=A2_REQUIRED_TRIGGERS + A2_HUMAN_TASK_TRIGGERS + A2_HUMAN_TASK_LIFECYCLE_TRIGGERS + A2_HUMAN_RESPONSE_PROVENANCE_TRIGGERS + A2_MATERIAL_ACTION_TRIGGERS,
         working_assumption_enabled=True,
     )
 
@@ -650,6 +682,177 @@ def persist_human_task_lifecycle_event(
             (
                 event_id, task["objective_id"], task["execution_id"], task["human_task_id"],
                 task["correlation_id"], scope, state, effective_time, reason.strip(),
+            ),
+            prepare=False,
+        )
+
+
+
+def prepare_material_action(
+    database: Database,
+    *,
+    project_scope: str,
+    action_id: str,
+    objective_id: str,
+    execution_id: str,
+    idempotency_key: str,
+    action_type: str,
+    target_ref: str,
+    payload_sha256: str,
+    observed_time: datetime,
+) -> dict[str, Any]:
+    """Create or recover one durable material action without blindly replaying it."""
+    scope = _require_scope(project_scope)
+    required = {
+        "action_id": action_id,
+        "objective_id": objective_id,
+        "execution_id": execution_id,
+        "idempotency_key": idempotency_key,
+        "action_type": action_type,
+        "target_ref": target_ref,
+        "payload_sha256": payload_sha256,
+    }
+    for name, value in required.items():
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{name} is required")
+
+    with database.connect(autocommit=True) as connection:
+        existing = connection.execute(
+            """
+            SELECT *
+            FROM soa_ops.material_actions
+            WHERE project_scope=%s AND idempotency_key=%s
+            """,
+            (scope, idempotency_key),
+        ).fetchone()
+
+        if not existing:
+            connection.execute(
+                """
+                INSERT INTO soa_ops.material_actions(
+                  action_id,project_scope,objective_id,execution_id,idempotency_key,
+                  action_type,target_ref,payload_sha256,observed_time
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (
+                    action_id, scope, objective_id, execution_id, idempotency_key,
+                    action_type, target_ref, payload_sha256, observed_time,
+                ),
+                prepare=False,
+            )
+            connection.execute(
+                """
+                INSERT INTO soa_ops.material_action_events(
+                  event_id,action_id,project_scope,event_seq,state,observed_time
+                ) VALUES (%s,%s,%s,1,'INTENDED',%s)
+                """,
+                (f"{action_id}:event:1", action_id, scope, observed_time),
+                prepare=False,
+            )
+            return {
+                "decision": "EXECUTE",
+                "action_id": action_id,
+                "latest_state": "INTENDED",
+                "existing": False,
+            }
+
+        existing = dict(existing)
+        contract_fields = {
+            "objective_id": objective_id,
+            "execution_id": execution_id,
+            "action_type": action_type,
+            "target_ref": target_ref,
+            "payload_sha256": payload_sha256,
+        }
+        mismatches = [
+            name for name, expected in contract_fields.items()
+            if existing.get(name) != expected
+        ]
+        if mismatches:
+            raise contract_error(
+                "MATERIAL_ACTION_IDEMPOTENCY_CONFLICT",
+                "Existing idempotency key is bound to a different material action",
+                "PRECHECK",
+                status_code=409,
+                details={"mismatched_fields": mismatches},
+            )
+
+        latest = connection.execute(
+            """
+            SELECT *
+            FROM soa_ops.material_action_events
+            WHERE action_id=%s AND project_scope=%s
+            ORDER BY event_seq DESC
+            LIMIT 1
+            """,
+            (existing["action_id"], scope),
+        ).fetchone()
+        if not latest:
+            raise contract_error(
+                "MATERIAL_ACTION_LEDGER_INCOMPLETE",
+                "Material action exists without an event history",
+                "PRECHECK",
+                status_code=500,
+            )
+        latest = dict(latest)
+        state = latest["state"]
+        if state == "SUCCEEDED":
+            decision = "ALREADY_APPLIED"
+        elif state in {"DISPATCHED", "INDETERMINATE"}:
+            decision = "RECONCILE_REQUIRED"
+        elif state == "FAILED":
+            decision = "RETRY_ALLOWED" if latest.get("retryable") is True else "BLOCKED"
+        else:
+            decision = "EXECUTE"
+
+        return {
+            "decision": decision,
+            "action_id": existing["action_id"],
+            "latest_state": state,
+            "existing": True,
+            "receipt_ref": latest.get("receipt_ref"),
+        }
+
+
+def record_material_action_event(
+    database: Database,
+    *,
+    project_scope: str,
+    action_id: str,
+    event_id: str,
+    state: str,
+    observed_time: datetime,
+    receipt_ref: str | None = None,
+    retryable: bool | None = None,
+) -> None:
+    """Append a state transition to a durable material action."""
+    scope = _require_scope(project_scope)
+    normalized = state.strip().upper()
+    if normalized not in {"DISPATCHED", "SUCCEEDED", "FAILED", "INDETERMINATE"}:
+        raise ValueError("unsupported material action state")
+    with database.connect(autocommit=True) as connection:
+        latest = connection.execute(
+            """
+            SELECT event_id,event_seq
+            FROM soa_ops.material_action_events
+            WHERE action_id=%s AND project_scope=%s
+            ORDER BY event_seq DESC
+            LIMIT 1
+            """,
+            (action_id, scope),
+        ).fetchone()
+        if not latest:
+            raise ValueError("material action not found")
+        connection.execute(
+            """
+            INSERT INTO soa_ops.material_action_events(
+              event_id,action_id,project_scope,event_seq,state,receipt_ref,retryable,
+              observed_time,previous_event_id
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (
+                event_id, action_id, scope, latest["event_seq"] + 1, normalized,
+                receipt_ref, retryable, observed_time, latest["event_id"],
             ),
             prepare=False,
         )

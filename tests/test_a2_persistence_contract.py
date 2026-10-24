@@ -10,11 +10,14 @@ import psycopg
 import pytest
 
 from soaiacore_runtime.database import Database
+from soaiacore_runtime.errors import RuntimeContractError
 from soaiacore_runtime.a2_persistence import (
     _require_scope,
     apply_a2_persistence,
     canonical_memory_as_of,
     load_human_task_bundle,
+    prepare_material_action,
+    record_material_action_event,
     persist_human_response,
     persist_human_task,
     persist_human_task_lifecycle_event,
@@ -33,6 +36,7 @@ A2_HUMAN_TASK_LIFECYCLE_MIGRATION = ROOT / "db" / "a2_migrations" / "1004_mocatr
 A2_HUMAN_TASK_SCOPE_MIGRATION = ROOT / "db" / "a2_migrations" / "1005_mocatriz_human_task_project_scope_guard.sql"
 A2_HUMAN_TASK_AUTHORITY_MIGRATION = ROOT / "db" / "a2_migrations" / "1006_mocatriz_human_task_authority_asof.sql"
 A2_HUMAN_RESPONSE_PROVENANCE_MIGRATION = ROOT / "db" / "a2_migrations" / "1007_mocatriz_human_response_provenance.sql"
+A2_MATERIAL_ACTION_LEDGER_MIGRATION = ROOT / "db" / "a2_migrations" / "1008_mocatriz_material_action_idempotency.sql"
 A2_RUNNER = ROOT / "packages" / "python-runtime" / "src" / "soaiacore_runtime" / "a2_persistence.py"
 WORKER_MAIN = ROOT / "apps" / "worker" / "src" / "soaiacore_worker" / "__main__.py"
 WORKER_DOCKERFILE = ROOT / "apps" / "worker" / "Dockerfile"
@@ -50,6 +54,7 @@ def test_a2_overlay_is_separate_from_p0_migration_directory() -> None:
     assert A2_HUMAN_TASK_SCOPE_MIGRATION.is_file()
     assert A2_HUMAN_TASK_AUTHORITY_MIGRATION.is_file()
     assert A2_HUMAN_RESPONSE_PROVENANCE_MIGRATION.is_file()
+    assert A2_MATERIAL_ACTION_LEDGER_MIGRATION.is_file()
     assert A2_MIGRATION.parent.name == "a2_migrations"
     assert A2_MIGRATION.parent != ROOT / "db" / "migrations"
 
@@ -497,6 +502,8 @@ def test_overlay_runner_verifies_each_migration_semantically() -> None:
     assert 'path.name.startswith("1005_")' in runner
     assert 'path.name.startswith("1006_")' in runner
     assert 'path.name.startswith("1007_")' in runner
+    assert 'path.name.startswith("1008_")' in runner
+    assert "A2_MATERIAL_ACTION_RELATIONS" in runner
     assert "A2_HUMAN_TASK_RELATIONS" in runner
     assert "A2_HUMAN_TASK_TRIGGERS" in runner
     assert "A2_HUMAN_TASK_RESPONSE_INDEXES" in runner
@@ -1144,3 +1151,151 @@ def test_human_response_requires_durable_identity_and_authentication_provenance(
     assert recovered["response"]["responder_ref"] == "SOA-test-actor"
     assert recovered["response"]["authority_level"] == "R2"
     assert recovered["response"]["authentication_ref"].startswith("authn:")
+
+
+
+def test_material_action_lost_ack_does_not_replay_after_durable_success(database) -> None:
+    """SCN-050: a lost acknowledgement must not duplicate a material action."""
+    apply_a2_persistence(
+        database,
+        base_migration_dir=ROOT / "db" / "migrations",
+        a2_migration_dir=ROOT / "db" / "a2_migrations",
+    )
+    database_url = database.database_url
+
+    initial = prepare_material_action(
+        database,
+        project_scope="SOAiaCore",
+        action_id="ACT-MOCATRIZ-050-01",
+        objective_id="OBJ-MOCATRIZ-050",
+        execution_id="EXE-MOCATRIZ-050-01",
+        idempotency_key="idem:scn050:material-action:01",
+        action_type="TEST_MUTATION",
+        target_ref="ephemeral:test-resource",
+        payload_sha256="sha256:payload-v1",
+        observed_time=datetime(2026, 10, 24, 19, 0, tzinfo=timezone.utc),
+    )
+    assert initial["decision"] == "EXECUTE"
+
+    record_material_action_event(
+        database,
+        project_scope="SOAiaCore",
+        action_id=initial["action_id"],
+        event_id="ACT-MOCATRIZ-050-01:event:2",
+        state="DISPATCHED",
+        observed_time=datetime(2026, 10, 24, 19, 1, tzinfo=timezone.utc),
+    )
+    record_material_action_event(
+        database,
+        project_scope="SOAiaCore",
+        action_id=initial["action_id"],
+        event_id="ACT-MOCATRIZ-050-01:event:3",
+        state="SUCCEEDED",
+        receipt_ref="receipt:ephemeral:scn050:success",
+        observed_time=datetime(2026, 10, 24, 19, 2, tzinfo=timezone.utc),
+    )
+
+    # Process/channel loss: reconstruct from durable state only.
+    recovered_runtime = Database(database_url)
+    recovered = prepare_material_action(
+        recovered_runtime,
+        project_scope="SOAiaCore",
+        action_id="ACT-MOCATRIZ-050-RETRY",
+        objective_id="OBJ-MOCATRIZ-050",
+        execution_id="EXE-MOCATRIZ-050-01",
+        idempotency_key="idem:scn050:material-action:01",
+        action_type="TEST_MUTATION",
+        target_ref="ephemeral:test-resource",
+        payload_sha256="sha256:payload-v1",
+        observed_time=datetime(2026, 10, 24, 19, 5, tzinfo=timezone.utc),
+    )
+    assert recovered["decision"] == "ALREADY_APPLIED"
+    assert recovered["action_id"] == "ACT-MOCATRIZ-050-01"
+    assert recovered["receipt_ref"] == "receipt:ephemeral:scn050:success"
+
+    with recovered_runtime.connect(autocommit=True) as connection:
+        count = connection.execute(
+            "SELECT count(*) AS n FROM soa_ops.material_action_events WHERE action_id=%s",
+            ("ACT-MOCATRIZ-050-01",),
+        ).fetchone()["n"]
+    assert count == 3
+
+
+def test_material_action_unknown_outcome_requires_reconciliation_not_blind_retry(database) -> None:
+    """SCN-050: DISPATCHED without a terminal receipt is not evidence of failure."""
+    apply_a2_persistence(
+        database,
+        base_migration_dir=ROOT / "db" / "migrations",
+        a2_migration_dir=ROOT / "db" / "a2_migrations",
+    )
+    initial = prepare_material_action(
+        database,
+        project_scope="SOAiaCore",
+        action_id="ACT-MOCATRIZ-050-02",
+        objective_id="OBJ-MOCATRIZ-050",
+        execution_id="EXE-MOCATRIZ-050-02",
+        idempotency_key="idem:scn050:material-action:02",
+        action_type="TEST_MUTATION",
+        target_ref="ephemeral:test-resource-2",
+        payload_sha256="sha256:payload-v2",
+        observed_time=datetime(2026, 10, 24, 19, 10, tzinfo=timezone.utc),
+    )
+    record_material_action_event(
+        database,
+        project_scope="SOAiaCore",
+        action_id=initial["action_id"],
+        event_id="ACT-MOCATRIZ-050-02:event:2",
+        state="DISPATCHED",
+        observed_time=datetime(2026, 10, 24, 19, 11, tzinfo=timezone.utc),
+    )
+
+    recovered = prepare_material_action(
+        Database(database.database_url),
+        project_scope="SOAiaCore",
+        action_id="ACT-MOCATRIZ-050-02-RETRY",
+        objective_id="OBJ-MOCATRIZ-050",
+        execution_id="EXE-MOCATRIZ-050-02",
+        idempotency_key="idem:scn050:material-action:02",
+        action_type="TEST_MUTATION",
+        target_ref="ephemeral:test-resource-2",
+        payload_sha256="sha256:payload-v2",
+        observed_time=datetime(2026, 10, 24, 19, 15, tzinfo=timezone.utc),
+    )
+    assert recovered["decision"] == "RECONCILE_REQUIRED"
+    assert recovered["latest_state"] == "DISPATCHED"
+
+
+def test_material_action_idempotency_key_cannot_bind_different_payload(database) -> None:
+    """SCN-050: same key + different action contract is an integrity conflict."""
+    apply_a2_persistence(
+        database,
+        base_migration_dir=ROOT / "db" / "migrations",
+        a2_migration_dir=ROOT / "db" / "a2_migrations",
+    )
+    prepare_material_action(
+        database,
+        project_scope="SOAiaCore",
+        action_id="ACT-MOCATRIZ-050-03",
+        objective_id="OBJ-MOCATRIZ-050",
+        execution_id="EXE-MOCATRIZ-050-03",
+        idempotency_key="idem:scn050:material-action:03",
+        action_type="TEST_MUTATION",
+        target_ref="ephemeral:test-resource-3",
+        payload_sha256="sha256:payload-v3",
+        observed_time=datetime(2026, 10, 24, 19, 20, tzinfo=timezone.utc),
+    )
+
+    with pytest.raises(RuntimeContractError) as exc:
+        prepare_material_action(
+            database,
+            project_scope="SOAiaCore",
+            action_id="ACT-MOCATRIZ-050-03-OTHER",
+            objective_id="OBJ-MOCATRIZ-050",
+            execution_id="EXE-MOCATRIZ-050-03",
+            idempotency_key="idem:scn050:material-action:03",
+            action_type="TEST_MUTATION",
+            target_ref="ephemeral:test-resource-3",
+            payload_sha256="sha256:DIFFERENT",
+            observed_time=datetime(2026, 10, 24, 19, 21, tzinfo=timezone.utc),
+        )
+    assert exc.value.code == "MATERIAL_ACTION_IDEMPOTENCY_CONFLICT"
