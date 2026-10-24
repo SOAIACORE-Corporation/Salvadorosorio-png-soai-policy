@@ -1,7 +1,7 @@
 # SCN-049 · Stale Preflight / Time-of-Check to Time-of-Use
 
 **Class:** MOCATRIZ execution integrity / preflight freshness  
-**Status:** ACTIVE / TESTABLE  
+**Status:** PASS / CONTROLLED  
 **Created:** 2026-10-24
 
 ## Problem
