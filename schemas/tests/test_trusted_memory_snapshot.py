@@ -134,7 +134,7 @@ def test_missing_critical_requirement_blocks_recovery():
 
 def test_reconstruction_preserves_frozen_state():
     snapshot=_snapshot()
-    recovered=reconstruct_from_snapshot(snapshot,_manifest(snapshot))
+    recovered=reconstruct_from_snapshot(snapshot,_manifest(snapshot),_evidence_inventory())
     result=fidelity_score(snapshot,recovered)
     assert result["result"]=="PASS"
     assert result["total_score"]==100
@@ -143,7 +143,7 @@ def test_reconstruction_preserves_frozen_state():
 
 def test_wrong_head_nullifies_fidelity():
     snapshot=_snapshot()
-    recovered=reconstruct_from_snapshot(snapshot,_manifest(snapshot))
+    recovered=reconstruct_from_snapshot(snapshot,_manifest(snapshot),_evidence_inventory())
     recovered["checkpoint"]["head"]="b"*40
     result=fidelity_score(snapshot,recovered)
     assert result["result"]=="FAIL"
@@ -152,14 +152,14 @@ def test_wrong_head_nullifies_fidelity():
 
 def test_endpoint_missing_remains_not_demonstrated():
     snapshot=_snapshot()
-    recovered=reconstruct_from_snapshot(snapshot,_manifest(snapshot))
+    recovered=reconstruct_from_snapshot(snapshot,_manifest(snapshot),_evidence_inventory())
     assert recovered["pending_and_exceptions"]["functional_endpoint_validation"]["status"]=="MISSING"
     assert "FALSE_FUNCTIONAL_SUCCESS" not in fidelity_score(snapshot,recovered)["invalidating_conditions"]
 
 
 def test_zero_denominator_is_not_exercised_not_100_percent():
     snapshot=_snapshot()
-    recovered=reconstruct_from_snapshot(snapshot,_manifest(snapshot))
+    recovered=reconstruct_from_snapshot(snapshot,_manifest(snapshot),_evidence_inventory())
     metric=recovered["metrics"]["correlation_integrity"]
     assert metric["denominator"]==0
     assert metric["result_pct"] is None
@@ -168,7 +168,7 @@ def test_zero_denominator_is_not_exercised_not_100_percent():
 
 def test_frozen_exception_cannot_be_silently_removed():
     snapshot=_snapshot()
-    recovered=reconstruct_from_snapshot(snapshot,_manifest(snapshot))
+    recovered=reconstruct_from_snapshot(snapshot,_manifest(snapshot),_evidence_inventory())
     recovered["pending_and_exceptions"]["exceptions"]=[]
     result=fidelity_score(snapshot,recovered)
     assert "EXCEPTION_LOSS" in result["invalidating_conditions"]
@@ -177,7 +177,7 @@ def test_frozen_exception_cannot_be_silently_removed():
 
 def test_complete_cannot_replace_completed_with_exceptions():
     snapshot=_snapshot()
-    recovered=reconstruct_from_snapshot(snapshot,_manifest(snapshot))
+    recovered=reconstruct_from_snapshot(snapshot,_manifest(snapshot),_evidence_inventory())
     recovered["objective"]["scope_status"]="COMPLETED"
     result=fidelity_score(snapshot,recovered)
     assert "FALSE_COMPLETE_STATUS" in result["invalidating_conditions"]
@@ -253,6 +253,41 @@ def test_blind_reconstruction_requires_manifest_and_evidence_to_agree():
     manifest=_manifest(snapshot)
     recovered=reconstruct_from_snapshot(snapshot,manifest,_evidence_inventory())
     assert recovered["objective"]["objective_id"]=="OBJ-1"
+
+
+def test_recovery_rejects_manifest_that_references_missing_evidence_inventory():
+    snapshot=_snapshot()
+    manifest=_manifest(snapshot)
+    try:
+        reconstruct_from_snapshot(snapshot,manifest)
+    except ValueError as exc:
+        assert "evidence_inventory_missing" in str(exc)
+    else:
+        raise AssertionError("trusted recovery must fail closed without referenced evidence inventory")
+
+
+def test_partial_evidence_recovery_preserves_exceptions_instead_of_completing():
+    snapshot=_snapshot()
+    manifest=_manifest(snapshot)
+    recovered=reconstruct_from_snapshot(snapshot,manifest,_evidence_inventory())
+    assert recovered["recovery_status"]=="RECOVERABLE_WITH_EXCEPTIONS"
+    assert recovered["objective"]["scope_status"]=="COMPLETED_WITH_EXCEPTIONS"
+
+
+def test_missing_critical_evidence_blocks_reconstruction_even_with_valid_snapshot():
+    snapshot=_snapshot()
+    manifest=_manifest(snapshot)
+    inventory=_evidence_inventory()
+    manifest["requirements"][0]["status"]="MISSING"
+    manifest["content_sha256"]=sha256_hex({
+        k:v for k,v in manifest.items() if k!="content_sha256"
+    })
+    try:
+        reconstruct_from_snapshot(snapshot,manifest,inventory)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("critical missing evidence must block trusted reconstruction")
 
 
 def test_canonical_hash_is_stable_for_integral_float_representation():
