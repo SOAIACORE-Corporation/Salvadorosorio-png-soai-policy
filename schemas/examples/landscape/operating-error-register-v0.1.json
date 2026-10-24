@@ -523,6 +523,30 @@
       ],
       "control_status": "CONTROLLED",
       "regression_test": "test_zero_applicable_criteria_cannot_complete_objective"
+    },
+    {
+      "error_id": "ERR-20261024-042",
+      "detected_at": "2026-10-24",
+      "class": "STRATEGY_ADAPTATION_CLASSIFICATION_GAP",
+      "phase": "adaptive-execution",
+      "symptom": "Methodology telemetry counted caller-declared strategy_mutation and drift events without deriving whether a change was evidence-driven adaptation or objective drift.",
+      "root_cause": "Strategy telemetry lacked semantic validation of objective continuity, failed-strategy evidence, new basis evidence, and unproductive revisits.",
+      "early_signals": [
+        "methodology_telemetry increments counters based only on event.type",
+        "no control links strategy changes to prior failed attempts",
+        "no control rejects revisiting a failed strategy without new evidence"
+      ],
+      "human_cost": "No operator action required; gap identified through adversarial methodology audit.",
+      "avoidable": true,
+      "prevention_rule": "Derive strategy adaptation from objective continuity, preceding result, basis evidence and novelty; classify unsupported revisits or objective departures as drift.",
+      "automated_detection": "SCN-041 regressions exercise three evidence-driven failed routes, unsupported revisit and objective departure.",
+      "evidence_refs": [
+        "SCN-041",
+        "tools/landscape/mocatriz_execution.py",
+        "schemas/tests/test_mocatriz_execution.py"
+      ],
+      "control_status": "OPEN",
+      "regression_test": "test_three_failed_routes_can_drive_evidence_based_strategy_mutation_without_drift"
     }
   ]
 }
