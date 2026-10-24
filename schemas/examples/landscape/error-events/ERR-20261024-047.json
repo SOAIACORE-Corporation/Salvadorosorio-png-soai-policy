@@ -1,0 +1,24 @@
+{
+  "error_id": "ERR-20261024-047",
+  "detected_at": "2026-10-24",
+  "class": "CONTROL_VALIDATION_SCHEMA_MISMATCH",
+  "phase": "error-control-audit",
+  "symptom": "VAL-ERR-045 used effective_status while the canonical error-control audit contract requires status, causing six audit tests to fail before SCN-047 could be evaluated.",
+  "root_cause": "The validation artifact was authored from semantic intent rather than first reusing the canonical validation schema used by existing VAL-* records.",
+  "early_signals": [
+    "tools/landscape/error_control_audit.py reads item.get('status')",
+    "existing VAL-ERR-031.json uses status and observed_at",
+    "Landscape #266 failed with unsupported validation status: None"
+  ],
+  "human_cost": "No user intervention required; CI identified the contract mismatch.",
+  "avoidable": true,
+  "prevention_rule": "Before creating a new control-validation artifact, read and conform to the canonical VAL-* schema; error-control audit tests remain the regression gate.",
+  "automated_detection": "schemas/tests/test_error_control_audit.py and schemas/tests/test_error_control_closure.py",
+  "evidence_refs": [
+    "github-actions:40086314007",
+    "schemas/examples/landscape/error-control-validations/VAL-ERR-031.json",
+    "tools/landscape/error_control_audit.py"
+  ],
+  "control_status": "OPEN",
+  "regression_test": "schemas/tests/test_error_control_audit.py"
+}
