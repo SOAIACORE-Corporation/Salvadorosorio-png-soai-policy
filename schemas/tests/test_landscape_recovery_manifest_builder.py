@@ -33,6 +33,25 @@ def test_missing_evidence_becomes_missing_not_healthy():
     assert authority["evidence_ids"] == []
 
 
+def test_unavailable_declared_authority_is_unknown_not_missing():
+    evidence = _complete_evidence()
+    authority = next(e for e in evidence if e["requirement_id"] == "decision-authority")
+    authority["available"] = False
+    authority["validation_status"] = "UNKNOWN"
+
+    manifest = build_recovery_manifest(evidence)
+    item = next(r for r in manifest["requirements"] if r["requirement_id"] == "decision-authority")
+
+    assert item["status"] == "UNKNOWN"
+    assert item["evidence_ids"] == []
+    assert item["unavailable_evidence_ids"] == ["receipt:authority"]
+    assert item["unavailable_source_refs"] == ["receipt:approval"]
+
+    result = run_memory_cycle_from_evidence(evidence)
+    assert result["resolve"]["canonicalization_status"] == "BLOCKED"
+    assert "MISSING_REQUIRED_AUTHORITY" in result["understand"]["critical_gates"]
+
+
 def test_stale_freshness_stays_stale():
     evidence = _complete_evidence()
     fresh = next(e for e in evidence if e["requirement_id"] == "source-freshness")
