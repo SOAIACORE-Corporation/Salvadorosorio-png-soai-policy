@@ -31,6 +31,7 @@ A2_HUMAN_RESPONSE_GUARD_MIGRATION = ROOT / "db" / "a2_migrations" / "1003_mocatr
 A2_HUMAN_TASK_LIFECYCLE_MIGRATION = ROOT / "db" / "a2_migrations" / "1004_mocatriz_human_task_lifecycle_guard.sql"
 A2_HUMAN_TASK_SCOPE_MIGRATION = ROOT / "db" / "a2_migrations" / "1005_mocatriz_human_task_project_scope_guard.sql"
 A2_HUMAN_TASK_AUTHORITY_MIGRATION = ROOT / "db" / "a2_migrations" / "1006_mocatriz_human_task_authority_asof.sql"
+A2_HUMAN_RESPONSE_PROVENANCE_MIGRATION = ROOT / "db" / "a2_migrations" / "1007_mocatriz_human_response_provenance.sql"
 A2_RUNNER = ROOT / "packages" / "python-runtime" / "src" / "soaiacore_runtime" / "a2_persistence.py"
 WORKER_MAIN = ROOT / "apps" / "worker" / "src" / "soaiacore_worker" / "__main__.py"
 WORKER_DOCKERFILE = ROOT / "apps" / "worker" / "Dockerfile"
@@ -47,6 +48,7 @@ def test_a2_overlay_is_separate_from_p0_migration_directory() -> None:
     assert A2_HUMAN_TASK_LIFECYCLE_MIGRATION.is_file()
     assert A2_HUMAN_TASK_SCOPE_MIGRATION.is_file()
     assert A2_HUMAN_TASK_AUTHORITY_MIGRATION.is_file()
+    assert A2_HUMAN_RESPONSE_PROVENANCE_MIGRATION.is_file()
     assert A2_MIGRATION.parent.name == "a2_migrations"
     assert A2_MIGRATION.parent != ROOT / "db" / "migrations"
 
@@ -364,6 +366,7 @@ def test_overlay_runner_verifies_each_migration_semantically() -> None:
     assert 'path.name.startswith("1004_")' in runner
     assert 'path.name.startswith("1005_")' in runner
     assert 'path.name.startswith("1006_")' in runner
+    assert 'path.name.startswith("1007_")' in runner
     assert "A2_HUMAN_TASK_RELATIONS" in runner
     assert "A2_HUMAN_TASK_TRIGGERS" in runner
     assert "A2_HUMAN_TASK_RESPONSE_INDEXES" in runner
@@ -418,6 +421,9 @@ def test_human_task_cross_session_persists_correlates_and_resumes(database) -> N
         "human_task_id": "HT-MOCATRIZ-002-01",
         "correlation_id": "CORR-MOCATRIZ-002-01",
         "answer": {"decision": "AUTHORIZED_FOR_TEST_ONLY"},
+    "responder_ref": "test-human",
+    "authority_level": "R2",
+    "authentication_ref": "test-auth:ephemeral-ci",
     }
     persist_human_response(
         database,
@@ -475,6 +481,9 @@ def test_human_task_cross_session_persists_correlates_and_resumes(database) -> N
         "human_task_id": "HT-MOCATRIZ-002-01",
         "correlation_id": "CORR-MOCATRIZ-002-01",
         "answer": {"decision": "SHOULD_NOT_BIND"},
+    "responder_ref": "test-human",
+    "authority_level": "R2",
+    "authentication_ref": "test-auth:ephemeral-ci",
     }
     with pytest.raises(psycopg.Error):
         persist_human_response(
@@ -517,6 +526,9 @@ def test_human_task_rejects_replay_or_conflicting_second_response(database) -> N
         "human_task_id": task["human_task_id"],
         "correlation_id": task["correlation_id"],
         "answer": {"decision": "AUTHORIZED_FOR_TEST_ONLY"},
+    "responder_ref": "test-human",
+    "authority_level": "R2",
+    "authentication_ref": "test-auth:ephemeral-ci",
     }
     persist_human_response(
         database,
@@ -586,6 +598,9 @@ def test_stale_human_authority_is_rejected_after_task_supersession(database) -> 
         "human_task_id": task["human_task_id"],
         "correlation_id": task["correlation_id"],
         "answer": {"decision": "AUTHORIZED_FOR_CHECKPOINT_A"},
+    "responder_ref": "test-human",
+    "authority_level": "R2",
+    "authentication_ref": "test-auth:ephemeral-ci",
     }
     with pytest.raises(psycopg.Error):
         persist_human_response(
@@ -635,6 +650,9 @@ def test_cross_project_human_authority_is_rejected(database) -> None:
         "human_task_id": task["human_task_id"],
         "correlation_id": task["correlation_id"],
         "answer": {"decision": "AUTHORIZED_BUT_WRONG_SCOPE"},
+    "responder_ref": "test-human",
+    "authority_level": "R2",
+    "authentication_ref": "test-auth:ephemeral-ci",
     }
     with pytest.raises(psycopg.Error):
         persist_human_response(
@@ -694,6 +712,9 @@ def test_late_recorded_backdated_revocation_invalidates_prior_response(database)
         "human_task_id": task["human_task_id"],
         "correlation_id": task["correlation_id"],
         "answer": {"decision": "AUTHORIZED_FOR_CHECKPOINT_A"},
+    "responder_ref": "test-human",
+    "authority_level": "R2",
+    "authentication_ref": "test-auth:ephemeral-ci",
     }
     persist_human_response(
         database,
@@ -796,6 +817,9 @@ def test_concurrent_human_tasks_remain_execution_isolated(database) -> None:
         "human_task_id": task_b["human_task_id"],
         "correlation_id": task_b["correlation_id"],
         "answer": {"decision": "REJECT_B"},
+    "responder_ref": "test-human",
+    "authority_level": "R2",
+    "authentication_ref": "test-auth:ephemeral-ci",
     }
     response_a = {
         "objective_id": task_a["objective_id"],
@@ -803,6 +827,9 @@ def test_concurrent_human_tasks_remain_execution_isolated(database) -> None:
         "human_task_id": task_a["human_task_id"],
         "correlation_id": task_a["correlation_id"],
         "answer": {"decision": "AUTHORIZE_A"},
+    "responder_ref": "test-human",
+    "authority_level": "R2",
+    "authentication_ref": "test-auth:ephemeral-ci",
     }
 
     # Deliberately persist B first to prove arrival order does not determine binding.
@@ -838,3 +865,70 @@ def test_concurrent_human_tasks_remain_execution_isolated(database) -> None:
     assert recovered_b["response"]["answer"]["decision"] == "REJECT_B"
     assert recovered_a["task"]["execution_id"] == "EXE-MOCATRIZ-007-A"
     assert recovered_b["task"]["execution_id"] == "EXE-MOCATRIZ-007-B"
+
+
+def test_human_response_requires_durable_identity_and_authentication_provenance(database) -> None:
+    """SCN-036: a correlated answer without actor/auth provenance is not durable authority."""
+    apply_a2_persistence(
+        database,
+        base_migration_dir=ROOT / "db" / "migrations",
+        a2_migration_dir=ROOT / "db" / "a2_migrations",
+    )
+
+    task = create_human_task(
+        objective_id="OBJ-MOCATRIZ-008",
+        execution_id="EXE-MOCATRIZ-008-01",
+        human_task_id="HT-MOCATRIZ-008-01",
+        correlation_id="CORR-MOCATRIZ-008-01",
+        reason="Authority provenance must be durable.",
+        question="Authorize test branch with authenticated provenance?",
+        evidence=["SCN-036"],
+        resume_from="UNDERSTAND-PROVENANCE",
+    )
+    persist_human_task(
+        database,
+        project_scope="SOAiaCore",
+        task=task,
+        observed_time=datetime(2026, 10, 24, 17, 0, tzinfo=timezone.utc),
+    )
+
+    no_provenance = {
+        "objective_id": task["objective_id"],
+        "execution_id": task["execution_id"],
+        "human_task_id": task["human_task_id"],
+        "correlation_id": task["correlation_id"],
+        "answer": {"decision": "AUTHORIZE_WITHOUT_PROVENANCE"},
+    }
+    with pytest.raises(psycopg.Error):
+        persist_human_response(
+            database,
+            project_scope="SOAiaCore",
+            response_id="HR-MOCATRIZ-008-BAD",
+            response=no_provenance,
+            received_time=datetime(2026, 10, 24, 17, 1, tzinfo=timezone.utc),
+        )
+
+    provenanced = {
+        **no_provenance,
+        "answer": {"decision": "AUTHORIZE_WITH_PROVENANCE"},
+        "responder_ref": "SOA-test-actor",
+        "authority_level": "R2",
+        "authentication_ref": "authn:ephemeral-ci:soa-test-actor",
+    }
+    persist_human_response(
+        database,
+        project_scope="SOAiaCore",
+        response_id="HR-MOCATRIZ-008-GOOD",
+        response=provenanced,
+        received_time=datetime(2026, 10, 24, 17, 2, tzinfo=timezone.utc),
+    )
+
+    recovered = load_human_task_bundle(
+        database,
+        project_scope="SOAiaCore",
+        human_task_id=task["human_task_id"],
+    )
+    assert recovered["authority_state"] == "AUTHORITATIVE"
+    assert recovered["response"]["responder_ref"] == "SOA-test-actor"
+    assert recovered["response"]["authority_level"] == "R2"
+    assert recovered["response"]["authentication_ref"].startswith("authn:")

@@ -68,6 +68,14 @@ A2_HUMAN_TASK_AUTHORITY_FUNCTIONS = (
     "soa_memory.human_task_response_authority(text,text,timestamp with time zone)",
 )
 
+A2_HUMAN_RESPONSE_PROVENANCE_TRIGGERS = (
+    ("soa_memory", "human_task_responses", "trg_a2_require_human_response_provenance"),
+)
+
+A2_HUMAN_RESPONSE_PROVENANCE_FUNCTIONS = (
+    "soa_memory.require_human_response_provenance()",
+)
+
 A2_HUMAN_TASK_SCOPE_CONSTRAINTS = (
     ("soa_memory", "human_task_responses", "fk_a2_human_response_project_scope"),
     ("soa_memory", "human_task_lifecycle", "fk_a2_human_lifecycle_project_scope"),
@@ -212,6 +220,13 @@ def _human_task_authority_function_present(connection) -> bool:
     return all(_function_exists(connection, signature) for signature in A2_HUMAN_TASK_AUTHORITY_FUNCTIONS)
 
 
+def _human_response_provenance_present(connection) -> bool:
+    return (
+        all(_function_exists(connection, signature) for signature in A2_HUMAN_RESPONSE_PROVENANCE_FUNCTIONS)
+        and all(_trigger_exists(connection, *spec) for spec in A2_HUMAN_RESPONSE_PROVENANCE_TRIGGERS)
+    )
+
+
 def _migration_objects_present(connection, path: Path) -> bool:
     if path.name.startswith("1001_"):
         return _overlay_objects_present(connection)
@@ -225,6 +240,8 @@ def _migration_objects_present(connection, path: Path) -> bool:
         return _human_task_scope_guards_present(connection)
     if path.name.startswith("1006_"):
         return _human_task_authority_function_present(connection)
+    if path.name.startswith("1007_"):
+        return _human_response_provenance_present(connection)
     return False
 
 
@@ -398,6 +415,13 @@ def verify_a2_persistence(
                 "PRECHECK",
                 status_code=503,
             )
+        if not _human_response_provenance_present(connection):
+            raise contract_error(
+                "A2_HUMAN_RESPONSE_PROVENANCE_GUARD_MISSING",
+                "Human response provenance guard is absent",
+                "PRECHECK",
+                status_code=503,
+            )
         for path in files:
             checksum = _checksum(path)
             row = _overlay_registry_row(connection, path)
@@ -415,8 +439,8 @@ def verify_a2_persistence(
         base_migrations=base,
         overlay_migrations=overlay,
         relations=A2_REQUIRED_RELATIONS + A2_HUMAN_TASK_RELATIONS + A2_HUMAN_TASK_LIFECYCLE_RELATIONS,
-        functions=A2_REQUIRED_FUNCTIONS + A2_HUMAN_TASK_LIFECYCLE_FUNCTIONS + A2_HUMAN_TASK_AUTHORITY_FUNCTIONS,
-        triggers=A2_REQUIRED_TRIGGERS + A2_HUMAN_TASK_TRIGGERS + A2_HUMAN_TASK_LIFECYCLE_TRIGGERS,
+        functions=A2_REQUIRED_FUNCTIONS + A2_HUMAN_TASK_LIFECYCLE_FUNCTIONS + A2_HUMAN_TASK_AUTHORITY_FUNCTIONS + A2_HUMAN_RESPONSE_PROVENANCE_FUNCTIONS,
+        triggers=A2_REQUIRED_TRIGGERS + A2_HUMAN_TASK_TRIGGERS + A2_HUMAN_TASK_LIFECYCLE_TRIGGERS + A2_HUMAN_RESPONSE_PROVENANCE_TRIGGERS,
         working_assumption_enabled=True,
     )
 
@@ -504,13 +528,16 @@ def persist_human_response(
             """
             INSERT INTO soa_memory.human_task_responses(
               response_id, objective_id, execution_id, human_task_id, correlation_id,
-              project_scope, answer, received_time
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s)
+              project_scope, answer, received_time, responder_ref, authority_level,
+              authentication_ref
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s)
             """,
             (
                 response_id, response["objective_id"], response["execution_id"],
                 response["human_task_id"], response["correlation_id"], scope,
                 json.dumps(response.get("answer")), received_time,
+                response.get("responder_ref"), response.get("authority_level"),
+                response.get("authentication_ref"),
             ),
             prepare=False,
         )
@@ -557,12 +584,25 @@ def load_human_task_bundle(
         }
 
     row = dict(authority)
+    with database.connect(autocommit=True) as connection:
+        provenance = connection.execute(
+            """
+            SELECT responder_ref, authority_level, authentication_ref
+            FROM soa_memory.human_task_responses
+            WHERE response_id=%s
+            """,
+            (row["response_id"],),
+        ).fetchone()
+
     response = {
         "objective_id": row["objective_id"],
         "execution_id": row["execution_id"],
         "human_task_id": row["human_task_id"],
         "correlation_id": row["correlation_id"],
         "answer": row["answer"],
+        "responder_ref": provenance["responder_ref"] if provenance else None,
+        "authority_level": provenance["authority_level"] if provenance else None,
+        "authentication_ref": provenance["authentication_ref"] if provenance else None,
     }
     invalidator = None
     if row["invalidating_lifecycle_event_id"]:
