@@ -80,6 +80,20 @@ def test_final_status_is_not_completed_with_material_gap():
     assert result["final_status"] == "PENDING"
 
 
+def test_zero_applicable_criteria_cannot_complete_objective():
+    result = determine_final_status([])
+    assert result["completion_applicable"] is False
+    assert result["objective_completion_pct"] is None
+    assert result["final_status"] == "PENDING"
+
+
+def test_claimed_completion_without_acceptance_basis_is_false_completion():
+    result = detect_false_completion("COMPLETED", [])
+    assert result["completion_applicable"] is False
+    assert result["objective_completion_pct"] is None
+    assert result["false_completion"] is True
+
+
 def test_waiting_human_is_normal_execution_state():
     criteria = [{"criterion_id":"C1","satisfied":False,"material":True}]
     result = determine_final_status(criteria, waiting_human=True)
