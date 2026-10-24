@@ -10,6 +10,7 @@ from trusted_memory import (  # noqa: E402
     fidelity_score,
     reconstruct_from_snapshot,
     recovery_decision,
+    select_authoritative_snapshot,
     validate_evidence_inventory,
     validate_manifest,
     validate_snapshot,
@@ -95,6 +96,24 @@ def test_tms2_blind_recovery_preserves_task_continuity_without_chat_context():
     assert recovered["pending_and_exceptions"] == t2["pending_and_exceptions"]
     assert recovered["resume_point"] == t2["resume_point"]
     assert recovered["recovery_status"] == "RECOVERABLE_WITH_EXCEPTIONS"
+
+
+def test_real_trusted_snapshot_selection_is_historical_as_of_not_latest_file():
+    t1, t2 = _load(TMS1), _load(TMS2)
+
+    historical = select_authoritative_snapshot(
+        [t1,t2],
+        logical_snapshot_id=t1["logical_snapshot_id"],
+        as_of="2026-09-27T00:00:00Z",
+    )
+    current = select_authoritative_snapshot(
+        [t1,t2],
+        logical_snapshot_id=t1["logical_snapshot_id"],
+        as_of="2026-10-24T00:00:00Z",
+    )
+
+    assert historical["snapshot_id"] == t1["snapshot_id"]
+    assert current["snapshot_id"] == t2["snapshot_id"]
 
 
 def test_tms2_bitemporal_projection_links_only_real_trusted_memory_predecessors():
