@@ -91,7 +91,8 @@ def objective_completion(criteria: list[dict[str, Any]]) -> dict[str, Any]:
             raise ValueError("applicable criteria require boolean satisfied")
     total = len(applicable)
     satisfied = sum(1 for c in applicable if c["satisfied"])
-    pct = 100.0 if total == 0 else round(satisfied / total * 100, 2)
+    completion_applicable = total > 0
+    pct = None if total == 0 else round(satisfied / total * 100, 2)
     material_unresolved = [
         str(c.get("criterion_id"))
         for c in applicable
@@ -101,6 +102,7 @@ def objective_completion(criteria: list[dict[str, Any]]) -> dict[str, Any]:
         "applicable_criteria": total,
         "satisfied_criteria": satisfied,
         "objective_completion_pct": pct,
+        "completion_applicable": completion_applicable,
         "material_unresolved_criteria": material_unresolved,
     }
 
@@ -120,6 +122,8 @@ def determine_final_status(
         status = "WAITING_HUMAN"
     elif blocked:
         status = "BLOCKED"
+    elif not completion["completion_applicable"]:
+        status = "PENDING"
     elif completion["material_unresolved_criteria"]:
         status = "PENDING"
     elif accepted_exceptions:
@@ -138,7 +142,10 @@ def detect_false_completion(
     completion = objective_completion(criteria)
     false_completion = (
         claimed_status in {"COMPLETED", "COMPLETED_WITH_EXCEPTIONS"}
-        and bool(completion["material_unresolved_criteria"])
+        and (
+            not completion["completion_applicable"]
+            or bool(completion["material_unresolved_criteria"])
+        )
     )
     return {
         "claimed_status": claimed_status,
