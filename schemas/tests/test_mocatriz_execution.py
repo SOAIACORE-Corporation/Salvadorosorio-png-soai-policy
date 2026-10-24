@@ -181,7 +181,7 @@ def test_viable_untried_alternative_prevents_showstopper():
     ])
     assert assessment["recommended_status"] == "CONTINUE"
     assert assessment["showstopper_justified"] is False
-    assert assessment["reason"] == "VIABLE_ALTERNATIVE_REMAINS"
+    assert assessment["reason"] == "AUTONOMOUS_ALTERNATIVE_REMAINS"
 
 
 def test_available_human_dependency_is_waiting_human_not_showstopper():
@@ -221,3 +221,25 @@ def test_material_blocker_without_exhaustion_is_blocked_not_showstopper():
     ])
     assert assessment["recommended_status"] == "BLOCKED"
     assert assessment["showstopper_justified"] is False
+
+
+def test_autonomous_recovery_route_precedes_available_human_escalation():
+    assessment = assess_stop_decision([
+        {"type":"recovery_attempt","result":"FAILED","evidence":["EV-FAIL-A"]},
+        {"type":"alternative","alternative_id":"B","status":"VIABLE_UNTRIED","requires_human":False,"evidence":["EV-B-VIABLE"]},
+        {"type":"human_dependency","required":True,"available":True,"evidence":["EV-HUMAN-AVAILABLE"]},
+    ])
+    assert assessment["recommended_status"] == "CONTINUE"
+    assert assessment["showstopper_justified"] is False
+    assert assessment["reason"] == "AUTONOMOUS_ALTERNATIVE_REMAINS"
+
+
+def test_human_gated_recovery_route_waits_for_human_when_no_autonomous_route_remains():
+    assessment = assess_stop_decision([
+        {"type":"recovery_attempt","result":"FAILED","evidence":["EV-FAIL-A"]},
+        {"type":"alternative","alternative_id":"B","status":"VIABLE_UNTRIED","requires_human":True,"evidence":["EV-B-NEEDS-AUTHORITY"]},
+        {"type":"human_dependency","required":True,"available":True,"evidence":["EV-HUMAN-AVAILABLE"]},
+    ])
+    assert assessment["recommended_status"] == "WAITING_HUMAN"
+    assert assessment["showstopper_justified"] is False
+    assert assessment["reason"] == "VIABLE_ALTERNATIVE_REQUIRES_HUMAN"

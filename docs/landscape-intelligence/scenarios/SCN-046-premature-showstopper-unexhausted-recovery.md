@@ -1,7 +1,7 @@
 # SCN-046 · Premature SHOWSTOPPER / Unexhausted Recovery
 
 **Class:** MOCATRIZ self-regulation / stop-decision integrity  
-**Status:** ACTIVE / TESTABLE  
+**Status:** PASS / CONTROLLED  
 **Created:** 2026-10-24
 
 ## Problem

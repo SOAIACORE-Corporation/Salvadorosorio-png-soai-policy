@@ -293,6 +293,8 @@ def assess_stop_decision(events: list[dict[str, Any]]) -> dict[str, Any]:
         elif event_type == "alternative":
             if event.get("status") not in {"VIABLE_UNTRIED", "FAILED", "BLOCKED"}:
                 raise ValueError("alternative status is invalid")
+            if "requires_human" in event and not isinstance(event.get("requires_human"), bool):
+                raise ValueError("alternative requires_human must be boolean when provided")
             alternatives.append(event)
         elif event_type == "human_dependency":
             if not isinstance(event.get("required"), bool) or not isinstance(event.get("available"), bool):
@@ -319,19 +321,39 @@ def assess_stop_decision(events: list[dict[str, Any]]) -> dict[str, Any]:
             "reason": "RECOVERY_IN_PROGRESS",
         }
 
+    autonomous_viable = [
+        item for item in alternatives
+        if item["status"] == "VIABLE_UNTRIED" and item.get("requires_human") is not True
+    ]
+    if autonomous_viable:
+        return {
+            "recommended_status": "CONTINUE",
+            "showstopper_justified": False,
+            "reason": "AUTONOMOUS_ALTERNATIVE_REMAINS",
+            "viable_alternative_ids": [str(item.get("alternative_id")) for item in autonomous_viable],
+        }
+
+    human_gated_viable = [
+        item for item in alternatives
+        if item["status"] == "VIABLE_UNTRIED" and item.get("requires_human") is True
+    ]
     if any(item["required"] and item["available"] for item in human_dependencies):
         return {
             "recommended_status": "WAITING_HUMAN",
             "showstopper_justified": False,
-            "reason": "HUMAN_DEPENDENCY_AVAILABLE",
+            "reason": (
+                "VIABLE_ALTERNATIVE_REQUIRES_HUMAN"
+                if human_gated_viable
+                else "HUMAN_DEPENDENCY_AVAILABLE"
+            ),
         }
 
     viable = [item for item in alternatives if item["status"] == "VIABLE_UNTRIED"]
     if viable:
         return {
-            "recommended_status": "CONTINUE",
+            "recommended_status": "BLOCKED",
             "showstopper_justified": False,
-            "reason": "VIABLE_ALTERNATIVE_REMAINS",
+            "reason": "HUMAN_GATED_ALTERNATIVE_WITHOUT_AVAILABLE_AUTHORITY",
             "viable_alternative_ids": [str(item.get("alternative_id")) for item in viable],
         }
 
