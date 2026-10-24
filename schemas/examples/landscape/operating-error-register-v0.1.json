@@ -514,10 +514,14 @@
       "automated_detection": "SCN-040 regression tests cover zero-criteria completion and explicit false-completion detection.",
       "evidence_refs": [
         "SCN-040",
-        "tools/landscape/mocatriz_execution.py",
-        "schemas/tests/test_mocatriz_execution.py"
+        "github-actions:40082935096",
+        "github-actions:40082935012",
+        "github-actions:40082935033",
+        "github-actions:40082935018",
+        "github-actions:40082935068",
+        "commit:de3cfe9c3dc1c088627d8242d16b3cb174bf250b"
       ],
-      "control_status": "OPEN",
+      "control_status": "CONTROLLED",
       "regression_test": "test_zero_applicable_criteria_cannot_complete_objective"
     }
   ]
