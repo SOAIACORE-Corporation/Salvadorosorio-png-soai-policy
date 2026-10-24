@@ -411,6 +411,30 @@
       ],
       "control_status": "CONTROLLED",
       "regression_test": "BOUNDED_WRITE_AFTER_CONNECTOR_POLICY_BLOCK"
+    },
+    {
+      "error_id": "ERR-20261024-038",
+      "detected_at": "2026-10-24",
+      "class": "PARTIAL_EVIDENCE_RECOVERY_GAP",
+      "phase": "trusted-memory-recovery",
+      "symptom": "Trusted recovery could proceed when a recovery manifest referenced an evidence inventory but reconstruct_from_snapshot was called without loading that inventory.",
+      "root_cause": "The evidence_inventory argument was optional and absence defaulted to a valid evidence check, allowing snapshot/manifest coherence to substitute for missing evidence validation.",
+      "early_signals": [
+        "Recovery manifest contains evidence_inventory with expected hash",
+        "reconstruct_from_snapshot accepted evidence_inventory=None",
+        "Existing recovery decision already distinguishes necessary from critical missing requirements"
+      ],
+      "human_cost": "No operator action required; defect found by adversarial review before relying on the path for autonomous recovery.",
+      "avoidable": true,
+      "prevention_rule": "If a recovery manifest references an evidence inventory, trusted reconstruction must require and validate that inventory; missing necessary evidence degrades explicitly and missing critical evidence blocks recovery.",
+      "automated_detection": "SCN-037 regression tests cover absent inventory, partial necessary evidence, and missing critical evidence.",
+      "evidence_refs": [
+        "SCN-037",
+        "tools/landscape/trusted_memory.py",
+        "schemas/tests/test_trusted_memory_snapshot.py"
+      ],
+      "control_status": "OPEN",
+      "regression_test": "test_recovery_rejects_manifest_that_references_missing_evidence_inventory"
     }
   ]
 }
