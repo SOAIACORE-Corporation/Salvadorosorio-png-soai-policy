@@ -439,6 +439,30 @@
       ],
       "control_status": "CONTROLLED",
       "regression_test": "test_recovery_rejects_manifest_that_references_missing_evidence_inventory"
+    },
+    {
+      "error_id": "ERR-20261024-039",
+      "detected_at": "2026-10-24",
+      "class": "SNAPSHOT_AUTHORITY_SELECTION_GAP",
+      "phase": "trusted-memory-recovery",
+      "symptom": "Trusted Memory validates individual snapshots and pairwise diffs but has no deterministic authority resolver for multiple temporally plausible or contradictory snapshots.",
+      "root_cause": "Authority selection was implicit; no control enforced unique lineage head, historical as-of semantics, fork rejection or missing trusted-predecessor rejection.",
+      "early_signals": [
+        "compare_snapshot_versions proves pairwise difference but does not select authority",
+        "TMS-001 and TMS-002 remain independently valid immutable artifacts",
+        "status/version/timestamp fields can be misused as ranking heuristics"
+      ],
+      "human_cost": "No operator intervention required; gap identified through adversarial lineage analysis.",
+      "avoidable": true,
+      "prevention_rule": "Select trusted-memory authority only from a valid, temporally eligible, non-forked lineage; reject ambiguous heads and missing TMS predecessors rather than ranking by completeness or recency alone.",
+      "automated_detection": "SCN-038 synthetic fork/gap tests plus real TMS-001/TMS-002 historical as-of selection.",
+      "evidence_refs": [
+        "SCN-038",
+        "tools/landscape/trusted_memory.py",
+        "schemas/tests/test_trusted_memory_tms002.py"
+      ],
+      "control_status": "OPEN",
+      "regression_test": "test_trusted_snapshot_selector_rejects_lineage_fork"
     }
   ]
 }
