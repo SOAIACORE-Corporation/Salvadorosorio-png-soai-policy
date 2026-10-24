@@ -62,3 +62,76 @@ OBJECTIVE
 ## Authority
 
 This specification grants no merge, production mutation, Terraform apply/destroy, security exception, firewall change or deployment authority.
+
+
+## Human Authority Integrity · validated extension 2026-10-24
+
+The Human Interaction control surface is now materially stronger than simple four-part
+correlation. The following invariants are implemented and tested in ephemeral PostgreSQL:
+
+1. **Durable cross-session Human Task** — WAITING_HUMAN survives transient context loss.
+2. **Single authoritative response** — replay/conflicting second responses fail closed.
+3. **Temporal validity** — REVOKED / SUPERSEDED / EXPIRED tasks reject later responses.
+4. **Project isolation** — project_scope is part of durable response/lifecycle correlation.
+5. **Bitemporal authority recovery** — later-recorded evidence can invalidate current
+   authority without rewriting historical knowledge.
+6. **Concurrent execution isolation** — response arrival order cannot cross-bind
+   simultaneous Human Tasks.
+7. **Durable responder provenance** — new responses require responder_ref,
+   authority_level and authentication_ref.
+
+### Canonical Human Task rule set
+
+A Human Task response is resume-eligible only when all of the following are true:
+
+```text
+task identity matches
++ execution identity matches
++ correlation identity matches
++ project scope matches
++ task remains temporally valid
++ no competing authoritative response exists
++ current bitemporal reconstruction still considers the response authoritative
++ durable responder/authentication provenance exists
+```
+
+Correlation alone is therefore necessary but insufficient.
+
+### Persistence artifacts
+
+- `db/a2_migrations/1002_mocatriz_human_task_resume.sql`
+- `db/a2_migrations/1003_mocatriz_human_response_replay_guard.sql`
+- `db/a2_migrations/1004_mocatriz_human_task_lifecycle_guard.sql`
+- `db/a2_migrations/1005_mocatriz_human_task_project_scope_guard.sql`
+- `db/a2_migrations/1006_mocatriz_human_task_authority_asof.sql`
+- `db/a2_migrations/1007_mocatriz_human_response_provenance.sql`
+
+### Validated scenarios
+
+| Test | Scenario | Result | Primary CI evidence |
+|---|---|---|---|
+| 03 | SCN-030 · Durable cross-session resume | PASS | A2 #73 |
+| 04 | SCN-031 · Response replay/conflict | PASS | A2 #74 |
+| 05 | SCN-032 · Stale human authority | PASS | A2 #76 |
+| 06 | SCN-033 · Cross-project authority isolation | PASS | A2 #78 |
+| 07 | SCN-034 · Late-recorded backdated revocation | PASS | A2 #80 |
+| 08 | SCN-035 · Concurrent Human Task isolation | PASS | A2 #81 |
+| 09 | SCN-036 · Human response provenance gate | PASS | A2 #82 |
+
+All tests use disposable CI PostgreSQL and preserve the no-live-cloud mutation boundary.
+
+### Explicit boundary
+
+`authentication_ref` proves that durable provenance points to authentication evidence;
+it does not make PostgreSQL an identity provider. End-to-end cryptographic verification
+of the human actor remains a separate integration test.
+
+### Derived rules
+
+> Correlación correcta no implica autoridad vigente.
+
+> La autoridad correlacionada también tiene ámbito.
+
+> Nueva evidencia puede invalidar autoridad vigente sin reescribir lo que históricamente se sabía.
+
+> Una respuesta correlacionada no es autoridad durable si no conserva quién respondió y qué evidencia autentica esa autoridad.
