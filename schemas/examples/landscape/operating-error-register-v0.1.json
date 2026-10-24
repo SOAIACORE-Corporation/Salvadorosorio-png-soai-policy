@@ -486,10 +486,14 @@
       "automated_detection": "SCN-039 regressions assert UNKNOWN for unavailable source, MISSING for absent evidence, and BLOCKED canonicalization for unavailable required authority.",
       "evidence_refs": [
         "SCN-039",
-        "tools/landscape/durable_evidence_adapters.py",
-        "tools/landscape/recovery_manifest_builder.py"
+        "github-actions:40082713293",
+        "github-actions:40082713287",
+        "github-actions:40082713308",
+        "github-actions:40082713305",
+        "github-actions:40082713289",
+        "commit:6e3d05ee7671e2aa4db5c3601a74cdbda214b301"
       ],
-      "control_status": "OPEN",
+      "control_status": "CONTROLLED",
       "regression_test": "test_unavailable_declared_authority_is_unknown_not_missing"
     }
   ]
