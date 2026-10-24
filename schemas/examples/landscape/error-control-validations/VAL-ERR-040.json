@@ -1,0 +1,18 @@
+{
+  "validation_id": "VAL-ERR-040",
+  "error_id": "ERR-20261024-040",
+  "status": "CONTROLLED",
+  "observed_at": "2026-10-24",
+  "evidence_refs": [
+    "github-actions:40082713293",
+    "github-actions:40082713287",
+    "commit:6e3d05ee7671e2aa4db5c3601a74cdbda214b301",
+    "SCN-039"
+  ],
+  "human_required": false,
+  "regression_tests": [
+    "schemas/tests/test_landscape_recovery_manifest_builder.py::test_unavailable_declared_authority_is_unknown_not_missing",
+    "schemas/tests/test_landscape_durable_evidence_adapters.py::test_unretrieved_source_remains_unknown_through_manifest_build"
+  ],
+  "rationale": "Known-but-unretrievable source authority now remains UNKNOWN with preserved unavailable provenance; truly absent evidence remains MISSING; required authority still blocks canonicalization. Landscape #228 and A2 #100 passed."
+}
