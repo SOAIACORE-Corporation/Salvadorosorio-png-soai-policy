@@ -579,6 +579,30 @@
       ],
       "control_status": "CONTROLLED",
       "regression_test": "test_sealed_fidelity_receipt_tampering_blocks_recovery"
+    },
+    {
+      "error_id": "ERR-20261024-044",
+      "detected_at": "2026-10-24",
+      "class": "DECLARED_AUTHORITY_SPOOFING",
+      "phase": "exception-authority-gate",
+      "symptom": "The exception gate could authorize solely from a declared canonical name or SOA alias plus a reason, without durable authority/authentication provenance.",
+      "root_cause": "Nominal authority resolution and operational authorization were conflated; matching a canonical string was treated as sufficient authority.",
+      "early_signals": [
+        "authority.py explicitly states that it does not authenticate a person",
+        "exception_gate returned AUTHORIZED_EXCEPTION for authority='SOA' plus reason",
+        "no authentication_ref or canonical authority_ref was required"
+      ],
+      "human_cost": "No operator action required; defect found by adversarial authority audit.",
+      "avoidable": true,
+      "prevention_rule": "Canonical name/alias resolution may identify the claimed authority, but operational exception authorization requires matching canonical authority_ref plus non-empty upstream authentication_ref.",
+      "automated_detection": "SCN-044 regressions reject alias/full-name spoofing without provenance, reject wrong actors with provenance, and admit only canonical identity plus durable authentication reference.",
+      "evidence_refs": [
+        "SCN-044",
+        "tools/landscape/authority.py",
+        "docs/landscape-intelligence/EXCEPTION_AUTHORITY_POLICY_v1.md"
+      ],
+      "control_status": "OPEN",
+      "regression_test": "test_exception_alias_without_authentication_provenance_fails_closed"
     }
   ]
 }
