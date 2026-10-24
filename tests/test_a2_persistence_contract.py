@@ -274,6 +274,135 @@ def test_postgres_semantics_block_t2_leak_and_illegal_decision_authority(databas
         )
 
 
+def test_all_bitemporal_surfaces_block_future_recorded_knowledge_leakage(database) -> None:
+    """SCN-045: T2 knowledge cannot leak into a historical T1 record-time query."""
+    apply_a2_persistence(
+        database,
+        base_migration_dir=ROOT / "db" / "migrations",
+        a2_migration_dir=ROOT / "db" / "a2_migrations",
+    )
+
+    valid_at = datetime(2026, 1, 15, tzinfo=timezone.utc)
+    t1_recorded = datetime(2026, 1, 20, tzinfo=timezone.utc)
+    t2_recorded = datetime(2026, 2, 20, tzinfo=timezone.utc)
+
+    with database.connect(autocommit=True) as connection:
+        connection.execute(
+            "TRUNCATE soa_memory.memory_claim_lineage, soa_memory.canonical_memory, "
+            "soa_memory.episodic_temporal_memory, soa_memory.operational_state, "
+            "soa_decision.decision_ledger RESTART IDENTITY CASCADE",
+            prepare=False,
+        )
+        connection.execute(
+            """
+            INSERT INTO soa_memory.canonical_memory(
+              memory_id,logical_memory_id,version_no,project_scope,content,
+              epistemic_class,admission_state,observed_time,recorded_time,valid_from
+            ) VALUES
+              ('scn45-mem-v1','scn45-memory',1,'SCN-045','{"value":"T1"}'::jsonb,
+               'DOCUMENTED_FACT','ADMITTED','2026-01-10Z','2026-01-20Z','2026-01-01Z'),
+              ('scn45-mem-v2','scn45-memory',2,'SCN-045','{"value":"T2"}'::jsonb,
+               'DOCUMENTED_FACT','ADMITTED','2026-02-10Z','2026-02-20Z','2026-01-01Z')
+            """,
+            prepare=False,
+        )
+        connection.execute(
+            """
+            INSERT INTO soa_memory.episodic_temporal_memory(
+              episode_id,logical_episode_id,version_no,project_scope,payload,
+              observed_time,recorded_time,valid_from
+            ) VALUES
+              ('scn45-ep-v1','scn45-episode',1,'SCN-045','{"value":"T1"}'::jsonb,
+               '2026-01-10Z','2026-01-20Z','2026-01-01Z'),
+              ('scn45-ep-v2','scn45-episode',2,'SCN-045','{"value":"T2"}'::jsonb,
+               '2026-02-10Z','2026-02-20Z','2026-01-01Z')
+            """,
+            prepare=False,
+        )
+        connection.execute(
+            """
+            INSERT INTO soa_memory.operational_state(
+              state_id,state_key,version_no,project_scope,status,phase,decision,
+              source_authority,observed_time,recorded_time,valid_from
+            ) VALUES
+              ('scn45-state-v1','scn45-state',1,'SCN-045','RUNNING','T1','T1',
+               'TEST','2026-01-10Z','2026-01-20Z','2026-01-01Z'),
+              ('scn45-state-v2','scn45-state',2,'SCN-045','RUNNING','T2','T2',
+               'TEST','2026-02-10Z','2026-02-20Z','2026-01-01Z')
+            """,
+            prepare=False,
+        )
+        connection.execute(
+            """
+            INSERT INTO soa_decision.decision_ledger(
+              decision_event_id,decision_id,event_seq,project_scope,state,authority_level,
+              observed_time,recorded_time,valid_from
+            ) VALUES
+              ('scn45-dec-e1','scn45-decision',1,'SCN-045','PROPOSED','R1',
+               '2026-01-10Z','2026-01-20Z','2026-01-01Z')
+            """,
+            prepare=False,
+        )
+        connection.execute(
+            """
+            INSERT INTO soa_decision.decision_ledger(
+              decision_event_id,decision_id,event_seq,project_scope,state,authority_level,
+              observed_time,recorded_time,valid_from,previous_event_id
+            ) VALUES
+              ('scn45-dec-e2','scn45-decision',2,'SCN-045','APPROVED','R2',
+               '2026-02-10Z','2026-02-20Z','2026-01-01Z','scn45-dec-e1')
+            """,
+            prepare=False,
+        )
+
+        def one(sql: str, recorded_at: datetime):
+            rows = connection.execute(sql, ("SCN-045", valid_at, recorded_at)).fetchall()
+            assert len(rows) == 1
+            return rows[0]
+
+        t1_memory = one(
+            "SELECT * FROM soa_memory.canonical_memory_as_of(%s,%s,%s)",
+            t1_recorded,
+        )
+        t1_episode = one(
+            "SELECT * FROM soa_memory.episodic_memory_as_of(%s,%s,%s)",
+            t1_recorded,
+        )
+        t1_state = one(
+            "SELECT * FROM soa_memory.operational_state_as_of(%s,%s,%s)",
+            t1_recorded,
+        )
+        t1_decision = one(
+            "SELECT * FROM soa_decision.decision_state_as_of(%s,%s,%s)",
+            t1_recorded,
+        )
+        assert t1_memory["memory_id"] == "scn45-mem-v1"
+        assert t1_episode["episode_id"] == "scn45-ep-v1"
+        assert t1_state["state_id"] == "scn45-state-v1"
+        assert t1_decision["decision_event_id"] == "scn45-dec-e1"
+
+        t2_memory = one(
+            "SELECT * FROM soa_memory.canonical_memory_as_of(%s,%s,%s)",
+            t2_recorded,
+        )
+        t2_episode = one(
+            "SELECT * FROM soa_memory.episodic_memory_as_of(%s,%s,%s)",
+            t2_recorded,
+        )
+        t2_state = one(
+            "SELECT * FROM soa_memory.operational_state_as_of(%s,%s,%s)",
+            t2_recorded,
+        )
+        t2_decision = one(
+            "SELECT * FROM soa_decision.decision_state_as_of(%s,%s,%s)",
+            t2_recorded,
+        )
+        assert t2_memory["memory_id"] == "scn45-mem-v2"
+        assert t2_episode["episode_id"] == "scn45-ep-v2"
+        assert t2_state["state_id"] == "scn45-state-v2"
+        assert t2_decision["decision_event_id"] == "scn45-dec-e2"
+
+
 def test_tms002_round_trips_through_ephemeral_bitemporal_postgres(database) -> None:
     """Persist TMS-001 -> TMS-002 in CI Postgres and read TMS-002 back bitemporally.
 
