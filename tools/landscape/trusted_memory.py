@@ -232,6 +232,59 @@ def validate_evidence_inventory(
     }
 
 
+def seal_fidelity_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
+    """Seal a fidelity receipt without creating a manifest/receipt hash cycle.
+
+    manifest_hash is deliberately excluded from the receipt self-hash because the
+    manifest may bind the receipt's expected hash. validate_fidelity_receipt()
+    verifies manifest_hash separately against the sealed manifest.
+    """
+    sealed = deepcopy(receipt)
+    sealed.pop("content_sha256", None)
+    sealed.pop("manifest_hash", None)
+    sealed["content_sha256"] = sha256_hex(sealed)
+    if "manifest_hash" in receipt:
+        sealed["manifest_hash"] = receipt["manifest_hash"]
+    return sealed
+
+
+def validate_fidelity_receipt(
+    receipt: dict[str, Any],
+    *,
+    snapshot: dict[str, Any],
+    manifest: dict[str, Any],
+    evidence_inventory: dict[str, Any],
+) -> dict[str, Any]:
+    errors: list[str] = []
+    body = deepcopy(receipt)
+    expected = body.pop("content_sha256", None)
+    body.pop("manifest_hash", None)
+    actual = sha256_hex(body)
+    if expected != actual:
+        errors.append("fidelity_receipt_hash_mismatch")
+
+    binding = manifest.get("fidelity_receipt", {})
+    if binding.get("receipt_id") != receipt.get("receipt_id"):
+        errors.append("fidelity_receipt_id_mismatch")
+    if binding.get("expected_hash") != receipt.get("content_sha256"):
+        errors.append("fidelity_receipt_expected_hash_mismatch")
+
+    if receipt.get("snapshot_id") != snapshot.get("snapshot_id"):
+        errors.append("fidelity_receipt_snapshot_id_mismatch")
+    if receipt.get("snapshot_hash") != snapshot.get("content_sha256"):
+        errors.append("fidelity_receipt_snapshot_hash_mismatch")
+    if receipt.get("manifest_hash") != manifest.get("content_sha256"):
+        errors.append("fidelity_receipt_manifest_hash_mismatch")
+    if receipt.get("evidence_inventory_hash") != evidence_inventory.get("content_sha256"):
+        errors.append("fidelity_receipt_evidence_hash_mismatch")
+
+    return {
+        "valid": not errors,
+        "errors": errors,
+        "actual_content_sha256": actual,
+    }
+
+
 def recovery_decision(manifest: dict[str, Any]) -> dict[str, Any]:
     requirements = manifest.get("requirements", [])
     blocking = []
@@ -267,6 +320,7 @@ def reconstruct_from_snapshot(
     snapshot: dict[str, Any],
     manifest: dict[str, Any],
     evidence_inventory: dict[str, Any] | None = None,
+    fidelity_receipt: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     sv = validate_snapshot(snapshot)
     mv = validate_manifest(manifest, snapshot)
@@ -282,15 +336,32 @@ def reconstruct_from_snapshot(
         )
     else:
         ev = {"valid": True, "errors": []}
+    receipt_binding = manifest.get("fidelity_receipt")
+    if receipt_binding and fidelity_receipt is None:
+        rv = {"valid": False, "errors": ["fidelity_receipt_missing"]}
+    elif fidelity_receipt is not None:
+        if evidence_inventory is None:
+            rv = {"valid": False, "errors": ["fidelity_receipt_requires_evidence_inventory"]}
+        else:
+            rv = validate_fidelity_receipt(
+                fidelity_receipt,
+                snapshot=snapshot,
+                manifest=manifest,
+                evidence_inventory=evidence_inventory,
+            )
+    else:
+        rv = {"valid": True, "errors": []}
+
     if (
         not sv["valid"]
         or not mv["valid"]
         or not ev["valid"]
+        or not rv["valid"]
         or decision["result"] == "RECOVERY_BLOCKED"
     ):
         raise ValueError(
             "trusted recovery prerequisites not satisfied: "
-            + ", ".join(sv["errors"] + mv["errors"] + ev["errors"])
+            + ", ".join(sv["errors"] + mv["errors"] + ev["errors"] + rv["errors"])
         )
 
     return {
