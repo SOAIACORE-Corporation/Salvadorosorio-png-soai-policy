@@ -154,6 +154,116 @@ def detect_false_completion(
     }
 
 
+def assess_strategy_adaptation(events: list[dict[str, Any]]) -> dict[str, Any]:
+    """Derive adaptive mutation vs drift from execution evidence.
+
+    Expected event types:
+    - strategy_attempt: objective_id, strategy_id, result, evidence[]
+    - strategy_change: objective_id, from_strategy, to_strategy, basis_evidence[]
+    """
+    active_objective: str | None = None
+    failed_or_partial: dict[str, set[str]] = {}
+    seen_strategies: set[str] = set()
+    evidence_at_entry: dict[str, set[str]] = {}
+    cumulative_evidence: set[str] = set()
+    classifications: list[dict[str, Any]] = []
+
+    for event in events:
+        event_type = event.get("type")
+        if event_type == "strategy_attempt":
+            objective_id = event.get("objective_id")
+            strategy_id = event.get("strategy_id")
+            result = event.get("result")
+            evidence = event.get("evidence", [])
+            if not isinstance(objective_id, str) or not objective_id:
+                raise ValueError("strategy_attempt requires objective_id")
+            if not isinstance(strategy_id, str) or not strategy_id:
+                raise ValueError("strategy_attempt requires strategy_id")
+            if result not in {"SUCCESS", "FAILED", "PARTIAL"}:
+                raise ValueError("strategy_attempt result must be SUCCESS, FAILED or PARTIAL")
+            if not isinstance(evidence, list) or not all(isinstance(x, str) and x for x in evidence):
+                raise ValueError("strategy_attempt evidence must be a list of non-empty strings")
+
+            if active_objective is None:
+                active_objective = objective_id
+            elif objective_id != active_objective:
+                classifications.append({
+                    "classification": "DRIFT",
+                    "reason": "OBJECTIVE_DEPARTURE",
+                    "strategy_id": strategy_id,
+                    "objective_id": objective_id,
+                })
+
+            seen_strategies.add(strategy_id)
+            evidence_at_entry.setdefault(strategy_id, set(cumulative_evidence))
+            cumulative_evidence.update(evidence)
+            if result in {"FAILED", "PARTIAL"}:
+                failed_or_partial.setdefault(strategy_id, set()).update(evidence)
+
+        elif event_type == "strategy_change":
+            objective_id = event.get("objective_id")
+            from_strategy = event.get("from_strategy")
+            to_strategy = event.get("to_strategy")
+            basis = event.get("basis_evidence", [])
+            if not isinstance(objective_id, str) or not objective_id:
+                raise ValueError("strategy_change requires objective_id")
+            if not isinstance(from_strategy, str) or not from_strategy:
+                raise ValueError("strategy_change requires from_strategy")
+            if not isinstance(to_strategy, str) or not to_strategy:
+                raise ValueError("strategy_change requires to_strategy")
+            if not isinstance(basis, list) or not all(isinstance(x, str) and x for x in basis):
+                raise ValueError("strategy_change basis_evidence must be a list of non-empty strings")
+
+            reasons: list[str] = []
+            if active_objective is None or objective_id != active_objective:
+                reasons.append("OBJECTIVE_DEPARTURE")
+            if from_strategy not in failed_or_partial:
+                reasons.append("NO_FAILED_OR_PARTIAL_TRIGGER")
+            if from_strategy == to_strategy:
+                reasons.append("NO_STRATEGY_CHANGE")
+            if not basis:
+                reasons.append("NO_BASIS_EVIDENCE")
+            elif from_strategy in failed_or_partial and not (
+                set(basis) & failed_or_partial[from_strategy]
+            ):
+                reasons.append("UNSUPPORTED_BY_PRIOR_RESULT")
+
+            if to_strategy in seen_strategies:
+                prior_basis = evidence_at_entry.get(to_strategy, set())
+                if set(basis).issubset(prior_basis):
+                    reasons.append("UNPRODUCTIVE_REVISIT")
+
+            if reasons:
+                classifications.append({
+                    "classification": "DRIFT",
+                    "reason": "+".join(sorted(set(reasons))),
+                    "from_strategy": from_strategy,
+                    "to_strategy": to_strategy,
+                    "objective_id": objective_id,
+                    "basis_evidence": list(basis),
+                })
+            else:
+                classifications.append({
+                    "classification": "ADAPTIVE_MUTATION",
+                    "reason": "EVIDENCE_DRIVEN_STRATEGY_CHANGE",
+                    "from_strategy": from_strategy,
+                    "to_strategy": to_strategy,
+                    "objective_id": objective_id,
+                    "basis_evidence": list(basis),
+                })
+                seen_strategies.add(to_strategy)
+                evidence_at_entry[to_strategy] = set(cumulative_evidence)
+
+    adaptive = sum(1 for item in classifications if item["classification"] == "ADAPTIVE_MUTATION")
+    drift = sum(1 for item in classifications if item["classification"] == "DRIFT")
+    return {
+        "adaptive_mutation_count": adaptive,
+        "drift_count": drift,
+        "classifications": classifications,
+        "objective_id": active_objective,
+    }
+
+
 def methodology_telemetry(events: list[dict[str, Any]]) -> dict[str, Any]:
     counts = {
         "strategy_mutation_count": 0,
