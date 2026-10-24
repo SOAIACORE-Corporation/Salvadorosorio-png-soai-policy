@@ -458,10 +458,14 @@
       "automated_detection": "SCN-038 synthetic fork/gap tests plus real TMS-001/TMS-002 historical as-of selection.",
       "evidence_refs": [
         "SCN-038",
-        "tools/landscape/trusted_memory.py",
-        "schemas/tests/test_trusted_memory_tms002.py"
+        "github-actions:40082537842",
+        "github-actions:40082537792",
+        "github-actions:40082537818",
+        "github-actions:40082537834",
+        "github-actions:40082537845",
+        "commit:974bd924bfa572302956b6055ae4793118d5c291"
       ],
-      "control_status": "OPEN",
+      "control_status": "CONTROLLED",
       "regression_test": "test_trusted_snapshot_selector_rejects_lineage_fork"
     }
   ]
