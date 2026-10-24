@@ -1,0 +1,24 @@
+{
+  "error_id": "ERR-20261024-052",
+  "detected_at": "2026-10-24",
+  "class": "CROSS_OBJECTIVE_RESOURCE_INTERFERENCE",
+  "phase": "multi-objective-execution",
+  "symptom": "MOCATRIZ had strong within-objective controls but no generic pre-execution arbitration for incompatible material actions from concurrent objectives targeting the same resource.",
+  "root_cause": "The objective-oriented execution model did not yet model cross-objective resource claims, write/write incompatibility, read/write serialization, or coalescing of identical writes.",
+  "early_signals": [
+    "mocatriz_execution.py models one active objective at a time",
+    "material-action idempotency prevents replay of one action but not interference between distinct objective/action identities",
+    "repository search found no objective-level resource arbitration contract"
+  ],
+  "human_cost": "Potential conflicting mutations, duplicate work or unnecessary serialization across autonomous objectives; detected before live multi-objective execution.",
+  "avoidable": true,
+  "prevention_rule": "Before concurrent execution, compare material resource claims across objectives. Incompatible writes require arbitration, read/write requires serialization, identical writes require coalescing, and priority alone must not invent authority.",
+  "automated_detection": "SCN-052 objective-arbitration regression suite.",
+  "evidence_refs": [
+    "tools/landscape/mocatriz_execution.py",
+    "tools/landscape/objective_arbitration.py",
+    "db/a2_migrations/1008_mocatriz_material_action_idempotency.sql"
+  ],
+  "control_status": "OPEN",
+  "regression_test": "SCN-052:test_incompatible_writes_require_arbitration_and_do_not_invent_winner"
+}
