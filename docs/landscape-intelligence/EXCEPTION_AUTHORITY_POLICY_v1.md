@@ -43,6 +43,24 @@ It may not grant the exception.
 
 Only the canonical exception authority may authorize it.
 
+## Authentication and provenance
+
+The canonical name or alias identifies the claimed authority; it does **not** authenticate
+the actor.
+
+An operational exception authorization must additionally preserve:
+
+- `authority_ref = authority:soa:salvador-osorio-ayala`;
+- a non-empty `authentication_ref` pointing to upstream authentication evidence.
+
+The Landscape authority module validates the presence and canonical binding of this
+provenance. It does not itself act as an identity provider or cryptographically verify
+the upstream authentication event.
+
+Therefore:
+
+`DECLARED IDENTITY != AUTHENTICATION != OPERATIONAL AUTHORITY`
+
 ## Fail-closed semantics
 
 If authority is missing, ambiguous, delegated without explicit canonical
