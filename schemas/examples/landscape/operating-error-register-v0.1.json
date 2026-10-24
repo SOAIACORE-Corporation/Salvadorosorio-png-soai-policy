@@ -598,10 +598,15 @@
       "automated_detection": "SCN-044 regressions reject alias/full-name spoofing without provenance, reject wrong actors with provenance, and admit only canonical identity plus durable authentication reference.",
       "evidence_refs": [
         "SCN-044",
-        "tools/landscape/authority.py",
-        "docs/landscape-intelligence/EXCEPTION_AUTHORITY_POLICY_v1.md"
+        "github-actions:40083781768",
+        "github-actions:40083781810",
+        "github-actions:40083781753",
+        "github-actions:40083781756",
+        "github-actions:40083781760",
+        "commit:6aef41658d160c7728e891bf3fddba2b0f64a592",
+        "commit:fe0c3d92608d6068c299a34b29ed8c7ff8d04770"
       ],
-      "control_status": "OPEN",
+      "control_status": "CONTROLLED",
       "regression_test": "test_exception_alias_without_authentication_provenance_fails_closed"
     }
   ]
