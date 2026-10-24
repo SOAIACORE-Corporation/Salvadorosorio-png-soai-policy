@@ -1,0 +1,24 @@
+{
+  "error_id": "ERR-20261024-048",
+  "detected_at": "2026-10-24",
+  "class": "CROSS_MODULE_ZERO_DENOMINATOR_DRIFT",
+  "phase": "compound-resilience",
+  "symptom": "memory_cycle.assess_human_interaction_efficiency reported 100% efficiency and 0% avoidable rate when no human actions occurred, while the canonical Human Interaction control reports zero-denominator metrics as NOT_EXERCISED.",
+  "root_cause": "The earlier Memory Cycle pilot predated the canonical zero-denominator semantics and retained optimistic defaults for empty event sets.",
+  "early_signals": [
+    "tools/landscape/human_interaction.py returns NOT_EXERCISED for total_human_actions=0",
+    "tools/landscape/memory_cycle.py returned 100.0 for the same denominator",
+    "SCN-040 established that zero denominator is not evidence of 100% completion"
+  ],
+  "human_cost": "No direct human action was required, but the metric could overstate autonomy quality and contaminate executive reporting.",
+  "avoidable": true,
+  "prevention_rule": "All zero-denominator Human Interaction Efficiency calculations must return NOT_EXERCISED / null percentages rather than 100%.",
+  "automated_detection": "SCN-048 integrated compound-failure test and test_landscape_memory_cycle zero-human-action regression.",
+  "evidence_refs": [
+    "tools/landscape/memory_cycle.py",
+    "tools/landscape/human_interaction.py",
+    "docs/landscape-intelligence/scenarios/SCN-040-false-completion-zero-criteria.md"
+  ],
+  "control_status": "OPEN",
+  "regression_test": "SCN-048:test_compound_failure_preserves_objective_and_avoids_false_escalation_or_completion"
+}

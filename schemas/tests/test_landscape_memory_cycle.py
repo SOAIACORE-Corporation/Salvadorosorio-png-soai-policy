@@ -72,10 +72,12 @@ def test_avoidable_human_actions_reduce_efficiency():
     assert result["avoidable_human_interaction_rate_pct"] == 50
 
 
-def test_no_human_actions_is_not_penalized():
+def test_no_human_actions_is_not_exercised_not_fake_100():
     result = assess_human_interaction_efficiency([])
-    assert result["human_interaction_efficiency_pct"] == 100
-    assert result["avoidable_human_interaction_rate_pct"] == 0
+    assert result["human_interaction_efficiency_pct"] is None
+    assert result["avoidable_human_interaction_rate_pct"] is None
+    assert result["human_interaction_efficiency_applicable"] is False
+    assert result["status"] == "NOT_EXERCISED"
 
 
 def test_recovery_efficiency_measures_autonomous_resolution():

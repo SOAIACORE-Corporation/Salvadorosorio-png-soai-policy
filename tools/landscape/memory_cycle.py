@@ -31,9 +31,10 @@ def assess_human_interaction_efficiency(events: list[dict[str, Any]] | None) -> 
     necessary = sum(1 for event in events if event["required"])
     avoidable = total - necessary
 
-    if total == 0:
-        efficiency = 100.0
-        avoidable_rate = 0.0
+    applicable = total > 0
+    if not applicable:
+        efficiency = None
+        avoidable_rate = None
     else:
         efficiency = round(necessary / total * 100, 2)
         avoidable_rate = round(avoidable / total * 100, 2)
@@ -44,6 +45,8 @@ def assess_human_interaction_efficiency(events: list[dict[str, Any]] | None) -> 
         "avoidable_human_actions": avoidable,
         "human_interaction_efficiency_pct": efficiency,
         "avoidable_human_interaction_rate_pct": avoidable_rate,
+        "human_interaction_efficiency_applicable": applicable,
+        "status": "MEASURED" if applicable else "NOT_EXERCISED",
     }
 
 
