@@ -1,0 +1,19 @@
+{
+  "validation_id": "VAL-ERR-038",
+  "error_id": "ERR-20261024-038",
+  "status": "CONTROLLED",
+  "observed_at": "2026-10-24",
+  "evidence_refs": [
+    "github-actions:40082314020",
+    "github-actions:40082314024",
+    "commit:c6b03b18ff84311654fbeccd42d4c10461743f6a",
+    "SCN-037"
+  ],
+  "human_required": false,
+  "regression_tests": [
+    "schemas/tests/test_trusted_memory_snapshot.py::test_recovery_rejects_manifest_that_references_missing_evidence_inventory",
+    "schemas/tests/test_trusted_memory_snapshot.py::test_partial_evidence_recovery_preserves_exceptions_instead_of_completing",
+    "schemas/tests/test_trusted_memory_snapshot.py::test_missing_critical_evidence_blocks_reconstruction_even_with_valid_snapshot"
+  ],
+  "rationale": "Landscape #214 validated the adversarial recovery tests; A2 #86, Terraform #158, Worker #112 and Alpha #21 also passed. Trusted recovery now fails closed when a referenced evidence inventory is absent, preserves necessary evidence gaps as RECOVERABLE_WITH_EXCEPTIONS, and blocks on critical missing evidence."
+}
