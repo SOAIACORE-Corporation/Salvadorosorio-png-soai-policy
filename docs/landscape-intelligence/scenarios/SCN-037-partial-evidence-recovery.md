@@ -1,7 +1,7 @@
 # SCN-037 · Partial Evidence Recovery
 
 **Class:** MOCATRIZ trusted recovery / evidence integrity  
-**Status:** ACTIVE / TESTABLE  
+**Status:** PASS / CONTROLLED  
 **Created:** 2026-10-24
 
 ## Problem
