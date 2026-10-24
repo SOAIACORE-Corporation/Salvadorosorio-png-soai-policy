@@ -1,7 +1,7 @@
 # SCN-050 · Lost Acknowledgement / Duplicate Material Action
 
 **Class:** MOCATRIZ recovery integrity / material-action idempotency  
-**Status:** ACTIVE / TESTABLE  
+**Status:** PASS / CONTROLLED  
 **Created:** 2026-10-24
 
 ## Problem
