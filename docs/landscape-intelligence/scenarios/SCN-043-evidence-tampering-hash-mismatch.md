@@ -1,7 +1,7 @@
 # SCN-043 · Evidence Tampering / Hash Mismatch
 
 **Class:** MOCATRIZ trusted recovery / physical integrity  
-**Status:** ACTIVE / TESTABLE  
+**Status:** PASS / CONTROLLED  
 **Created:** 2026-10-24
 
 ## Problem
