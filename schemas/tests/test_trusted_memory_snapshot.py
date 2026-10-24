@@ -12,6 +12,7 @@ from trusted_memory import (  # noqa: E402
     postgres_projection,
     reconstruct_from_snapshot,
     recovery_decision,
+    select_authoritative_snapshot,
     validate_evidence_inventory,
     seal_snapshot,
     sha256_hex,
@@ -288,6 +289,83 @@ def test_missing_critical_evidence_blocks_reconstruction_even_with_valid_snapsho
         pass
     else:
         raise AssertionError("critical missing evidence must block trusted reconstruction")
+
+
+def _successor(previous, *, snapshot_id, version_no, valid_from):
+    return seal_snapshot({
+        **{k:v for k,v in previous.items() if k!="content_sha256"},
+        "snapshot_id":snapshot_id,
+        "snapshot_version":f"1.{version_no - 1}.0",
+        "version_no":version_no,
+        "created_at":valid_from,
+        "valid_from":valid_from,
+        "previous_snapshot_id":previous["snapshot_id"],
+    })
+
+
+def test_trusted_snapshot_selector_uses_unique_lineage_head_not_completeness():
+    first=_snapshot()
+    second=_successor(
+        first,
+        snapshot_id="TMS-TEST-002",
+        version_no=2,
+        valid_from="2026-09-27T00:00:00Z",
+    )
+    selected=select_authoritative_snapshot(
+        [first,second],
+        logical_snapshot_id="SOAIACORE-MOCATRIZ",
+        as_of="2026-09-28T00:00:00Z",
+    )
+    assert selected["snapshot_id"]=="TMS-TEST-002"
+
+
+def test_trusted_snapshot_selector_rejects_lineage_fork():
+    first=_snapshot()
+    child_a=_successor(
+        first,
+        snapshot_id="TMS-TEST-002A",
+        version_no=2,
+        valid_from="2026-09-27T00:00:00Z",
+    )
+    child_b=_successor(
+        first,
+        snapshot_id="TMS-TEST-003B",
+        version_no=3,
+        valid_from="2026-09-27T00:00:00Z",
+    )
+    try:
+        select_authoritative_snapshot(
+            [first,child_a,child_b],
+            logical_snapshot_id="SOAIACORE-MOCATRIZ",
+            as_of="2026-09-28T00:00:00Z",
+        )
+    except ValueError as exc:
+        assert "snapshot_lineage_fork" in str(exc)
+    else:
+        raise AssertionError("contradictory trusted snapshot fork must fail closed")
+
+
+def test_trusted_snapshot_selector_rejects_missing_trusted_predecessor():
+    first=_snapshot()
+    orphan=seal_snapshot({
+        **{k:v for k,v in first.items() if k!="content_sha256"},
+        "snapshot_id":"TMS-TEST-ORPHAN",
+        "snapshot_version":"1.1.0",
+        "version_no":2,
+        "created_at":"2026-09-27T00:00:00Z",
+        "valid_from":"2026-09-27T00:00:00Z",
+        "previous_snapshot_id":"TMS-MISSING-PREDECESSOR",
+    })
+    try:
+        select_authoritative_snapshot(
+            [first,orphan],
+            logical_snapshot_id="SOAIACORE-MOCATRIZ",
+            as_of="2026-09-28T00:00:00Z",
+        )
+    except ValueError as exc:
+        assert "snapshot_lineage_gap" in str(exc)
+    else:
+        raise AssertionError("missing trusted predecessor must fail closed")
 
 
 def test_canonical_hash_is_stable_for_integral_float_representation():
