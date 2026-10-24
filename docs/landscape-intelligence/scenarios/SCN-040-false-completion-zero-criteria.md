@@ -1,7 +1,7 @@
 # SCN-040 · False Completion on Zero Applicable Criteria
 
 **Class:** MOCATRIZ closure integrity / false completion  
-**Status:** ACTIVE / TESTABLE  
+**Status:** PASS / CONTROLLED  
 **Created:** 2026-10-24
 
 ## Problem
