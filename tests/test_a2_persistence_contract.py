@@ -747,3 +747,94 @@ def test_late_recorded_backdated_revocation_invalidates_prior_response(database)
             "SELECT count(*) AS n FROM soa_memory.human_task_responses WHERE response_id='HR-MOCATRIZ-006-01'"
         ).fetchone()["n"]
     assert stored == 1
+
+
+def test_concurrent_human_tasks_remain_execution_isolated(database) -> None:
+    """SCN-035: concurrent WAITING_HUMAN tasks must not cross-bind responses."""
+    apply_a2_persistence(
+        database,
+        base_migration_dir=ROOT / "db" / "migrations",
+        a2_migration_dir=ROOT / "db" / "a2_migrations",
+    )
+
+    task_a = create_human_task(
+        objective_id="OBJ-MOCATRIZ-007",
+        execution_id="EXE-MOCATRIZ-007-A",
+        human_task_id="HT-MOCATRIZ-007-A",
+        correlation_id="CORR-MOCATRIZ-007-A",
+        reason="Execution A needs authority.",
+        question="Authorize execution A?",
+        evidence=["SCN-035", "execution:A"],
+        resume_from="UNDERSTAND-A",
+    )
+    task_b = create_human_task(
+        objective_id="OBJ-MOCATRIZ-007",
+        execution_id="EXE-MOCATRIZ-007-B",
+        human_task_id="HT-MOCATRIZ-007-B",
+        correlation_id="CORR-MOCATRIZ-007-B",
+        reason="Execution B needs independent authority.",
+        question="Authorize execution B?",
+        evidence=["SCN-035", "execution:B"],
+        resume_from="UNDERSTAND-B",
+    )
+    persist_human_task(
+        database,
+        project_scope="SOAiaCore",
+        task=task_a,
+        observed_time=datetime(2026, 10, 24, 16, 0, tzinfo=timezone.utc),
+    )
+    persist_human_task(
+        database,
+        project_scope="SOAiaCore",
+        task=task_b,
+        observed_time=datetime(2026, 10, 24, 16, 0, tzinfo=timezone.utc),
+    )
+
+    response_b = {
+        "objective_id": task_b["objective_id"],
+        "execution_id": task_b["execution_id"],
+        "human_task_id": task_b["human_task_id"],
+        "correlation_id": task_b["correlation_id"],
+        "answer": {"decision": "REJECT_B"},
+    }
+    response_a = {
+        "objective_id": task_a["objective_id"],
+        "execution_id": task_a["execution_id"],
+        "human_task_id": task_a["human_task_id"],
+        "correlation_id": task_a["correlation_id"],
+        "answer": {"decision": "AUTHORIZE_A"},
+    }
+
+    # Deliberately persist B first to prove arrival order does not determine binding.
+    persist_human_response(
+        database,
+        project_scope="SOAiaCore",
+        response_id="HR-MOCATRIZ-007-B",
+        response=response_b,
+        received_time=datetime(2026, 10, 24, 16, 2, tzinfo=timezone.utc),
+    )
+    persist_human_response(
+        database,
+        project_scope="SOAiaCore",
+        response_id="HR-MOCATRIZ-007-A",
+        response=response_a,
+        received_time=datetime(2026, 10, 24, 16, 3, tzinfo=timezone.utc),
+    )
+
+    recovered_a = load_human_task_bundle(
+        database,
+        project_scope="SOAiaCore",
+        human_task_id=task_a["human_task_id"],
+    )
+    recovered_b = load_human_task_bundle(
+        database,
+        project_scope="SOAiaCore",
+        human_task_id=task_b["human_task_id"],
+    )
+
+    assert recovered_a["authority_state"] == "AUTHORITATIVE"
+    assert recovered_b["authority_state"] == "AUTHORITATIVE"
+    assert recovered_a["response"]["answer"]["decision"] == "AUTHORIZE_A"
+    assert recovered_b["response"]["answer"]["decision"] == "REJECT_B"
+    assert recovered_a["task"]["execution_id"] == "EXE-MOCATRIZ-007-A"
+    assert recovered_b["task"]["execution_id"] == "EXE-MOCATRIZ-007-B"
