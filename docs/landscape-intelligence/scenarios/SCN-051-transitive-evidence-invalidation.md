@@ -1,7 +1,7 @@
 # SCN-051 · Transitive Evidence Invalidation
 
 **Class:** MOCATRIZ epistemic integrity / dependency propagation  
-**Status:** ACTIVE / TESTABLE  
+**Status:** PASS / CONTROLLED  
 **Created:** 2026-10-24
 
 ## Problem
