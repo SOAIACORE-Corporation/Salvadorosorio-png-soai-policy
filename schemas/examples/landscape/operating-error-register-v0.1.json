@@ -430,10 +430,14 @@
       "automated_detection": "SCN-037 regression tests cover absent inventory, partial necessary evidence, and missing critical evidence.",
       "evidence_refs": [
         "SCN-037",
-        "tools/landscape/trusted_memory.py",
-        "schemas/tests/test_trusted_memory_snapshot.py"
+        "github-actions:40082314020",
+        "github-actions:40082314024",
+        "github-actions:40082314021",
+        "github-actions:40082314108",
+        "github-actions:40082314113",
+        "commit:c6b03b18ff84311654fbeccd42d4c10461743f6a"
       ],
-      "control_status": "OPEN",
+      "control_status": "CONTROLLED",
       "regression_test": "test_recovery_rejects_manifest_that_references_missing_evidence_inventory"
     }
   ]
