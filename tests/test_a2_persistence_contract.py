@@ -9,6 +9,7 @@ from pathlib import Path
 import psycopg
 import pytest
 
+from soaiacore_runtime.database import Database
 from soaiacore_runtime.a2_persistence import (
     _require_scope,
     apply_a2_persistence,
@@ -493,6 +494,88 @@ def test_human_task_cross_session_persists_correlates_and_resumes(database) -> N
             response=bad,
             received_time=datetime(2026, 10, 17, 23, 51, tzinfo=timezone.utc),
         )
+
+
+def test_process_crash_recovery_uses_only_durable_postgres_state(database) -> None:
+    """SCN-042: lose the creating process and reconstruct only from durable PostgreSQL."""
+    apply_a2_persistence(
+        database,
+        base_migration_dir=ROOT / "db" / "migrations",
+        a2_migration_dir=ROOT / "db" / "a2_migrations",
+    )
+
+    original_task = create_human_task(
+        objective_id="OBJ-MOCATRIZ-009",
+        execution_id="EXE-MOCATRIZ-009-01",
+        human_task_id="HT-MOCATRIZ-009-01",
+        correlation_id="CORR-MOCATRIZ-009-01",
+        reason="Crash recovery must not depend on transient process memory.",
+        question="Authorize crash-recovery test continuation?",
+        evidence=["SCN-042", "durable-postgres-only"],
+        resume_from="UNDERSTAND-AFTER-PROCESS-CRASH",
+    )
+    task_id = original_task["human_task_id"]
+    database_url = database.database_url
+
+    persist_human_task(
+        database,
+        project_scope="SOAiaCore",
+        task=original_task,
+        observed_time=datetime(2026, 10, 24, 18, 0, tzinfo=timezone.utc),
+    )
+
+    # Crash boundary #1: discard the objects that created the task.
+    del original_task
+    del database
+
+    recovered_runtime = Database(database_url)
+    recovered_before = load_human_task_bundle(
+        recovered_runtime,
+        project_scope="SOAiaCore",
+        human_task_id=task_id,
+    )
+    durable_task = recovered_before["task"]
+    assert recovered_before["authority_state"] == "WAITING_HUMAN"
+    assert recovered_before["response"] is None
+    assert durable_task["resume_from"] == "UNDERSTAND-AFTER-PROCESS-CRASH"
+    assert durable_task["evidence"] == ["SCN-042", "durable-postgres-only"]
+
+    response_from_durable_state = {
+        "objective_id": durable_task["objective_id"],
+        "execution_id": durable_task["execution_id"],
+        "human_task_id": durable_task["human_task_id"],
+        "correlation_id": durable_task["correlation_id"],
+        "answer": {"decision": "AUTHORIZE_CRASH_RECOVERY_TEST"},
+        "responder_ref": "SOA-test-actor",
+        "authority_level": "R2",
+        "authentication_ref": "authn:ephemeral-ci:crash-recovery",
+    }
+    persist_human_response(
+        recovered_runtime,
+        project_scope="SOAiaCore",
+        response_id="HR-MOCATRIZ-009-01",
+        response=response_from_durable_state,
+        received_time=datetime(2026, 10, 24, 18, 2, tzinfo=timezone.utc),
+    )
+
+    # Crash boundary #2: no recovered bundle or response object may be required.
+    del recovered_before
+    del durable_task
+    del response_from_durable_state
+    del recovered_runtime
+
+    resumed_runtime = Database(database_url)
+    recovered_after = load_human_task_bundle(
+        resumed_runtime,
+        project_scope="SOAiaCore",
+        human_task_id=task_id,
+    )
+    assert recovered_after["authority_state"] == "AUTHORITATIVE"
+    assert recovered_after["task"]["resume_from"] == "UNDERSTAND-AFTER-PROCESS-CRASH"
+    assert recovered_after["response"]["answer"]["decision"] == "AUTHORIZE_CRASH_RECOVERY_TEST"
+    assert recovered_after["response"]["responder_ref"] == "SOA-test-actor"
+    assert recovered_after["response"]["authority_level"] == "R2"
+    assert recovered_after["response"]["authentication_ref"] == "authn:ephemeral-ci:crash-recovery"
 
 
 def test_human_task_rejects_replay_or_conflicting_second_response(database) -> None:
