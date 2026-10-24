@@ -467,6 +467,30 @@
       ],
       "control_status": "CONTROLLED",
       "regression_test": "test_trusted_snapshot_selector_rejects_lineage_fork"
+    },
+    {
+      "error_id": "ERR-20261024-040",
+      "detected_at": "2026-10-24",
+      "class": "SOURCE_UNAVAILABILITY_SEMANTIC_COLLAPSE",
+      "phase": "recovery-manifest-build",
+      "symptom": "Evidence adapted from a known but unretrievable source carried validation_status UNKNOWN, but manifest construction converted the requirement to MISSING because unavailable evidence was discarded before status derivation.",
+      "root_cause": "_derive_status treated 'no available evidence' as equivalent to 'no evidence records', collapsing source unavailability into evidence absence.",
+      "early_signals": [
+        "durable_evidence_adapters emits available=false plus validation_status=UNKNOWN for retrieved=false",
+        "recovery_manifest_builder filters to available=true before deriving status",
+        "unavailable evidence IDs/source refs were not retained in generated requirements"
+      ],
+      "human_cost": "No operator action required; defect identified during adversarial source-authority audit.",
+      "avoidable": true,
+      "prevention_rule": "Distinguish declared-but-unavailable evidence from absent evidence. Preserve unavailable evidence provenance and map it to UNKNOWN while retaining fail-closed authority gates.",
+      "automated_detection": "SCN-039 regressions assert UNKNOWN for unavailable source, MISSING for absent evidence, and BLOCKED canonicalization for unavailable required authority.",
+      "evidence_refs": [
+        "SCN-039",
+        "tools/landscape/durable_evidence_adapters.py",
+        "tools/landscape/recovery_manifest_builder.py"
+      ],
+      "control_status": "OPEN",
+      "regression_test": "test_unavailable_declared_authority_is_unknown_not_missing"
     }
   ]
 }
