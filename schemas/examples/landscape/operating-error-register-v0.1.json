@@ -495,6 +495,30 @@
       ],
       "control_status": "CONTROLLED",
       "regression_test": "test_unavailable_declared_authority_is_unknown_not_missing"
+    },
+    {
+      "error_id": "ERR-20261024-041",
+      "detected_at": "2026-10-24",
+      "class": "ZERO_DENOMINATOR_FALSE_COMPLETION",
+      "phase": "objective-closure",
+      "symptom": "An objective with zero applicable acceptance criteria produced objective_completion_pct=100 and could be classified COMPLETED.",
+      "root_cause": "objective_completion used 100% as the zero-denominator default and determine_final_status had no explicit no-acceptance-basis gate.",
+      "early_signals": [
+        "Other MOCATRIZ telemetry already treats zero denominators as not applicable",
+        "objective_completion total==0 returned 100.0",
+        "determine_final_status could reach COMPLETED with an empty criteria list"
+      ],
+      "human_cost": "No operator action required; defect found through adversarial closure audit.",
+      "avoidable": true,
+      "prevention_rule": "Zero applicable criteria must be NOT_EXERCISED/PENDING for closure purposes; a completion claim without an exercised acceptance basis is false completion.",
+      "automated_detection": "SCN-040 regression tests cover zero-criteria completion and explicit false-completion detection.",
+      "evidence_refs": [
+        "SCN-040",
+        "tools/landscape/mocatriz_execution.py",
+        "schemas/tests/test_mocatriz_execution.py"
+      ],
+      "control_status": "OPEN",
+      "regression_test": "test_zero_applicable_criteria_cannot_complete_objective"
     }
   ]
 }
