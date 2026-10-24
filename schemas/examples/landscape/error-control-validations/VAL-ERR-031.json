@@ -1,0 +1,13 @@
+{
+  "validation_id": "VAL-ERR-031",
+  "error_id": "ERR-20261017-031",
+  "status": "OPEN",
+  "observed_at": "2026-10-18",
+  "evidence_refs": [
+    "github-actions:39099227372",
+    "artifact:12125198826",
+    ".trivyignore.yaml"
+  ],
+  "human_required": false,
+  "rationale": "Security regression remains unresolved and fail-closed. It is explicitly visible and separated from the Trusted Memory objective; no bypass or acceptance has been authorized."
+}

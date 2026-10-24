@@ -1,0 +1,18 @@
+{
+  "validation_id": "VAL-ERR-050",
+  "error_id": "ERR-20261024-050",
+  "status": "CONTROLLED",
+  "observed_at": "2026-10-24",
+  "evidence_refs": [
+    "commit:9bb3eed2124cf999887fc09115f0a093525aa980",
+    "github-actions:40107009119",
+    "github-actions:40107009078",
+    "github-actions:40107009047",
+    "github-actions:40107009068",
+    "github-actions:40107009074",
+    "github-actions:40107006122",
+    "SCN-050"
+  ],
+  "human_required": false,
+  "rationale": "A2 #145 passed disposable PostgreSQL contract tests proving durable material-action identity, no replay after SUCCEEDED, reconciliation instead of blind retry for DISPATCHED/unknown outcome, and fail-closed idempotency conflict on changed payload."
+}

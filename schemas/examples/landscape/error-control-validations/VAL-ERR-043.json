@@ -1,0 +1,21 @@
+{
+  "validation_id": "VAL-ERR-043",
+  "error_id": "ERR-20261024-043",
+  "status": "CONTROLLED",
+  "observed_at": "2026-10-24",
+  "evidence_refs": [
+    "github-actions:40083521454",
+    "github-actions:40083521394",
+    "commit:02c5d26e024b822c8f49c795561198bf3ddf057a",
+    "SCN-043"
+  ],
+  "human_required": false,
+  "regression_tests": [
+    "schemas/tests/test_trusted_memory_snapshot.py::test_sealed_fidelity_receipt_tampering_blocks_recovery",
+    "schemas/tests/test_trusted_memory_snapshot.py::test_receipt_bound_manifest_tampering_blocks_recovery",
+    "schemas/tests/test_trusted_memory_snapshot.py::test_receipt_bound_snapshot_tampering_blocks_recovery",
+    "schemas/tests/test_trusted_memory_snapshot.py::test_different_valid_receipt_cannot_substitute_for_manifest_bound_receipt",
+    "schemas/tests/test_trusted_memory_snapshot.py::test_receipt_bound_recovery_requires_receipt_presence"
+  ],
+  "rationale": "New manifests can bind a sealed fidelity receipt by ID and expected content hash. Trusted reconstruction validates receipt self-integrity plus snapshot/manifest/evidence cross-hashes and fails closed on tampering or substitution. Landscape #250 and A2 #122 passed."
+}

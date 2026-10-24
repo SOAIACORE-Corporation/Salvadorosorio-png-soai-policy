@@ -1,0 +1,18 @@
+{
+  "validation_id": "VAL-ERR-051",
+  "error_id": "ERR-20261024-051",
+  "status": "CONTROLLED",
+  "observed_at": "2026-10-24",
+  "evidence_refs": [
+    "commit:d2c5a620c910fe28b10d7bff8409031a6a2bc8a8",
+    "github-actions:40107293801",
+    "github-actions:40107293710",
+    "github-actions:40107294297",
+    "github-actions:40107293879",
+    "github-actions:40107293834",
+    "github-actions:40107290288",
+    "SCN-051"
+  ],
+  "human_required": false,
+  "rationale": "Landscape #275 and companion gates passed the transitive dependency-integrity suite. Material SUPERSEDED/STALE/UNKNOWN dependencies propagate revalidation, REJECTED/QUARANTINED propagate invalidity, non-material historical lineage remains non-blocking, and dependency cycles fail closed."
+}

@@ -1,0 +1,21 @@
+{
+  "validation_id": "VAL-ERR-044",
+  "error_id": "ERR-20261024-044",
+  "status": "CONTROLLED",
+  "observed_at": "2026-10-24",
+  "evidence_refs": [
+    "github-actions:40083781768",
+    "github-actions:40083781810",
+    "commit:6aef41658d160c7728e891bf3fddba2b0f64a592",
+    "commit:fe0c3d92608d6068c299a34b29ed8c7ff8d04770",
+    "SCN-044"
+  ],
+  "human_required": false,
+  "regression_tests": [
+    "schemas/tests/test_landscape_authority.py::test_exception_alias_without_authentication_provenance_fails_closed",
+    "schemas/tests/test_landscape_authority.py::test_full_name_without_authentication_provenance_fails_closed",
+    "schemas/tests/test_landscape_authority.py::test_wrong_actor_with_apparent_provenance_still_fails_closed",
+    "schemas/tests/test_landscape_authority.py::test_valid_exception_requires_canonical_ref_and_authentication_provenance"
+  ],
+  "rationale": "Operational exception authority now requires canonical identity resolution plus canonical authority_ref and durable upstream authentication_ref. Alias/full-name declaration alone fails closed. Landscape #258, A2 #130, Terraform #202, Alpha #65 and Worker #156 succeeded."
+}

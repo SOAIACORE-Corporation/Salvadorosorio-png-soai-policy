@@ -1,0 +1,107 @@
+{
+  "test_result_id": "TMS-FIDELITY-001-RESULT",
+  "test_id": "TMS-FIDELITY-001",
+  "snapshot_id": "TMS-SOAIACORE-MOCATRIZ-20260926-001",
+  "manifest_id": "RM-SOAIACORE-MOCATRIZ-20260926-001",
+  "source_head_under_test": "b087f6cec9e4efbffb5228b401b22d9eaa5c443c",
+  "physical_integrity": {
+    "snapshot_hash_match": true,
+    "manifest_hash_match": true,
+    "evidence_inventory_hash_match": true,
+    "schema_valid": true,
+    "version_compatible": true,
+    "primary_secondary_bytes_identical": true
+  },
+  "reconstruction": {
+    "structural_score": 100,
+    "semantic_score": 100,
+    "total_score": 100,
+    "invalidating_conditions": 0,
+    "critical_fields_preserved": true
+  },
+  "adversarial_cases": {
+    "total": 7,
+    "passed": 7,
+    "cases": [
+      "wrong_commit_rejected",
+      "foreign_receipt_correlation_rejected",
+      "zero_denominator_100_rejected",
+      "missing_endpoint_preserved_as_not_demonstrated",
+      "frozen_exceptions_cannot_be_erased",
+      "plausible_narrative_without_authority_rejected",
+      "stale_evidence_as_current_rejected"
+    ]
+  },
+  "recovery": {
+    "result": "RECOVERABLE_WITH_EXCEPTIONS",
+    "blocking_requirements": [],
+    "necessary_exceptions": [
+      "REQ-010"
+    ],
+    "complementary_missing": [
+      "REQ-011",
+      "REQ-012"
+    ]
+  },
+  "persistence": {
+    "primary": "Trusted_Memory/01_Snapshots/TMS-SOAIACORE-MOCATRIZ-20260926-001_v1.0.0_FROZEN.yaml",
+    "secondary": "schemas/examples/landscape/trusted-memory/TMS-SOAIACORE-MOCATRIZ-20260926-001_v1.0.0_FROZEN.json",
+    "independent_fault_domains": false,
+    "bitemporal_projection": "VALIDATED",
+    "postgres_write_performed": false
+  },
+  "ci": [
+    {
+      "workflow": "Landscape Intelligence Schema",
+      "run_number": 186,
+      "run_id": 36242696480,
+      "result": "SUCCESS"
+    },
+    {
+      "workflow": "Terraform SOA Intelligence DEV Static",
+      "run_number": 130,
+      "run_id": 36242696561,
+      "result": "SUCCESS"
+    },
+    {
+      "workflow": "SOA Intelligence A2 Persistence Static",
+      "run_number": 58,
+      "run_id": 36242696514,
+      "result": "SUCCESS"
+    },
+    {
+      "workflow": "SOA Intelligence Worker OCI Runtime Smoke",
+      "run_number": 84,
+      "run_id": 36242696524,
+      "result": "SUCCESS"
+    },
+    {
+      "workflow": "OCI Build, Scan, and Publish",
+      "run_number": 242,
+      "run_id": 36242696494,
+      "result": "SUCCESS"
+    },
+    {
+      "workflow": "PR #84",
+      "run_number": 437,
+      "run_id": 36242694878,
+      "result": "SUCCESS"
+    }
+  ],
+  "implementation_learning": {
+    "error_id": "ERR-20260926-028",
+    "class": "CROSS_RUNTIME_CANONICALIZATION_DEFECT",
+    "status": "CONTROLLED",
+    "note": "Integral floats are normalized before canonical hashing so semantically identical JSON values hash identically across runtimes."
+  },
+  "limitations": [
+    "Valid for the snapshot, manifest, recovery engine and evidence sources evaluated.",
+    "Two persisted copies are in different repository paths but not independent infrastructure fault domains.",
+    "The PostgreSQL bitemporal projection was validated without performing a database write.",
+    "Final endpoint functionality remains NOT_DEMONSTRATED because durable functional evidence is absent."
+  ],
+  "decision": {
+    "result": "PASS",
+    "recovery_status": "RECOVERABLE_WITH_EXCEPTIONS"
+  }
+}

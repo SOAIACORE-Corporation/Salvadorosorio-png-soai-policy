@@ -1,0 +1,18 @@
+{
+  "decision_id": "decision:R-006:HOLD_LIVE_20260926",
+  "finding_id": "R-006",
+  "decision_type": "HOLD",
+  "authority": "Architecture / Terraform",
+  "rationale": "NO APPLY GLOBAL. El plan mezcla identidades, RBAC, secretos, apps, red y alertas; mantener HOLD y separar por dominios.",
+  "conditions": [
+    "Baseline vigente 11 add / 6 change / 1 destroy",
+    "TERRAFORM_EXIT_CODE=0",
+    "No apply global"
+  ],
+  "status": "APPROVED",
+  "observed_at": "2026-09-26T03:11:00Z",
+  "collected_at": "2026-09-26T03:11:00Z",
+  "source_id": "drive-comite-live-r006-20260926",
+  "source_location": "SOAiaCore_COMITE_Landscape_Live/TRAZABILIDAD_IA!A7:L7",
+  "trust_level": "authoritative"
+}

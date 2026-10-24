@@ -1,0 +1,18 @@
+{
+  "validation_id": "VAL-ERR-049",
+  "error_id": "ERR-20261024-049",
+  "status": "CONTROLLED",
+  "observed_at": "2026-10-24",
+  "evidence_refs": [
+    "commit:9e5001b60e65e76dc2cc43d63aa1b789db75eb56",
+    "github-actions:40106584932",
+    "github-actions:40106584992",
+    "github-actions:40106584987",
+    "github-actions:40106585065",
+    "github-actions:40106585052",
+    "github-actions:40106582609",
+    "SCN-049"
+  ],
+  "human_required": false,
+  "rationale": "Landscape #271 and companion gates passed after adding explicit preflight freshness semantics for immutable, time-bounded and versioned evidence. Expired, changed or freshness-unknown material preconditions now require revalidation before action."
+}

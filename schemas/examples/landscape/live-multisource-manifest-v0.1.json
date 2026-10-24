@@ -1,0 +1,13 @@
+{
+  "manifest_version": "0.1",
+  "sources": [
+    {
+      "kind": "committee-decision",
+      "path": "live/committee-r006-live-20260926.json"
+    },
+    {
+      "kind": "github-branch",
+      "path": "live/github-branch-live-20260926.json"
+    }
+  ]
+}

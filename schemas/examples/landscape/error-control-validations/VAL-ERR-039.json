@@ -1,0 +1,20 @@
+{
+  "validation_id": "VAL-ERR-039",
+  "error_id": "ERR-20261024-039",
+  "status": "CONTROLLED",
+  "observed_at": "2026-10-24",
+  "evidence_refs": [
+    "github-actions:40082537842",
+    "github-actions:40082537792",
+    "commit:974bd924bfa572302956b6055ae4793118d5c291",
+    "SCN-038"
+  ],
+  "human_required": false,
+  "regression_tests": [
+    "schemas/tests/test_trusted_memory_snapshot.py::test_trusted_snapshot_selector_uses_unique_lineage_head_not_completeness",
+    "schemas/tests/test_trusted_memory_snapshot.py::test_trusted_snapshot_selector_rejects_lineage_fork",
+    "schemas/tests/test_trusted_memory_snapshot.py::test_trusted_snapshot_selector_rejects_missing_trusted_predecessor",
+    "schemas/tests/test_trusted_memory_tms002.py::test_real_trusted_snapshot_selection_is_historical_as_of_not_latest_file"
+  ],
+  "rationale": "Landscape #222 validated deterministic as-of selection, unique lineage-head selection, fork rejection and trusted predecessor gap rejection; A2 #94, Terraform #166, Alpha #29 and Worker #120 also succeeded."
+}

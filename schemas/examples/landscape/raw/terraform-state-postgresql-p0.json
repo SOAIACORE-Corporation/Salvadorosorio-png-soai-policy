@@ -1,0 +1,14 @@
+{
+  "observation_id": "obs:tfstate:psql-soaiacore-p0-34utxi",
+  "asset_id": "azure:108eb4dd-25b3-4a7f-8d5e-4ec4389c3f0d:psql-soaiacore-p0-34utxi",
+  "address": "azurerm_postgresql_flexible_server.pilot",
+  "resource_type": "postgresql_flexible_server",
+  "native_id": "psql-soaiacore-p0-34utxi",
+  "attributes": {
+    "public_network_access": "Disabled",
+    "sku": "Standard_B1ms"
+  },
+  "observed_at": "2026-09-25T22:29:14Z",
+  "source_id": "terraform-state-p0",
+  "source_location": "soaiacore/controlled-pilot/terraform.tfstate"
+}

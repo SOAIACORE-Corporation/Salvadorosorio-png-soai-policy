@@ -1,0 +1,12 @@
+{
+  "validation_id": "VAL-ERR-047",
+  "error_id": "ERR-20261024-047",
+  "status": "CONTROLLED",
+  "observed_at": "2026-10-24",
+  "evidence_refs": [
+    "commit:74f4a34470cb495560cdfdb4269a850030be5600",
+    "github-actions:40086427790"
+  ],
+  "human_required": false,
+  "rationale": "Landscape #267 passed the error-control audit after VAL-ERR-045 was conformed to the canonical validation schema using status/observed_at."
+}

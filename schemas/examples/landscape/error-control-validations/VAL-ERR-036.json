@@ -1,0 +1,15 @@
+{
+  "validation_id": "VAL-ERR-036",
+  "error_id": "ERR-20261024-036",
+  "status": "CONTROLLED",
+  "observed_at": "2026-10-24",
+  "evidence_refs": [
+    "github-actions:40081192829",
+    "github-actions:40081192838",
+    "commit:fe4fe04f88b88dedeca2af167624e6736481e6d8",
+    "SCN-034"
+  ],
+  "human_required": false,
+  "regression_test": "tests/test_a2_persistence_contract.py::test_late_recorded_backdated_revocation_invalidates_prior_response",
+  "rationale": "A2 Persistence #80 passed the bitemporal authority regression test and Landscape #208 passed canonical/schema validation."
+}

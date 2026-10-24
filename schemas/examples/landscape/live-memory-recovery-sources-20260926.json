@@ -1,0 +1,53 @@
+{
+  "live_memory_recovery_version": "0.1",
+  "observed_at": "2026-09-26T09:50:00Z",
+  "sources": [
+    {
+      "source_kind": "git_commit",
+      "source_id": "git:399afe3e",
+      "requirement_id": "primary-state",
+      "sha": "399afe3e48db6732018edae3da2c82c65e82486e",
+      "retrieved": true,
+      "source_ref": "commit:399afe3e48db6732018edae3da2c82c65e82486e"
+    },
+    {
+      "source_kind": "receipt",
+      "source_id": "receipt:memory-cycle-causal",
+      "requirement_id": "causal-link",
+      "receipt_id": "LANDSCAPE_INTELLIGENCE_MEMORY_CYCLE_PILOT_2026-09-26",
+      "path": "receipts/LANDSCAPE_INTELLIGENCE_MEMORY_CYCLE_PILOT_2026-09-26.md",
+      "retrieved": true,
+      "source_ref": "receipts/LANDSCAPE_INTELLIGENCE_MEMORY_CYCLE_PILOT_2026-09-26.md"
+    },
+    {
+      "source_kind": "decision",
+      "source_id": "decision:memory-pilot-go",
+      "requirement_id": "decision-authority",
+      "decision_id": "MEMORY-PILOT-GO-20260926",
+      "authority": "operator-explicit-approval",
+      "retrieved": true,
+      "source_ref": "receipts/SOAIACORE_MEMORY_AUTOMATION_PILOT_AUTHORITY_2026-09-26.md"
+    },
+    {
+      "source_kind": "ci_run",
+      "source_id": "ci:landscape-127",
+      "requirement_id": "source-freshness",
+      "run_id": 36233893774,
+      "status": "completed",
+      "outcome": "success",
+      "retrieved": true,
+      "observed_at": "2026-09-26T09:48:38Z",
+      "freshness_max_age_seconds": 86400,
+      "source_ref": "github-actions:36233893774"
+    },
+    {
+      "source_kind": "receipt",
+      "source_id": "receipt:source-adapter-validation",
+      "requirement_id": "validation-receipt",
+      "receipt_id": "LANDSCAPE_INTELLIGENCE_DURABLE_SOURCE_ADAPTERS_2026-09-26",
+      "path": "receipts/LANDSCAPE_INTELLIGENCE_DURABLE_SOURCE_ADAPTERS_2026-09-26.md",
+      "retrieved": true,
+      "source_ref": "receipts/LANDSCAPE_INTELLIGENCE_DURABLE_SOURCE_ADAPTERS_2026-09-26.md"
+    }
+  ]
+}

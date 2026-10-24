@@ -1,0 +1,13 @@
+{
+  "validation_id": "VAL-ERR-048",
+  "error_id": "ERR-20261024-048",
+  "status": "CONTROLLED",
+  "observed_at": "2026-10-24",
+  "evidence_refs": [
+    "commit:b5e4aff156128844bd4991402186d94995870d40",
+    "github-actions:40086691214",
+    "SCN-048"
+  ],
+  "human_required": false,
+  "rationale": "Landscape #269 passed 248 schema tests, including the compound multi-control scenario. Zero human actions now remain NOT_EXERCISED while the same objective survives authority UNKNOWN, strategy failure, autonomous recovery and false-completion pressure."
+}

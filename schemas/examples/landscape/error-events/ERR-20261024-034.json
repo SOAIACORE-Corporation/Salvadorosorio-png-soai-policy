@@ -1,0 +1,24 @@
+{
+  "error_id": "ERR-20261024-034",
+  "detected_at": "2026-10-24",
+  "class": "CROSS_PROJECT_HUMAN_AUTHORITY_SCOPE_GAP",
+  "phase": "human-task-resume",
+  "symptom": "Human Task response and lifecycle foreign keys correlated four task identifiers but did not structurally require project_scope to match the originating Human Task.",
+  "root_cause": "project_scope was stored on child rows but omitted from their foreign-key correlation to soa_memory.human_tasks.",
+  "early_signals": [
+    "human_task_responses.project_scope existed independently of the four-part foreign key",
+    "human_task_lifecycle.project_scope existed independently of the four-part foreign key",
+    "load_human_task_bundle relies on project_scope filtering at read time"
+  ],
+  "human_cost": "No human intervention required to detect or remediate. Without the control, a malformed or compromised writer could attach authority metadata to the wrong project scope.",
+  "avoidable": true,
+  "prevention_rule": "project_scope must be structurally included in Human Task response and lifecycle foreign-key correlation.",
+  "automated_detection": "SCN-033 PostgreSQL cross-project isolation regression test plus scoped foreign keys.",
+  "evidence_refs": [
+    "db/a2_migrations/1002_mocatriz_human_task_resume.sql",
+    "db/a2_migrations/1004_mocatriz_human_task_lifecycle_guard.sql",
+    "packages/python-runtime/src/soaiacore_runtime/a2_persistence.py"
+  ],
+  "control_status": "OPEN",
+  "regression_test": "SCN-033:test_cross_project_human_authority_is_rejected"
+}

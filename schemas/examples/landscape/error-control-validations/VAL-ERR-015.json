@@ -1,0 +1,15 @@
+{
+  "validation_id": "VAL-ERR-20260926-015",
+  "error_id": "ERR-20260926-015",
+  "status": "CONTROLLED",
+  "validated_at": "2026-09-26",
+  "rationale": "Fixable HIGH/CRITICAL vulnerabilities were remediated without weakening the security gate. OCI run #203 completed successfully with Core, Web and Worker gates and the final enforcement step all passing.",
+  "evidence_refs": [
+    "apps/core/Dockerfile",
+    "apps/web/Dockerfile",
+    "apps/worker/Dockerfile",
+    "github-actions:36234503732",
+    "GHSA-rgj7-g3m4-5g8c"
+  ],
+  "human_required": false
+}

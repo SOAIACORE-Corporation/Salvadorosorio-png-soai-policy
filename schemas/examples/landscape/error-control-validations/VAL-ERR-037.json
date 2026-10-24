@@ -1,0 +1,15 @@
+{
+  "validation_id": "VAL-ERR-037",
+  "error_id": "ERR-20261024-037",
+  "status": "CONTROLLED",
+  "observed_at": "2026-10-24",
+  "evidence_refs": [
+    "github-actions:40081639593",
+    "github-actions:40081639621",
+    "commit:f3bc0fc87c0a87a2ff777e517e2bf9ce1f00b048",
+    "SCN-036"
+  ],
+  "human_required": false,
+  "regression_test": "tests/test_a2_persistence_contract.py::test_human_response_requires_durable_identity_and_authentication_provenance",
+  "rationale": "A2 #82 rejected unprovenanced responses and preserved provenance for admitted responses; Landscape #210 and CodeQL gates were also successful."
+}

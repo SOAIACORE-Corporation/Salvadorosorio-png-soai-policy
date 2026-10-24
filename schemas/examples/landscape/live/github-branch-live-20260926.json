@@ -1,0 +1,16 @@
+{
+  "observation_id": "obs:github-branch:landscape-intelligence:20260926T0312Z",
+  "repo": "SOAIACORE-Corporation/Salvadorosorio-png-soai-policy",
+  "base": "main",
+  "head": "feat/landscape-intelligence-data-model-v1",
+  "ahead_by": 78,
+  "behind_by": 0,
+  "total_commits": 78,
+  "changed_files": 57,
+  "base_sha": "fc60164bc7a9adadccbfcf32c6e5ff6bc3b3163b",
+  "observed_at": "2026-09-26T03:12:00Z",
+  "collected_at": "2026-09-26T03:12:00Z",
+  "source_id": "github-live-branch-compare-20260926T0312Z",
+  "source_location": "GitHub compare main...feat/landscape-intelligence-data-model-v1",
+  "trust_level": "authoritative"
+}

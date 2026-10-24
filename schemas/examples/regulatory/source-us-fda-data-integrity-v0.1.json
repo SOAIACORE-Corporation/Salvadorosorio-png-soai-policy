@@ -1,0 +1,18 @@
+{
+  "regulatory_source_id": "regsrc:us:fda:data-integrity-cgmp-2018",
+  "jurisdiction": "US",
+  "authority": "FDA",
+  "instrument_type": "guidance",
+  "citation": "Data Integrity and Compliance With Drug CGMP: Questions and Answers (Dec. 2018)",
+  "title": "Data Integrity and Compliance With Drug CGMP: Questions and Answers",
+  "binding_level": "authoritative_guidance",
+  "status": "ACTIVE",
+  "effective_from": "2018-12-01",
+  "effective_to": null,
+  "official_url": "https://www.fda.gov/regulatory-information/search-fda-guidance-documents/data-integrity-and-compliance-drug-cgmp-questions-and-answers",
+  "source_tier": "TIER_2_OFFICIAL_NAVIGABLE",
+  "verified_at": "2026-09-26T04:23:00Z",
+  "freshness": "current",
+  "hash": null,
+  "exception_mode": "NON_WAIVABLE_EXTERNAL"
+}

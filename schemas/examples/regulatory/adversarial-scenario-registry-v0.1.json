@@ -1,0 +1,309 @@
+{
+  "pack_id": "SOAIA_ADVERSARIAL_CROSS_JURISDICTION_V0.1",
+  "pack_version": "0.1",
+  "legal_claim_default_state": "UNVERIFIED",
+  "scenarios": [
+    {
+      "id": "ADV-001",
+      "title": "Lote contaminado transfronterizo",
+      "domains": [
+        "quality",
+        "regulatory",
+        "customs",
+        "capital_markets",
+        "operations"
+      ],
+      "jurisdictions": [
+        "MX",
+        "US"
+      ],
+      "required_source_classes": [
+        "health_regulation",
+        "cgmp",
+        "customs",
+        "securities_disclosure"
+      ],
+      "exception_rule": "external obligations non-waivable"
+    },
+    {
+      "id": "ADV-002",
+      "title": "EBR comprometido y liberación apócrifa",
+      "domains": [
+        "data_integrity",
+        "quality",
+        "cybersecurity",
+        "regulatory"
+      ],
+      "jurisdictions": [
+        "MX",
+        "US"
+      ],
+      "required_source_classes": [
+        "cgmp",
+        "data_integrity",
+        "electronic_records"
+      ],
+      "exception_rule": "external obligations non-waivable"
+    },
+    {
+      "id": "ADV-003",
+      "title": "Bill and Hold y covenant cascade",
+      "domains": [
+        "accounting",
+        "treasury",
+        "capital_markets",
+        "contracts"
+      ],
+      "jurisdictions": [
+        "MX",
+        "IFRS",
+        "multi"
+      ],
+      "required_source_classes": [
+        "financial_reporting",
+        "debt_contracts",
+        "securities_disclosure"
+      ],
+      "exception_rule": "internal only"
+    },
+    {
+      "id": "ADV-004",
+      "title": "Precios de transferencia y devaluación asimétrica",
+      "domains": [
+        "tax",
+        "transfer_pricing",
+        "treasury",
+        "supply_chain"
+      ],
+      "jurisdictions": [
+        "MX",
+        "CH",
+        "AR",
+        "CO",
+        "OECD"
+      ],
+      "required_source_classes": [
+        "tax",
+        "transfer_pricing",
+        "fx_controls"
+      ],
+      "exception_rule": "external obligations non-waivable"
+    },
+    {
+      "id": "ADV-005",
+      "title": "Ciber-sabotaje PLC y endotoxinas",
+      "domains": [
+        "ot_security",
+        "quality",
+        "manufacturing",
+        "insurance"
+      ],
+      "jurisdictions": [
+        "MX"
+      ],
+      "required_source_classes": [
+        "gmp",
+        "ot_security",
+        "quality",
+        "insurance"
+      ],
+      "exception_rule": "external obligations non-waivable"
+    },
+    {
+      "id": "ADV-006",
+      "title": "Ruptura de contención biológica HVAC",
+      "domains": [
+        "gmp",
+        "industrial_hygiene",
+        "quality",
+        "capacity"
+      ],
+      "jurisdictions": [
+        "MX"
+      ],
+      "required_source_classes": [
+        "gmp",
+        "occupational_safety",
+        "quality"
+      ],
+      "exception_rule": "external obligations non-waivable"
+    },
+    {
+      "id": "ADV-007",
+      "title": "Flash crash algorítmico de precios",
+      "domains": [
+        "pricing",
+        "consumer_law",
+        "ecommerce",
+        "ai_governance"
+      ],
+      "jurisdictions": [
+        "MX"
+      ],
+      "required_source_classes": [
+        "consumer_protection",
+        "commerce",
+        "platform_terms"
+      ],
+      "exception_rule": "external obligations non-waivable"
+    },
+    {
+      "id": "ADV-008",
+      "title": "MRP paralizado por material crítico",
+      "domains": [
+        "supply_chain",
+        "regulatory_change",
+        "environmental",
+        "optimization"
+      ],
+      "jurisdictions": [
+        "MX"
+      ],
+      "required_source_classes": [
+        "gmp",
+        "regulatory_change",
+        "environmental_discharge"
+      ],
+      "exception_rule": "external obligations non-waivable"
+    },
+    {
+      "id": "ADV-009",
+      "title": "Fuga genómica en plataforma de longevidad",
+      "domains": [
+        "privacy",
+        "cybersecurity",
+        "health_data",
+        "crisis"
+      ],
+      "jurisdictions": [
+        "MX",
+        "US",
+        "EU"
+      ],
+      "required_source_classes": [
+        "privacy",
+        "breach_notification",
+        "health_data"
+      ],
+      "exception_rule": "external obligations non-waivable"
+    },
+    {
+      "id": "ADV-010",
+      "title": "IA recomienda combinación farmacológica tóxica",
+      "domains": [
+        "saMD",
+        "clinical_ai",
+        "liability",
+        "health"
+      ],
+      "jurisdictions": [
+        "MX",
+        "US"
+      ],
+      "required_source_classes": [
+        "medical_device",
+        "clinical_decision_support",
+        "health_regulation"
+      ],
+      "exception_rule": "external obligations non-waivable"
+    },
+    {
+      "id": "ADV-011",
+      "title": "ERP secuestrado en cierre anual",
+      "domains": [
+        "erp",
+        "forensics",
+        "financial_reporting",
+        "banking"
+      ],
+      "jurisdictions": [
+        "MX"
+      ],
+      "required_source_classes": [
+        "financial_reporting",
+        "tax_records",
+        "bank_contracts"
+      ],
+      "exception_rule": "internal only"
+    },
+    {
+      "id": "ADV-012",
+      "title": "Huelga aduanal + desastre natural",
+      "domains": [
+        "bcp",
+        "logistics",
+        "contracts",
+        "allocation"
+      ],
+      "jurisdictions": [
+        "MX"
+      ],
+      "required_source_classes": [
+        "force_majeure",
+        "customs",
+        "commercial_contracts"
+      ],
+      "exception_rule": "external obligations non-waivable"
+    },
+    {
+      "id": "ADV-013",
+      "title": "Litigio multinacional de patente",
+      "domains": [
+        "ip",
+        "litigation",
+        "finance",
+        "design_around"
+      ],
+      "jurisdictions": [
+        "MX",
+        "US"
+      ],
+      "required_source_classes": [
+        "patent",
+        "litigation",
+        "ipr"
+      ],
+      "exception_rule": "external obligations non-waivable"
+    },
+    {
+      "id": "ADV-014",
+      "title": "Expropiación de subsidiaria internacional",
+      "domains": [
+        "geopolitics",
+        "investment_arbitration",
+        "cybersecurity",
+        "personnel_safety"
+      ],
+      "jurisdictions": [
+        "multi"
+      ],
+      "required_source_classes": [
+        "investment_treaty",
+        "local_emergency_law",
+        "data_security"
+      ],
+      "exception_rule": "external obligations non-waivable"
+    },
+    {
+      "id": "ADV-015",
+      "title": "Tormenta perfecta C-Suite",
+      "domains": [
+        "regulatory_inspection",
+        "erp_outage",
+        "media",
+        "forensics",
+        "governance"
+      ],
+      "jurisdictions": [
+        "MX"
+      ],
+      "required_source_classes": [
+        "health_inspection",
+        "labor_safety",
+        "securities_disclosure",
+        "criminal_law"
+      ],
+      "exception_rule": "external obligations non-waivable"
+    }
+  ]
+}

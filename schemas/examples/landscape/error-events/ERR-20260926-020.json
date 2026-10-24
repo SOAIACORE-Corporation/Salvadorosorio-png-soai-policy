@@ -1,0 +1,23 @@
+{
+  "error_id": "ERR-20260926-020",
+  "detected_at": "2026-09-26",
+  "class": "REGRESSION",
+  "phase": "live-memory-recovery",
+  "symptom": "A third combined GitHub write was rejected by connector safety controls after two earlier occurrences of the same failure class.",
+  "root_cause": "The execution pattern still allowed combined writes after bounded writes had already been identified as the stable workaround.",
+  "early_signals": [
+    "ERR-20260926-018 identified the connector boundary",
+    "ERR-20260926-019 already classified recurrence as regression"
+  ],
+  "human_cost": "No operator intervention; execution policy tightened to one bounded write per call.",
+  "avoidable": true,
+  "prevention_rule": "After repeated connector policy blocks, enforce one bounded write per tool call for the remainder of the objective.",
+  "automated_detection": "Repeated occurrence references prior controlled errors and is classified as repeated regression.",
+  "evidence_refs": [
+    "ERR-20260926-018",
+    "ERR-20260926-019",
+    "session:third-connector-write-block"
+  ],
+  "control_status": "CONTROLLED",
+  "regression_test": "ONE_BOUNDED_WRITE_PER_TOOL_CALL_AFTER_REPEATED_BLOCK"
+}

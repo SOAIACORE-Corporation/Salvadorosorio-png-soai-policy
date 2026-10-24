@@ -1,0 +1,39 @@
+{
+  "schema_id": "Trusted_Memory_Snapshot_Schema_v1.0",
+  "schema_version": "1.0",
+  "serialization": "JSON-compatible YAML 1.2",
+  "required": [
+    "snapshot_id",
+    "schema_version",
+    "snapshot_version",
+    "version_no",
+    "created_at",
+    "status",
+    "project",
+    "objective",
+    "checkpoint",
+    "continuity",
+    "error_matrix",
+    "metrics",
+    "rules",
+    "authoritative_sources",
+    "evidence_inventory_ref",
+    "decisions",
+    "pending_and_exceptions",
+    "resume_point",
+    "content_sha256"
+  ],
+  "constraints": {
+    "status": [
+      "CANDIDATE",
+      "APPROVED",
+      "CANONICAL",
+      "FROZEN"
+    ],
+    "append_only": true,
+    "content_hash": "SHA-256 over canonical JSON excluding content_sha256",
+    "zero_denominator": "N/A / NOT_EXERCISED, never 100%",
+    "evidence_absence": "MISSING/UNKNOWN/STALE/PARTIAL; never automatic negative fact",
+    "frozen_mutation": "new version required"
+  }
+}

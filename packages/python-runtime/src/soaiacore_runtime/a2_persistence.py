@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
+import json
 import hashlib
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,20 @@ A2_REQUIRED_RELATIONS = (
     "soa_decision.decision_ledger",
 )
 
+A2_HUMAN_TASK_RELATIONS = (
+    "soa_memory.human_tasks",
+    "soa_memory.human_task_responses",
+)
+
+A2_HUMAN_TASK_LIFECYCLE_RELATIONS = (
+    "soa_memory.human_task_lifecycle",
+)
+
+A2_MATERIAL_ACTION_RELATIONS = (
+    "soa_ops.material_actions",
+    "soa_ops.material_action_events",
+)
+
 A2_REQUIRED_FUNCTIONS = (
     "soa_memory.canonical_memory_as_of(text,timestamp with time zone,timestamp with time zone)",
     "soa_memory.episodic_memory_as_of(text,timestamp with time zone,timestamp with time zone)",
@@ -34,6 +49,51 @@ A2_REQUIRED_TRIGGERS = (
     ("soa_memory", "operational_state", "trg_a2_operational_state_append_only"),
     ("soa_decision", "decision_ledger", "trg_a2_decision_transition"),
     ("soa_decision", "decision_ledger", "trg_a2_decision_ledger_append_only"),
+)
+
+A2_HUMAN_TASK_TRIGGERS = (
+    ("soa_memory", "human_tasks", "trg_a2_human_tasks_append_only"),
+    ("soa_memory", "human_task_responses", "trg_a2_human_task_responses_append_only"),
+)
+
+A2_HUMAN_TASK_RESPONSE_INDEXES = (
+    ("soa_memory", "human_task_responses", "uq_a2_human_task_single_authoritative_response"),
+)
+
+A2_HUMAN_TASK_LIFECYCLE_TRIGGERS = (
+    ("soa_memory", "human_task_lifecycle", "trg_a2_human_task_lifecycle_append_only"),
+    ("soa_memory", "human_task_responses", "trg_a2_reject_stale_human_response"),
+)
+
+A2_HUMAN_TASK_LIFECYCLE_FUNCTIONS = (
+    "soa_memory.reject_stale_human_response()",
+)
+
+A2_HUMAN_TASK_AUTHORITY_FUNCTIONS = (
+    "soa_memory.human_task_response_authority(text,text,timestamp with time zone)",
+)
+
+A2_HUMAN_RESPONSE_PROVENANCE_TRIGGERS = (
+    ("soa_memory", "human_task_responses", "trg_a2_require_human_response_provenance"),
+)
+
+A2_HUMAN_RESPONSE_PROVENANCE_FUNCTIONS = (
+    "soa_memory.require_human_response_provenance()",
+)
+
+A2_HUMAN_TASK_SCOPE_CONSTRAINTS = (
+    ("soa_memory", "human_task_responses", "fk_a2_human_response_project_scope"),
+    ("soa_memory", "human_task_lifecycle", "fk_a2_human_lifecycle_project_scope"),
+)
+
+A2_MATERIAL_ACTION_FUNCTIONS = (
+    "soa_ops.enforce_material_action_transition()",
+)
+
+A2_MATERIAL_ACTION_TRIGGERS = (
+    ("soa_ops", "material_actions", "trg_a2_material_actions_append_only"),
+    ("soa_ops", "material_action_events", "trg_a2_material_action_events_append_only"),
+    ("soa_ops", "material_action_events", "trg_a2_material_action_transition"),
 )
 
 
@@ -87,6 +147,36 @@ def _trigger_exists(connection, schema: str, table: str, trigger: str) -> bool:
     return bool(row and row["present"])
 
 
+def _index_exists(connection, schema: str, table: str, index: str) -> bool:
+    row = connection.execute(
+        """
+        SELECT EXISTS (
+          SELECT 1
+          FROM pg_indexes
+          WHERE schemaname=%s AND tablename=%s AND indexname=%s
+        ) AS present
+        """,
+        (schema, table, index),
+    ).fetchone()
+    return bool(row and row["present"])
+
+
+def _constraint_exists(connection, schema: str, table: str, constraint: str) -> bool:
+    row = connection.execute(
+        """
+        SELECT EXISTS (
+          SELECT 1
+          FROM pg_constraint c
+          JOIN pg_class r ON r.oid = c.conrelid
+          JOIN pg_namespace n ON n.oid = r.relnamespace
+          WHERE n.nspname=%s AND r.relname=%s AND c.conname=%s
+        ) AS present
+        """,
+        (schema, table, constraint),
+    ).fetchone()
+    return bool(row and row["present"])
+
+
 def _working_assumption_enabled(connection) -> bool:
     row = connection.execute(
         """
@@ -116,6 +206,68 @@ def _overlay_objects_present(connection) -> bool:
         and all(_trigger_exists(connection, *spec) for spec in A2_REQUIRED_TRIGGERS)
         and _working_assumption_enabled(connection)
     )
+
+
+def _human_task_objects_present(connection) -> bool:
+    return (
+        all(_relation_exists(connection, name) for name in A2_HUMAN_TASK_RELATIONS)
+        and all(_trigger_exists(connection, *spec) for spec in A2_HUMAN_TASK_TRIGGERS)
+    )
+
+
+def _human_response_guard_present(connection) -> bool:
+    return all(_index_exists(connection, *spec) for spec in A2_HUMAN_TASK_RESPONSE_INDEXES)
+
+
+def _human_task_lifecycle_present(connection) -> bool:
+    return (
+        all(_relation_exists(connection, name) for name in A2_HUMAN_TASK_LIFECYCLE_RELATIONS)
+        and all(_function_exists(connection, signature) for signature in A2_HUMAN_TASK_LIFECYCLE_FUNCTIONS)
+        and all(_trigger_exists(connection, *spec) for spec in A2_HUMAN_TASK_LIFECYCLE_TRIGGERS)
+    )
+
+
+def _human_task_scope_guards_present(connection) -> bool:
+    return all(_constraint_exists(connection, *spec) for spec in A2_HUMAN_TASK_SCOPE_CONSTRAINTS)
+
+
+def _human_task_authority_function_present(connection) -> bool:
+    return all(_function_exists(connection, signature) for signature in A2_HUMAN_TASK_AUTHORITY_FUNCTIONS)
+
+
+def _human_response_provenance_present(connection) -> bool:
+    return (
+        all(_function_exists(connection, signature) for signature in A2_HUMAN_RESPONSE_PROVENANCE_FUNCTIONS)
+        and all(_trigger_exists(connection, *spec) for spec in A2_HUMAN_RESPONSE_PROVENANCE_TRIGGERS)
+    )
+
+
+def _material_action_ledger_present(connection) -> bool:
+    return (
+        all(_relation_exists(connection, name) for name in A2_MATERIAL_ACTION_RELATIONS)
+        and all(_function_exists(connection, signature) for signature in A2_MATERIAL_ACTION_FUNCTIONS)
+        and all(_trigger_exists(connection, *spec) for spec in A2_MATERIAL_ACTION_TRIGGERS)
+    )
+
+
+def _migration_objects_present(connection, path: Path) -> bool:
+    if path.name.startswith("1001_"):
+        return _overlay_objects_present(connection)
+    if path.name.startswith("1002_"):
+        return _human_task_objects_present(connection)
+    if path.name.startswith("1003_"):
+        return _human_response_guard_present(connection)
+    if path.name.startswith("1004_"):
+        return _human_task_lifecycle_present(connection)
+    if path.name.startswith("1005_"):
+        return _human_task_scope_guards_present(connection)
+    if path.name.startswith("1006_"):
+        return _human_task_authority_function_present(connection)
+    if path.name.startswith("1007_"):
+        return _human_response_provenance_present(connection)
+    if path.name.startswith("1008_"):
+        return _material_action_ledger_present(connection)
+    return False
 
 
 def _overlay_registry_row(connection, path: Path):
@@ -192,7 +344,7 @@ def apply_a2_persistence(
                         "MIGRATE",
                         status_code=500,
                     )
-                if not _overlay_objects_present(connection):
+                if not _migration_objects_present(connection, path):
                     raise contract_error(
                         "A2_MIGRATION_OBJECTS_MISSING",
                         f"Registered A2 migration {path.name} is incomplete",
@@ -201,14 +353,14 @@ def apply_a2_persistence(
                     )
                 continue
 
-            if _overlay_objects_present(connection):
+            if _migration_objects_present(connection, path):
                 _record_overlay(connection, path, checksum, baselined=True)
                 overlay_applied.append(f"{path.name}:BASELINED")
                 continue
 
             sql = path.read_text(encoding="utf-8")
             connection.execute(sql, prepare=False)
-            if not _overlay_objects_present(connection):
+            if not _migration_objects_present(connection, path):
                 raise contract_error(
                     "A2_MIGRATION_VERIFICATION_FAILED",
                     f"A2 migration {path.name} did not create required objects",
@@ -253,6 +405,55 @@ def verify_a2_persistence(
                 "PRECHECK",
                 status_code=503,
             )
+        if not _human_task_objects_present(connection):
+            raise contract_error(
+                "A2_HUMAN_TASK_OBJECTS_MISSING",
+                "Durable Human Task persistence objects are absent",
+                "PRECHECK",
+                status_code=503,
+            )
+        if not _human_response_guard_present(connection):
+            raise contract_error(
+                "A2_HUMAN_RESPONSE_GUARD_MISSING",
+                "Human Task single-authoritative-response guard is absent",
+                "PRECHECK",
+                status_code=503,
+            )
+        if not _human_task_lifecycle_present(connection):
+            raise contract_error(
+                "A2_HUMAN_TASK_LIFECYCLE_GUARD_MISSING",
+                "Human Task lifecycle / stale-authority guard is absent",
+                "PRECHECK",
+                status_code=503,
+            )
+        if not _human_task_scope_guards_present(connection):
+            raise contract_error(
+                "A2_HUMAN_TASK_SCOPE_GUARD_MISSING",
+                "Human Task project-scope correlation guard is absent",
+                "PRECHECK",
+                status_code=503,
+            )
+        if not _human_task_authority_function_present(connection):
+            raise contract_error(
+                "A2_HUMAN_TASK_AUTHORITY_RESOLVER_MISSING",
+                "Bitemporal Human Task authority resolver is absent",
+                "PRECHECK",
+                status_code=503,
+            )
+        if not _human_response_provenance_present(connection):
+            raise contract_error(
+                "A2_HUMAN_RESPONSE_PROVENANCE_GUARD_MISSING",
+                "Human response provenance guard is absent",
+                "PRECHECK",
+                status_code=503,
+            )
+        if not _material_action_ledger_present(connection):
+            raise contract_error(
+                "A2_MATERIAL_ACTION_LEDGER_MISSING",
+                "Durable material-action idempotency ledger is absent",
+                "PRECHECK",
+                status_code=503,
+            )
         for path in files:
             checksum = _checksum(path)
             row = _overlay_registry_row(connection, path)
@@ -269,9 +470,9 @@ def verify_a2_persistence(
         vector_installed=True,
         base_migrations=base,
         overlay_migrations=overlay,
-        relations=A2_REQUIRED_RELATIONS,
-        functions=A2_REQUIRED_FUNCTIONS,
-        triggers=A2_REQUIRED_TRIGGERS,
+        relations=A2_REQUIRED_RELATIONS + A2_HUMAN_TASK_RELATIONS + A2_HUMAN_TASK_LIFECYCLE_RELATIONS + A2_MATERIAL_ACTION_RELATIONS,
+        functions=A2_REQUIRED_FUNCTIONS + A2_HUMAN_TASK_LIFECYCLE_FUNCTIONS + A2_HUMAN_TASK_AUTHORITY_FUNCTIONS + A2_HUMAN_RESPONSE_PROVENANCE_FUNCTIONS + A2_MATERIAL_ACTION_FUNCTIONS,
+        triggers=A2_REQUIRED_TRIGGERS + A2_HUMAN_TASK_TRIGGERS + A2_HUMAN_TASK_LIFECYCLE_TRIGGERS + A2_HUMAN_RESPONSE_PROVENANCE_TRIGGERS + A2_MATERIAL_ACTION_TRIGGERS,
         working_assumption_enabled=True,
     )
 
@@ -313,3 +514,345 @@ def decision_state_as_of(
             (scope, valid_at, recorded_at),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def persist_human_task(
+    database: Database,
+    *,
+    project_scope: str,
+    task: dict[str, Any],
+    observed_time: datetime,
+) -> None:
+    """Persist a WAITING_HUMAN task durably without changing its authority semantics."""
+    scope = _require_scope(project_scope)
+    if task.get("status") != "WAITING_HUMAN":
+        raise ValueError("only WAITING_HUMAN tasks may be persisted by this contract")
+    with database.connect(autocommit=True) as connection:
+        connection.execute(
+            """
+            INSERT INTO soa_memory.human_tasks(
+              human_task_id, objective_id, execution_id, correlation_id, project_scope,
+              status, reason, question, evidence_refs, resume_from, observed_time
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s)
+            """,
+            (
+                task["human_task_id"], task["objective_id"], task["execution_id"],
+                task["correlation_id"], scope, task["status"], task["reason"],
+                task["question"], json.dumps(task.get("evidence", [])),
+                task["resume_from"], observed_time,
+            ),
+            prepare=False,
+        )
+
+
+def persist_human_response(
+    database: Database,
+    *,
+    project_scope: str,
+    response_id: str,
+    response: dict[str, Any],
+    received_time: datetime,
+) -> None:
+    """Persist a human response only when its four-part correlation matches a durable task."""
+    scope = _require_scope(project_scope)
+    with database.connect(autocommit=True) as connection:
+        connection.execute(
+            """
+            INSERT INTO soa_memory.human_task_responses(
+              response_id, objective_id, execution_id, human_task_id, correlation_id,
+              project_scope, answer, received_time, responder_ref, authority_level,
+              authentication_ref
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s)
+            """,
+            (
+                response_id, response["objective_id"], response["execution_id"],
+                response["human_task_id"], response["correlation_id"], scope,
+                json.dumps(response.get("answer")), received_time,
+                response.get("responder_ref"), response.get("authority_level"),
+                response.get("authentication_ref"),
+            ),
+            prepare=False,
+        )
+
+
+def load_human_task_bundle(
+    database: Database,
+    *,
+    project_scope: str,
+    human_task_id: str,
+    recorded_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Recover a Human Task and resolve whether its persisted response is still authoritative.
+
+    A later-recorded lifecycle fact may invalidate an earlier response without deleting
+    that response from history. recorded_at preserves the bitemporal knowledge boundary.
+    """
+    scope = _require_scope(project_scope)
+    at = recorded_at or datetime.now(timezone.utc)
+    with database.connect(autocommit=True) as connection:
+        task = connection.execute(
+            """
+            SELECT human_task_id, objective_id, execution_id, correlation_id, status,
+                   reason, question, evidence_refs AS evidence, resume_from
+            FROM soa_memory.human_tasks
+            WHERE project_scope=%s AND human_task_id=%s
+            """,
+            (scope, human_task_id),
+        ).fetchone()
+        if not task:
+            raise ValueError("human task not found")
+        authority = connection.execute(
+            "SELECT * FROM soa_memory.human_task_response_authority(%s,%s,%s)",
+            (scope, human_task_id, at),
+        ).fetchone()
+
+    if not authority:
+        return {
+            "task": dict(task),
+            "response": None,
+            "invalidated_response": None,
+            "authority_state": "WAITING_HUMAN",
+            "invalidating_lifecycle": None,
+        }
+
+    row = dict(authority)
+    with database.connect(autocommit=True) as connection:
+        provenance = connection.execute(
+            """
+            SELECT responder_ref, authority_level, authentication_ref
+            FROM soa_memory.human_task_responses
+            WHERE response_id=%s
+            """,
+            (row["response_id"],),
+        ).fetchone()
+
+    response = {
+        "objective_id": row["objective_id"],
+        "execution_id": row["execution_id"],
+        "human_task_id": row["human_task_id"],
+        "correlation_id": row["correlation_id"],
+        "answer": row["answer"],
+        "responder_ref": provenance["responder_ref"] if provenance else None,
+        "authority_level": provenance["authority_level"] if provenance else None,
+        "authentication_ref": provenance["authentication_ref"] if provenance else None,
+    }
+    invalidator = None
+    if row["invalidating_lifecycle_event_id"]:
+        invalidator = {
+            "lifecycle_event_id": row["invalidating_lifecycle_event_id"],
+            "lifecycle_state": row["invalidating_lifecycle_state"],
+            "effective_time": row["invalidating_effective_time"],
+            "recorded_time": row["invalidating_recorded_time"],
+        }
+
+    authoritative = bool(row["authoritative"])
+    return {
+        "task": dict(task),
+        "response": response if authoritative else None,
+        "invalidated_response": None if authoritative else response,
+        "authority_state": "AUTHORITATIVE" if authoritative else "INVALIDATED",
+        "invalidating_lifecycle": invalidator,
+    }
+
+def persist_human_task_lifecycle_event(
+    database: Database,
+    *,
+    project_scope: str,
+    event_id: str,
+    task: dict[str, Any],
+    lifecycle_state: str,
+    effective_time: datetime,
+    reason: str,
+) -> None:
+    """Append a lifecycle event that can invalidate later Human Task responses."""
+    scope = _require_scope(project_scope)
+    state = lifecycle_state.strip().upper()
+    if state not in {"REVOKED", "SUPERSEDED", "EXPIRED"}:
+        raise ValueError("lifecycle_state must be REVOKED, SUPERSEDED, or EXPIRED")
+    if not reason.strip():
+        raise ValueError("reason is required")
+    with database.connect(autocommit=True) as connection:
+        connection.execute(
+            """
+            INSERT INTO soa_memory.human_task_lifecycle(
+              lifecycle_event_id, objective_id, execution_id, human_task_id,
+              correlation_id, project_scope, lifecycle_state, effective_time, reason
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (
+                event_id, task["objective_id"], task["execution_id"], task["human_task_id"],
+                task["correlation_id"], scope, state, effective_time, reason.strip(),
+            ),
+            prepare=False,
+        )
+
+
+
+def prepare_material_action(
+    database: Database,
+    *,
+    project_scope: str,
+    action_id: str,
+    objective_id: str,
+    execution_id: str,
+    idempotency_key: str,
+    action_type: str,
+    target_ref: str,
+    payload_sha256: str,
+    observed_time: datetime,
+) -> dict[str, Any]:
+    """Create or recover one durable material action without blindly replaying it."""
+    scope = _require_scope(project_scope)
+    required = {
+        "action_id": action_id,
+        "objective_id": objective_id,
+        "execution_id": execution_id,
+        "idempotency_key": idempotency_key,
+        "action_type": action_type,
+        "target_ref": target_ref,
+        "payload_sha256": payload_sha256,
+    }
+    for name, value in required.items():
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{name} is required")
+
+    with database.connect(autocommit=True) as connection:
+        existing = connection.execute(
+            """
+            SELECT *
+            FROM soa_ops.material_actions
+            WHERE project_scope=%s AND idempotency_key=%s
+            """,
+            (scope, idempotency_key),
+        ).fetchone()
+
+        if not existing:
+            connection.execute(
+                """
+                INSERT INTO soa_ops.material_actions(
+                  action_id,project_scope,objective_id,execution_id,idempotency_key,
+                  action_type,target_ref,payload_sha256,observed_time
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (
+                    action_id, scope, objective_id, execution_id, idempotency_key,
+                    action_type, target_ref, payload_sha256, observed_time,
+                ),
+                prepare=False,
+            )
+            connection.execute(
+                """
+                INSERT INTO soa_ops.material_action_events(
+                  event_id,action_id,project_scope,event_seq,state,observed_time
+                ) VALUES (%s,%s,%s,1,'INTENDED',%s)
+                """,
+                (f"{action_id}:event:1", action_id, scope, observed_time),
+                prepare=False,
+            )
+            return {
+                "decision": "EXECUTE",
+                "action_id": action_id,
+                "latest_state": "INTENDED",
+                "existing": False,
+            }
+
+        existing = dict(existing)
+        contract_fields = {
+            "objective_id": objective_id,
+            "execution_id": execution_id,
+            "action_type": action_type,
+            "target_ref": target_ref,
+            "payload_sha256": payload_sha256,
+        }
+        mismatches = [
+            name for name, expected in contract_fields.items()
+            if existing.get(name) != expected
+        ]
+        if mismatches:
+            raise contract_error(
+                "MATERIAL_ACTION_IDEMPOTENCY_CONFLICT",
+                "Existing idempotency key is bound to a different material action",
+                "PRECHECK",
+                status_code=409,
+                details={"mismatched_fields": mismatches},
+            )
+
+        latest = connection.execute(
+            """
+            SELECT *
+            FROM soa_ops.material_action_events
+            WHERE action_id=%s AND project_scope=%s
+            ORDER BY event_seq DESC
+            LIMIT 1
+            """,
+            (existing["action_id"], scope),
+        ).fetchone()
+        if not latest:
+            raise contract_error(
+                "MATERIAL_ACTION_LEDGER_INCOMPLETE",
+                "Material action exists without an event history",
+                "PRECHECK",
+                status_code=500,
+            )
+        latest = dict(latest)
+        state = latest["state"]
+        if state == "SUCCEEDED":
+            decision = "ALREADY_APPLIED"
+        elif state in {"DISPATCHED", "INDETERMINATE"}:
+            decision = "RECONCILE_REQUIRED"
+        elif state == "FAILED":
+            decision = "RETRY_ALLOWED" if latest.get("retryable") is True else "BLOCKED"
+        else:
+            decision = "EXECUTE"
+
+        return {
+            "decision": decision,
+            "action_id": existing["action_id"],
+            "latest_state": state,
+            "existing": True,
+            "receipt_ref": latest.get("receipt_ref"),
+        }
+
+
+def record_material_action_event(
+    database: Database,
+    *,
+    project_scope: str,
+    action_id: str,
+    event_id: str,
+    state: str,
+    observed_time: datetime,
+    receipt_ref: str | None = None,
+    retryable: bool | None = None,
+) -> None:
+    """Append a state transition to a durable material action."""
+    scope = _require_scope(project_scope)
+    normalized = state.strip().upper()
+    if normalized not in {"DISPATCHED", "SUCCEEDED", "FAILED", "INDETERMINATE"}:
+        raise ValueError("unsupported material action state")
+    with database.connect(autocommit=True) as connection:
+        latest = connection.execute(
+            """
+            SELECT event_id,event_seq
+            FROM soa_ops.material_action_events
+            WHERE action_id=%s AND project_scope=%s
+            ORDER BY event_seq DESC
+            LIMIT 1
+            """,
+            (action_id, scope),
+        ).fetchone()
+        if not latest:
+            raise ValueError("material action not found")
+        connection.execute(
+            """
+            INSERT INTO soa_ops.material_action_events(
+              event_id,action_id,project_scope,event_seq,state,receipt_ref,retryable,
+              observed_time,previous_event_id
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (
+                event_id, action_id, scope, latest["event_seq"] + 1, normalized,
+                receipt_ref, retryable, observed_time, latest["event_id"],
+            ),
+            prepare=False,
+        )

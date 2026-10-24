@@ -1,0 +1,73 @@
+{
+  "manifest_id": "RM-SOAIACORE-MOCATRIZ-20260928-002",
+  "manifest_version": "1.1.0",
+  "schema_version": "1.0",
+  "created_at": "2026-09-28T12:34:00Z",
+  "status": "FROZEN",
+  "target_snapshot": {
+    "snapshot_id": "TMS-SOAIACORE-MOCATRIZ-20260928-002",
+    "snapshot_version": "1.1.0",
+    "expected_hash": "9EE9E2018FDCB2CCCFD1228083673B0D71CE5DD740F85EF4FFDF33522B5D8490"
+  },
+  "evidence_inventory": {
+    "inventory_id": "DEI-SOAIACORE-MOCATRIZ-20260928-002",
+    "expected_hash": "4C8BAA3FEB850DB16A86AA150322E27201450B4CC7D5CDBF74BF4B1CD005C96F"
+  },
+  "requirements": [
+    {
+      "requirement_id": "REQ2-001",
+      "name": "Predecessor TMS-001",
+      "category": "lineage",
+      "criticality": "critical",
+      "status": "CONFIRMED",
+      "evidence_ids": [
+        "EV2-001"
+      ]
+    },
+    {
+      "requirement_id": "REQ2-002",
+      "name": "ERR-028 incorporated",
+      "category": "error_control",
+      "criticality": "critical",
+      "status": "CONFIRMED",
+      "evidence_ids": [
+        "EV2-002"
+      ]
+    },
+    {
+      "requirement_id": "REQ2-003",
+      "name": "TMS-001 fidelity baseline",
+      "category": "fidelity",
+      "criticality": "critical",
+      "status": "CONFIRMED",
+      "evidence_ids": [
+        "EV2-003"
+      ]
+    },
+    {
+      "requirement_id": "REQ2-004",
+      "name": "Current code checkpoint",
+      "category": "checkpoint",
+      "criticality": "critical",
+      "status": "CONFIRMED",
+      "evidence_ids": [
+        "EV2-004"
+      ]
+    },
+    {
+      "requirement_id": "REQ2-005",
+      "name": "PostgreSQL bitemporal write/read-back",
+      "category": "persistence",
+      "criticality": "necessary",
+      "status": "MISSING",
+      "evidence_ids": [
+        "EV2-005"
+      ]
+    }
+  ],
+  "recovery_decision": {
+    "expected_status": "RECOVERABLE_WITH_EXCEPTIONS",
+    "current_status": "RECOVERABLE_WITH_EXCEPTIONS"
+  },
+  "content_sha256": "C441357FA6B1AA45B76E6E3FD07D3AF70410D3C520A5A22C5C2F7DCCB932BB29"
+}

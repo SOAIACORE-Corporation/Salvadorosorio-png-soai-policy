@@ -1,0 +1,24 @@
+{
+  "error_id": "ERR-20261024-046",
+  "detected_at": "2026-10-24",
+  "class": "PREMATURE_HUMAN_ESCALATION",
+  "phase": "runtime-recovery",
+  "symptom": "assess_stop_decision prioritized an available human dependency before checking whether an autonomous viable recovery alternative remained.",
+  "root_cause": "The initial stop-decision ordering treated human availability as a stronger signal than autonomous recoverability.",
+  "early_signals": [
+    "MOCATRIZ canon requires reasonable autonomous recovery before escalation",
+    "SCN-029 covers preflight but not runtime recovery after a failed route",
+    "assess_stop_decision checked human dependency before viable autonomous alternatives"
+  ],
+  "human_cost": "The system could consume operator time and authority for a runtime failure it still had a reasonable autonomous path to resolve.",
+  "avoidable": true,
+  "prevention_rule": "When a viable untried alternative can be executed without human authority, CONTINUE takes precedence over WAITING_HUMAN. Human escalation is reserved for alternatives or decisions that genuinely require human authority.",
+  "automated_detection": "SCN-047 runtime escalation-order regression tests in schemas/tests/test_mocatriz_execution.py.",
+  "evidence_refs": [
+    "tools/landscape/mocatriz_execution.py",
+    "docs/landscape-intelligence/MOCATRIZ_ADAPTIVE_EXECUTION_v1.md",
+    "docs/landscape-intelligence/scenarios/SCN-029-avoidable-human-iteration-incomplete-preflight.md"
+  ],
+  "control_status": "OPEN",
+  "regression_test": "SCN-047:test_autonomous_recovery_route_precedes_available_human_escalation"
+}

@@ -1,0 +1,22 @@
+{
+  "error_id": "ERR-20260926-025",
+  "detected_at": "2026-09-26",
+  "class": "CONTEXT_CONTINUITY_AFTER_INTERRUPTION_UNVERIFIED",
+  "phase": "mocatriz-continuity",
+  "symptom": "External execution continuity was demonstrated, but preservation of objective, rules, pending work and closure criteria across conversational interruption had not yet been independently tested.",
+  "root_cause": "The earlier recovery conclusion conflated external execution continuity with continuity of the full task state.",
+  "early_signals": [
+    "The external workflow succeeded after the conversational stream timed out",
+    "No explicit continuity checkpoint comparison had yet been executed"
+  ],
+  "human_cost": "Risk of premature closure, duplicated work, lost restrictions or plausible-but-unfaithful narrative reconstruction.",
+  "avoidable": true,
+  "prevention_rule": "Persist a resumable checkpoint and validate recovered objective, scope, rule set, pending work, evidence and closure contract before continuing after interruption.",
+  "automated_detection": "MOCATRIZ Continuity Test 02 scores ten dimensions and applies nullifying failures plus checkpoint comparison.",
+  "evidence_refs": [
+    "docs/landscape-intelligence/MOCATRIZ_CONTINUITY_TEST_02_v1.md",
+    "schemas/examples/landscape/mocatriz-continuity-test-02-v1.json"
+  ],
+  "control_status": "OPEN",
+  "regression_test": "test_continuity_score_reaches_demonstrated_band_without_nullifier"
+}

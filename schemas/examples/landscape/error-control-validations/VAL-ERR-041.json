@@ -1,0 +1,19 @@
+{
+  "validation_id": "VAL-ERR-041",
+  "error_id": "ERR-20261024-041",
+  "status": "CONTROLLED",
+  "observed_at": "2026-10-24",
+  "evidence_refs": [
+    "github-actions:40082935096",
+    "github-actions:40082935012",
+    "commit:de3cfe9c3dc1c088627d8242d16b3cb174bf250b",
+    "SCN-040"
+  ],
+  "human_required": false,
+  "regression_tests": [
+    "schemas/tests/test_mocatriz_execution.py::test_zero_applicable_criteria_cannot_complete_objective",
+    "schemas/tests/test_mocatriz_execution.py::test_claimed_completion_without_acceptance_basis_is_false_completion",
+    "schemas/tests/test_mocatriz_execution.py::test_false_completion_detects_material_unresolved_work"
+  ],
+  "rationale": "Zero applicable criteria now produce completion_applicable=false and objective_completion_pct=null; determine_final_status returns PENDING and a manual completion claim is flagged as false completion. Landscape #234 and A2 #106 passed."
+}

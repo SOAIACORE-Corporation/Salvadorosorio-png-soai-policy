@@ -1,0 +1,13 @@
+{
+  "observation_id": "obs:monitor:psql-soaiacore-p0-34utxi",
+  "asset_id": "azure:108eb4dd-25b3-4a7f-8d5e-4ec4389c3f0d:psql-soaiacore-p0-34utxi",
+  "metric": "availability",
+  "state": "Observed",
+  "value": null,
+  "threshold": null,
+  "window": "snapshot",
+  "unit": null,
+  "observed_at": "2026-09-25T22:29:14Z",
+  "source_id": "monitoring-baseline-p0",
+  "source_location": "COMITE"
+}

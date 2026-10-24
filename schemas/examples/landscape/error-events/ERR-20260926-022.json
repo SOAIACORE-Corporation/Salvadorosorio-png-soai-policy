@@ -1,0 +1,24 @@
+{
+  "error_id": "ERR-20260926-022",
+  "detected_at": "2026-09-26",
+  "class": "CANONICAL_TOKEN_COLLISION",
+  "phase": "cross-thread-context",
+  "symptom": "MOCATRIZ was assigned incompatible activation meanings across threads: canonical-language scan, adaptive execution methodology, and manufacturing model.",
+  "root_cause": "A memorable canonical token was reused without an account-level activation-signature registry or semantic collision check.",
+  "early_signals": [
+    "MOCATRIZ was explicitly defined first as the canonical-language thread scan trigger",
+    "GO MOCATRIZ later became the adaptive execution command",
+    "A manufacturing thread separately assigned MOCATRIZ to an end-to-end production model"
+  ],
+  "human_cost": "Risk of invoking the wrong protocol and contaminating context across unrelated workstreams.",
+  "avoidable": true,
+  "prevention_rule": "Canonical triggers must be unique by activation signature. Before assigning or repurposing one, validate it against the Canonical Token Registry.",
+  "automated_detection": "Canonical Token Registry rejects duplicate unqualified activation signatures with incompatible semantic domains.",
+  "evidence_refs": [
+    "conversation:MOCATRIZ-language-trigger",
+    "docs/landscape-intelligence/MOCATRIZ_ADAPTIVE_EXECUTION_v1.md",
+    "conversation:MOCATRIZ-manufacturing-model"
+  ],
+  "control_status": "CONTROLLED",
+  "regression_test": "test_canonical_activation_signatures_are_unique"
+}

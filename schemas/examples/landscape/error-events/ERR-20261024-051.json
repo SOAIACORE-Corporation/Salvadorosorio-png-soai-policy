@@ -1,0 +1,25 @@
+{
+  "error_id": "ERR-20261024-051",
+  "detected_at": "2026-10-24",
+  "class": "TRANSITIVE_EVIDENCE_INVALIDATION_GAP",
+  "phase": "evidence-to-decision-lineage",
+  "symptom": "SOAiaCore persisted evidence/claim/memory lineage but had no generic control that propagated material evidence invalidation to dependent memory or decisions.",
+  "root_cause": "Lineage structures documented dependency origin but did not compute effective current validity across transitive material dependencies.",
+  "early_signals": [
+    "memory_claim_lineage stores links but no revalidation state",
+    "claim_evidence and decision evidence references are persisted without generic downstream invalidation propagation",
+    "evidence lifecycle includes SUPERSEDED/REJECTED while derived units can remain independently marked current"
+  ],
+  "human_cost": "Risk of presenting historically supported but no-longer-current decisions as still valid; detected autonomously during post-SCN-050 gap analysis.",
+  "avoidable": true,
+  "prevention_rule": "Compute effective validity transitively across material dependency edges. SUPERSEDED/STALE/UNKNOWN require revalidation; REJECTED/QUARANTINED invalidate material descendants; historical non-material lineage remains preserved.",
+  "automated_detection": "SCN-051 dependency-integrity regression suite.",
+  "evidence_refs": [
+    "db/migrations/0002_core_identity_evidence.sql",
+    "db/migrations/0004_context_and_claims.sql",
+    "db/a2_migrations/1001_memory_decision_bitemporal.sql",
+    "tools/landscape/dependency_integrity.py"
+  ],
+  "control_status": "OPEN",
+  "regression_test": "SCN-051:test_superseded_evidence_transitively_requires_revalidation"
+}

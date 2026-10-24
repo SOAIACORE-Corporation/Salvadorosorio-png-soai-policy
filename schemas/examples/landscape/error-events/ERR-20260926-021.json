@@ -1,0 +1,23 @@
+{
+  "error_id": "ERR-20260926-021",
+  "detected_at": "2026-09-26",
+  "class": "CI_STARVATION_BY_COMMIT_CHURN",
+  "phase": "mocatriz-security-validation",
+  "symptom": "Rapid successive commits repeatedly cancelled long-running OCI validation before it could complete.",
+  "root_cause": "Execution optimized local progress without accounting for workflow concurrency cancel-in-progress semantics.",
+  "early_signals": [
+    "OCI workflow uses concurrency with cancel-in-progress for pull_request events",
+    "Multiple prior OCI runs were cancelled after newer commits landed"
+  ],
+  "human_cost": "No operator intervention; validation latency increased and security evidence was delayed.",
+  "avoidable": true,
+  "prevention_rule": "When a long-running acceptance gate is required for objective closure, freeze branch writes until that gate completes unless a new commit is necessary to repair that gate.",
+  "automated_detection": "Detect repeated cancelled required workflows on successive head SHAs and classify branch-write churn as execution drift.",
+  "evidence_refs": [
+    ".github/workflows/oci-build-publish.yml",
+    "github-actions:36234495526",
+    "github-actions:36234503732"
+  ],
+  "control_status": "CONTROLLED",
+  "regression_test": "test_required_acceptance_gate_not_starved_by_commit_churn"
+}

@@ -1,0 +1,13 @@
+{
+  "validation_id": "VAL-ERR-045",
+  "error_id": "ERR-20261024-045",
+  "status": "CONTROLLED",
+  "observed_at": "2026-10-24",
+  "evidence_refs": [
+    "commit:bc5b3fe50a28f91156e8961aad6e461f84d9e854",
+    "github-actions:40086116260",
+    "SCN-046"
+  ],
+  "human_required": false,
+  "rationale": "Landscape #265 passed 245 schema tests, including evidence-backed SHOWSTOPPER controls. Caller assertion alone can no longer justify SHOWSTOPPER."
+}

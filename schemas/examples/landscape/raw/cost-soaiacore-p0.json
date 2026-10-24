@@ -1,0 +1,11 @@
+{
+  "cost_id": "cost:soaiacore:2026-09-01_2026-09-25",
+  "scope_id": "SOAiaCore",
+  "period": "2026-09-01/2026-09-25",
+  "amount": 78.8227235885305,
+  "currency": "USD",
+  "cost_type": "observed",
+  "observed_at": "2026-09-25T22:29:14Z",
+  "source_id": "azure-cost-management-2026-09-25",
+  "source_location": "Azure Cost Management"
+}

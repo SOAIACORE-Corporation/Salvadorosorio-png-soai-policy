@@ -1,0 +1,24 @@
+{
+  "error_id": "ERR-20261017-031",
+  "detected_at": "2026-10-17",
+  "class": "OCI_SECURITY_GATE_REGRESSION",
+  "phase": "oci-security-gate",
+  "symptom": "OCI Build, Scan, and Publish #252 failed the aggregate fixable HIGH/CRITICAL enforcement gate after Core, Web and Worker scans reported failure under the fail-closed policy.",
+  "root_cause": "Current image findings are not acceptable to the aggregate gate; the repository ignore file also exposes time-bounded entries with expired_at 2026-08-31, so a previous acceptance must not be treated as current.",
+  "early_signals": [
+    "CORE_SCAN=failure, WEB_SCAN=failure and WORKER_SCAN=failure in OCI #252",
+    "The security evidence artifact was successfully uploaded before aggregate enforcement failed",
+    "Displayed .trivyignore.yaml entries show expired_at: 2026-08-31"
+  ],
+  "human_cost": "No human intervention requested in the current Trusted Memory objective; publication remains blocked fail-closed.",
+  "avoidable": false,
+  "prevention_rule": "Do not bypass or relax Trivy. Treat expired or recurrent image findings as a separate remediation objective and require fresh passing evidence before publication.",
+  "automated_detection": "OCI Build, Scan, and Publish aggregate HIGH/CRITICAL enforcement gate.",
+  "evidence_refs": [
+    "github-actions:39099227372",
+    "artifact:12125198826",
+    ".trivyignore.yaml"
+  ],
+  "control_status": "OPEN",
+  "regression_test": "OCI_BUILD_SCAN_PUBLISH_SECURITY_GATE"
+}

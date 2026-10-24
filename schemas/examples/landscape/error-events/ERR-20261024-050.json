@@ -1,0 +1,24 @@
+{
+  "error_id": "ERR-20261024-050",
+  "detected_at": "2026-10-24",
+  "class": "MATERIAL_ACTION_REPLAY_RISK",
+  "phase": "recovery-after-material-action",
+  "symptom": "MOCATRIZ distinguished observability loss from execution failure but lacked a durable generic idempotency ledger preventing replay of material actions after a lost acknowledgement.",
+  "root_cause": "Execution recovery persisted Human Tasks and memory state but not a generic material-action identity, idempotency key and append-only outcome history.",
+  "early_signals": [
+    "OBSERVABILITY_CHANNEL_TIMEOUT is explicitly distinct from EXECUTION_FAILURE",
+    "no repository contract existed for material action idempotency or lost acknowledgement",
+    "process-crash recovery could reconstruct Human Tasks but not generic mutation outcomes"
+  ],
+  "human_cost": "Potential duplicate side effects or avoidable human reconciliation after timeouts; detected autonomously before using the pattern against live systems.",
+  "avoidable": true,
+  "prevention_rule": "Persist material-action identity and idempotency key before dispatch. On recovery, do not redispatch after SUCCEEDED and do not retry DISPATCHED/INDETERMINATE without authoritative reconciliation.",
+  "automated_detection": "SCN-050 PostgreSQL contract tests using disposable CI database.",
+  "evidence_refs": [
+    "db/a2_migrations/1008_mocatriz_material_action_idempotency.sql",
+    "packages/python-runtime/src/soaiacore_runtime/a2_persistence.py",
+    "tests/test_a2_persistence_contract.py"
+  ],
+  "control_status": "OPEN",
+  "regression_test": "SCN-050:test_material_action_lost_ack_does_not_replay_after_durable_success"
+}

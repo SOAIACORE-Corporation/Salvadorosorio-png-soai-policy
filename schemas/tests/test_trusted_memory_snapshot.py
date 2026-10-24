@@ -1,0 +1,478 @@
+import json
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools" / "landscape"))
+
+from trusted_memory import (  # noqa: E402
+    compare_snapshot_versions,
+    fidelity_score,
+    persist_dual,
+    postgres_projection,
+    reconstruct_from_snapshot,
+    recovery_decision,
+    seal_fidelity_receipt,
+    select_authoritative_snapshot,
+    validate_evidence_inventory,
+    validate_fidelity_receipt,
+    seal_snapshot,
+    sha256_hex,
+    validate_manifest,
+    validate_snapshot,
+)
+
+
+def _snapshot():
+    return seal_snapshot({
+        "snapshot_id":"TMS-TEST-001",
+        "schema_version":"1.0",
+        "snapshot_version":"1.0.0",
+        "version_no":1,
+        "created_at":"2026-09-26T12:24:00Z",
+        "valid_from":"2026-09-26T12:24:00Z",
+        "valid_until":None,
+        "previous_snapshot_id":None,
+        "logical_snapshot_id":"SOAIACORE-MOCATRIZ",
+        "status":"FROZEN",
+        "project":{"name":"SOAiaCore","capability":"Landscape Intelligence + Memory Integrity","methodology":"MOCATRIZ"},
+        "objective":{
+            "objective_id":"OBJ-1",
+            "statement":"Validate continuity",
+            "scope_status":"COMPLETED_WITH_EXCEPTIONS",
+            "scope":["continuity"],
+            "exclusions":["functional endpoint"],
+        },
+        "checkpoint":{"branch":"feat/x","head":"a"*40,"writes_frozen":True},
+        "continuity":{"result":"PASS","score":30,"maximum_score":30,"invalidating_conditions":0},
+        "error_matrix":{"total":27,"controlled":25,"accepted_gaps":2,"open":0},
+        "metrics":{
+            "correlation_integrity":{"numerator":0,"denominator":0,"result_pct":None,"status":"NOT_EXERCISED"},
+        },
+        "rules":[{"rule_id":"R1","statement":"Do not infer functional success"}],
+        "authoritative_sources":[{"source_id":"git","authority":"PRIMARY_AUTHORITATIVE","ref":"a"*40}],
+        "evidence_inventory_ref":"evidence.json",
+        "decisions":[{"decision_id":"D1","decision":"COMPLETED_WITH_EXCEPTIONS"}],
+        "pending_and_exceptions":{
+            "exceptions":["functional endpoint not demonstrated"],
+            "functional_endpoint_validation":{"status":"MISSING","interpretation":"NOT_DEMONSTRATED"},
+        },
+        "resume_point":{"phase":"OBSERVE","next_objective":"Trusted Memory Snapshot"},
+        "metadata":{"receipt_ref":"receipt.md"},
+    })
+
+
+def _evidence_inventory():
+    inventory = {
+        "inventory_id":"EV-TEST-001",
+        "evidence":[
+            {"evidence_id":"EV-1","objective_id":"OBJ-1","quality":"CONFIRMED","freshness":"CURRENT"},
+            {"evidence_id":"EV-2","objective_id":"OBJ-1","quality":"MISSING","freshness":"UNKNOWN"},
+        ],
+    }
+    inventory["content_sha256"] = sha256_hex(inventory)
+    return inventory
+
+
+def _manifest(snapshot):
+    inventory = _evidence_inventory()
+    manifest = {
+        "manifest_id":"RM-1",
+        "manifest_version":"1.0.0",
+        "schema_version":"1.0",
+        "status":"FROZEN",
+        "target_snapshot":{
+            "snapshot_id":snapshot["snapshot_id"],
+            "snapshot_version":snapshot["snapshot_version"],
+            "expected_hash":snapshot["content_sha256"],
+        },
+        "evidence_inventory":{
+            "inventory_id":inventory["inventory_id"],
+            "expected_hash":inventory["content_sha256"],
+        },
+        "requirements":[
+            {"requirement_id":"REQ-1","criticality":"critical","status":"CONFIRMED","evidence_ids":["EV-1"]},
+            {"requirement_id":"REQ-2","criticality":"necessary","status":"MISSING","evidence_ids":["EV-2"]},
+        ],
+    }
+    manifest["content_sha256"] = sha256_hex(manifest)
+    return manifest
+
+
+def _receipt_bound_bundle():
+    snapshot = _snapshot()
+    inventory = _evidence_inventory()
+    manifest = _manifest(snapshot)
+    receipt = seal_fidelity_receipt({
+        "receipt_id":"FR-TEST-001",
+        "snapshot_id":snapshot["snapshot_id"],
+        "snapshot_hash":snapshot["content_sha256"],
+        "evidence_inventory_hash":inventory["content_sha256"],
+        "decision":{"result":"PASS","recovery_status":"RECOVERABLE_WITH_EXCEPTIONS"},
+    })
+    manifest["fidelity_receipt"] = {
+        "receipt_id":receipt["receipt_id"],
+        "expected_hash":receipt["content_sha256"],
+    }
+    manifest["content_sha256"] = sha256_hex({
+        k:v for k,v in manifest.items() if k!="content_sha256"
+    })
+    receipt["manifest_hash"] = manifest["content_sha256"]
+    return snapshot, manifest, inventory, receipt
+
+
+def test_snapshot_seal_and_validate():
+    snapshot=_snapshot()
+    result=validate_snapshot(snapshot)
+    assert result["valid"] is True
+    assert result["actual_content_sha256"] == snapshot["content_sha256"]
+
+
+def test_sealed_fidelity_receipt_validates_against_bound_artifacts():
+    snapshot, manifest, inventory, receipt = _receipt_bound_bundle()
+    result = validate_fidelity_receipt(
+        receipt,
+        snapshot=snapshot,
+        manifest=manifest,
+        evidence_inventory=inventory,
+    )
+    assert result["valid"] is True
+    recovered = reconstruct_from_snapshot(
+        snapshot,
+        manifest,
+        inventory,
+        fidelity_receipt=receipt,
+    )
+    assert recovered["snapshot_id"] == snapshot["snapshot_id"]
+
+
+def test_sealed_fidelity_receipt_tampering_blocks_recovery():
+    snapshot, manifest, inventory, receipt = _receipt_bound_bundle()
+    receipt["decision"]["result"] = "FAIL"
+    try:
+        reconstruct_from_snapshot(snapshot,manifest,inventory,fidelity_receipt=receipt)
+    except ValueError as exc:
+        assert "fidelity_receipt_hash_mismatch" in str(exc)
+    else:
+        raise AssertionError("tampered fidelity receipt must invalidate recovery")
+
+
+def test_receipt_bound_manifest_tampering_blocks_recovery():
+    snapshot, manifest, inventory, receipt = _receipt_bound_bundle()
+    manifest["requirements"][1]["status"] = "CONFIRMED"
+    try:
+        reconstruct_from_snapshot(snapshot,manifest,inventory,fidelity_receipt=receipt)
+    except ValueError as exc:
+        assert "manifest_hash_mismatch" in str(exc)
+    else:
+        raise AssertionError("tampered manifest must invalidate recovery")
+
+
+def test_receipt_bound_snapshot_tampering_blocks_recovery():
+    snapshot, manifest, inventory, receipt = _receipt_bound_bundle()
+    snapshot["objective"]["statement"] = "tampered objective"
+    try:
+        reconstruct_from_snapshot(snapshot,manifest,inventory,fidelity_receipt=receipt)
+    except ValueError as exc:
+        assert "content_hash_mismatch" in str(exc)
+    else:
+        raise AssertionError("tampered snapshot must invalidate recovery")
+
+
+def test_different_valid_receipt_cannot_substitute_for_manifest_bound_receipt():
+    snapshot, manifest, inventory, receipt = _receipt_bound_bundle()
+    substitute = seal_fidelity_receipt({
+        "receipt_id":"FR-TEST-SUBSTITUTE",
+        "snapshot_id":snapshot["snapshot_id"],
+        "snapshot_hash":snapshot["content_sha256"],
+        "evidence_inventory_hash":inventory["content_sha256"],
+        "decision":{"result":"PASS","recovery_status":"RECOVERABLE_WITH_EXCEPTIONS"},
+    })
+    substitute["manifest_hash"] = manifest["content_sha256"]
+    try:
+        reconstruct_from_snapshot(snapshot,manifest,inventory,fidelity_receipt=substitute)
+    except ValueError as exc:
+        assert (
+            "fidelity_receipt_id_mismatch" in str(exc)
+            or "fidelity_receipt_expected_hash_mismatch" in str(exc)
+        )
+    else:
+        raise AssertionError("valid but unbound receipt must not substitute for bound receipt")
+
+
+def test_receipt_bound_recovery_requires_receipt_presence():
+    snapshot, manifest, inventory, _ = _receipt_bound_bundle()
+    try:
+        reconstruct_from_snapshot(snapshot,manifest,inventory)
+    except ValueError as exc:
+        assert "fidelity_receipt_missing" in str(exc)
+    else:
+        raise AssertionError("manifest-bound receipt must be present for trusted recovery")
+
+
+def test_hash_mismatch_fails_validation():
+    snapshot=_snapshot()
+    snapshot["objective"]["statement"]="tampered"
+    result=validate_snapshot(snapshot)
+    assert result["valid"] is False
+    assert "content_hash_mismatch" in result["errors"]
+
+
+def test_manifest_targets_exact_snapshot_hash():
+    snapshot=_snapshot()
+    manifest=_manifest(snapshot)
+    assert validate_manifest(manifest,snapshot)["valid"] is True
+    manifest["target_snapshot"]["expected_hash"]="0"*64
+    assert "snapshot_hash_mismatch" in validate_manifest(manifest,snapshot)["errors"]
+
+
+def test_missing_necessary_requirement_is_recoverable_with_exceptions():
+    result=recovery_decision(_manifest(_snapshot()))
+    assert result["result"]=="RECOVERABLE_WITH_EXCEPTIONS"
+    assert result["blocking_requirement_ids"]==[]
+
+
+def test_missing_critical_requirement_blocks_recovery():
+    manifest=_manifest(_snapshot())
+    manifest["requirements"][0]["status"]="MISSING"
+    result=recovery_decision(manifest)
+    assert result["result"]=="RECOVERY_BLOCKED"
+
+
+def test_reconstruction_preserves_frozen_state():
+    snapshot=_snapshot()
+    recovered=reconstruct_from_snapshot(snapshot,_manifest(snapshot),_evidence_inventory())
+    result=fidelity_score(snapshot,recovered)
+    assert result["result"]=="PASS"
+    assert result["total_score"]==100
+    assert result["invalidating_conditions"]==[]
+
+
+def test_wrong_head_nullifies_fidelity():
+    snapshot=_snapshot()
+    recovered=reconstruct_from_snapshot(snapshot,_manifest(snapshot),_evidence_inventory())
+    recovered["checkpoint"]["head"]="b"*40
+    result=fidelity_score(snapshot,recovered)
+    assert result["result"]=="FAIL"
+    assert "HEAD_MISMATCH" in result["invalidating_conditions"]
+
+
+def test_endpoint_missing_remains_not_demonstrated():
+    snapshot=_snapshot()
+    recovered=reconstruct_from_snapshot(snapshot,_manifest(snapshot),_evidence_inventory())
+    assert recovered["pending_and_exceptions"]["functional_endpoint_validation"]["status"]=="MISSING"
+    assert "FALSE_FUNCTIONAL_SUCCESS" not in fidelity_score(snapshot,recovered)["invalidating_conditions"]
+
+
+def test_zero_denominator_is_not_exercised_not_100_percent():
+    snapshot=_snapshot()
+    recovered=reconstruct_from_snapshot(snapshot,_manifest(snapshot),_evidence_inventory())
+    metric=recovered["metrics"]["correlation_integrity"]
+    assert metric["denominator"]==0
+    assert metric["result_pct"] is None
+    assert metric["status"]=="NOT_EXERCISED"
+
+
+def test_frozen_exception_cannot_be_silently_removed():
+    snapshot=_snapshot()
+    recovered=reconstruct_from_snapshot(snapshot,_manifest(snapshot),_evidence_inventory())
+    recovered["pending_and_exceptions"]["exceptions"]=[]
+    result=fidelity_score(snapshot,recovered)
+    assert "EXCEPTION_LOSS" in result["invalidating_conditions"]
+    assert result["result"]=="FAIL"
+
+
+def test_complete_cannot_replace_completed_with_exceptions():
+    snapshot=_snapshot()
+    recovered=reconstruct_from_snapshot(snapshot,_manifest(snapshot),_evidence_inventory())
+    recovered["objective"]["scope_status"]="COMPLETED"
+    result=fidelity_score(snapshot,recovered)
+    assert "FALSE_COMPLETE_STATUS" in result["invalidating_conditions"]
+
+
+def test_snapshot_diff_requires_lineage():
+    previous=_snapshot()
+    current=seal_snapshot({
+        **{k:v for k,v in previous.items() if k!="content_sha256"},
+        "snapshot_id":"TMS-TEST-002",
+        "snapshot_version":"1.1.0",
+        "version_no":2,
+        "previous_snapshot_id":previous["snapshot_id"],
+        "resume_point":{"phase":"RESOLVE","next_objective":"Versioning"},
+    })
+    diff=compare_snapshot_versions(previous,current)
+    assert "resume_point" in diff["changed_fields"]
+    assert diff["previous_snapshot_id"]==previous["snapshot_id"]
+
+
+def test_dual_persistence_writes_identical_immutable_copies(tmp_path):
+    snapshot=_snapshot()
+    p1=tmp_path/"primary"/"snapshot.yaml"
+    p2=tmp_path/"secondary"/"snapshot.yaml"
+    result=persist_dual(snapshot,p1,p2)
+    assert result["same_content"] is True
+    try:
+        persist_dual(snapshot,p1,p2)
+    except FileExistsError:
+        pass
+    else:
+        raise AssertionError("trusted persistence must be append-only")
+
+
+def test_postgres_projection_reuses_existing_bitemporal_model():
+    snapshot=_snapshot()
+    projection=postgres_projection(snapshot)
+    assert projection["canonical_memory"]["epistemic_class"]=="CONFIRMED_CONTEXT"
+    assert projection["canonical_memory"]["admission_state"]=="ADMITTED"
+    assert projection["operational_state"]["source_authority"]=="TRUSTED_MEMORY_SNAPSHOT"
+
+
+def test_evidence_inventory_requires_confirmed_fresh_matching_evidence():
+    snapshot=_snapshot()
+    manifest=_manifest(snapshot)
+    inventory=_evidence_inventory()
+    result=validate_evidence_inventory(manifest,inventory,objective_id="OBJ-1")
+    assert result["valid"] is True
+
+
+def test_evidence_inventory_rejects_stale_as_confirmed():
+    snapshot=_snapshot()
+    manifest=_manifest(snapshot)
+    inventory=_evidence_inventory()
+    inventory["evidence"][0]["freshness"]="STALE"
+    result=validate_evidence_inventory(manifest,inventory,objective_id="OBJ-1")
+    assert result["valid"] is False
+    assert any("stale_evidence_as_current" in e for e in result["errors"])
+
+
+def test_evidence_inventory_rejects_wrong_objective_correlation():
+    snapshot=_snapshot()
+    manifest=_manifest(snapshot)
+    inventory=_evidence_inventory()
+    inventory["evidence"][0]["objective_id"]="OBJ-OTHER"
+    result=validate_evidence_inventory(manifest,inventory,objective_id="OBJ-1")
+    assert result["valid"] is False
+    assert any("evidence_objective_mismatch" in e for e in result["errors"])
+
+
+def test_blind_reconstruction_requires_manifest_and_evidence_to_agree():
+    snapshot=_snapshot()
+    manifest=_manifest(snapshot)
+    recovered=reconstruct_from_snapshot(snapshot,manifest,_evidence_inventory())
+    assert recovered["objective"]["objective_id"]=="OBJ-1"
+
+
+def test_recovery_rejects_manifest_that_references_missing_evidence_inventory():
+    snapshot=_snapshot()
+    manifest=_manifest(snapshot)
+    try:
+        reconstruct_from_snapshot(snapshot,manifest)
+    except ValueError as exc:
+        assert "evidence_inventory_missing" in str(exc)
+    else:
+        raise AssertionError("trusted recovery must fail closed without referenced evidence inventory")
+
+
+def test_partial_evidence_recovery_preserves_exceptions_instead_of_completing():
+    snapshot=_snapshot()
+    manifest=_manifest(snapshot)
+    recovered=reconstruct_from_snapshot(snapshot,manifest,_evidence_inventory())
+    assert recovered["recovery_status"]=="RECOVERABLE_WITH_EXCEPTIONS"
+    assert recovered["objective"]["scope_status"]=="COMPLETED_WITH_EXCEPTIONS"
+
+
+def test_missing_critical_evidence_blocks_reconstruction_even_with_valid_snapshot():
+    snapshot=_snapshot()
+    manifest=_manifest(snapshot)
+    inventory=_evidence_inventory()
+    manifest["requirements"][0]["status"]="MISSING"
+    manifest["content_sha256"]=sha256_hex({
+        k:v for k,v in manifest.items() if k!="content_sha256"
+    })
+    try:
+        reconstruct_from_snapshot(snapshot,manifest,inventory)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("critical missing evidence must block trusted reconstruction")
+
+
+def _successor(previous, *, snapshot_id, version_no, valid_from):
+    return seal_snapshot({
+        **{k:v for k,v in previous.items() if k!="content_sha256"},
+        "snapshot_id":snapshot_id,
+        "snapshot_version":f"1.{version_no - 1}.0",
+        "version_no":version_no,
+        "created_at":valid_from,
+        "valid_from":valid_from,
+        "previous_snapshot_id":previous["snapshot_id"],
+    })
+
+
+def test_trusted_snapshot_selector_uses_unique_lineage_head_not_completeness():
+    first=_snapshot()
+    second=_successor(
+        first,
+        snapshot_id="TMS-TEST-002",
+        version_no=2,
+        valid_from="2026-09-27T00:00:00Z",
+    )
+    selected=select_authoritative_snapshot(
+        [first,second],
+        logical_snapshot_id="SOAIACORE-MOCATRIZ",
+        as_of="2026-09-28T00:00:00Z",
+    )
+    assert selected["snapshot_id"]=="TMS-TEST-002"
+
+
+def test_trusted_snapshot_selector_rejects_lineage_fork():
+    first=_snapshot()
+    child_a=_successor(
+        first,
+        snapshot_id="TMS-TEST-002A",
+        version_no=2,
+        valid_from="2026-09-27T00:00:00Z",
+    )
+    child_b=_successor(
+        first,
+        snapshot_id="TMS-TEST-003B",
+        version_no=3,
+        valid_from="2026-09-27T00:00:00Z",
+    )
+    try:
+        select_authoritative_snapshot(
+            [first,child_a,child_b],
+            logical_snapshot_id="SOAIACORE-MOCATRIZ",
+            as_of="2026-09-28T00:00:00Z",
+        )
+    except ValueError as exc:
+        assert "snapshot_lineage_fork" in str(exc)
+    else:
+        raise AssertionError("contradictory trusted snapshot fork must fail closed")
+
+
+def test_trusted_snapshot_selector_rejects_missing_trusted_predecessor():
+    first=_snapshot()
+    orphan=seal_snapshot({
+        **{k:v for k,v in first.items() if k!="content_sha256"},
+        "snapshot_id":"TMS-TEST-ORPHAN",
+        "snapshot_version":"1.1.0",
+        "version_no":2,
+        "created_at":"2026-09-27T00:00:00Z",
+        "valid_from":"2026-09-27T00:00:00Z",
+        "previous_snapshot_id":"TMS-MISSING-PREDECESSOR",
+    })
+    try:
+        select_authoritative_snapshot(
+            [first,orphan],
+            logical_snapshot_id="SOAIACORE-MOCATRIZ",
+            as_of="2026-09-28T00:00:00Z",
+        )
+    except ValueError as exc:
+        assert "snapshot_lineage_gap" in str(exc)
+    else:
+        raise AssertionError("missing trusted predecessor must fail closed")
+
+
+def test_canonical_hash_is_stable_for_integral_float_representation():
+    assert sha256_hex({"value":100}) == sha256_hex({"value":100.0})

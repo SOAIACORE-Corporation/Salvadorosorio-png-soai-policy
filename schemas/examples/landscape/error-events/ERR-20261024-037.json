@@ -1,0 +1,25 @@
+{
+  "error_id": "ERR-20261024-037",
+  "detected_at": "2026-10-24",
+  "class": "HUMAN_RESPONSE_PROVENANCE_GAP",
+  "phase": "human-task-response",
+  "symptom": "Durable Human Task responses stored correlation and answer content but did not require responder identity, authority level or authentication evidence reference.",
+  "root_cause": "The Human Task persistence contract modeled task correlation before modeling durable actor provenance.",
+  "early_signals": [
+    "human_task_responses had no responder_ref field",
+    "human_task_responses had no authority_level field",
+    "human_task_responses had no authentication_ref field",
+    "correlate_human_response validates task IDs but not actor provenance"
+  ],
+  "human_cost": "No user intervention required to identify the gap. Without remediation, a database row could be correlated correctly while lacking evidence that an authorized human produced it.",
+  "avoidable": true,
+  "prevention_rule": "Every newly persisted Human Task response must include non-empty responder_ref, valid authority_level and authentication_ref pointing to upstream authentication evidence.",
+  "automated_detection": "SCN-036 PostgreSQL provenance gate regression test.",
+  "evidence_refs": [
+    "db/a2_migrations/1002_mocatriz_human_task_resume.sql",
+    "packages/python-runtime/src/soaiacore_runtime/a2_persistence.py",
+    "docs/landscape-intelligence/EXCEPTION_AUTHORITY_POLICY_v1.md"
+  ],
+  "control_status": "OPEN",
+  "regression_test": "SCN-036:test_human_response_requires_durable_identity_and_authentication_provenance"
+}

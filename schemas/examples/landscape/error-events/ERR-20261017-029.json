@@ -1,0 +1,24 @@
+{
+  "error_id": "ERR-20261017-029",
+  "detected_at": "2026-10-17",
+  "class": "BITEMPORAL_PREDECESSOR_TYPE_MISMATCH",
+  "phase": "trusted-memory-postgres-roundtrip",
+  "symptom": "TMS-001 could not be inserted into soa_memory.canonical_memory because postgres_projection mapped a historical checkpoint identifier into supersedes_memory_id, whose foreign key requires an existing canonical-memory row.",
+  "root_cause": "The projection treated every previous_snapshot_id as a persisted Trusted Memory predecessor even when the historical predecessor was a continuity checkpoint rather than a TMS record.",
+  "early_signals": [
+    "TMS-001 previous_snapshot_id uses the CHK- prefix",
+    "soa_memory.canonical_memory.supersedes_memory_id is a self-referencing foreign key",
+    "TMS-002 correctly references a TMS- predecessor while TMS-001 does not"
+  ],
+  "human_cost": "No operator troubleshooting required; ephemeral PostgreSQL CI exposed the mismatch during autonomous closure.",
+  "avoidable": true,
+  "prevention_rule": "Only map a predecessor into supersedes_memory_id when it identifies a persisted Trusted Memory snapshot; preserve non-memory historical predecessors as metadata rather than fabricating a foreign-key relationship.",
+  "automated_detection": "Regression tests assert TMS-001 has no canonical-memory supersedes FK, preserves its checkpoint predecessor as metadata, and TMS-002 supersedes TMS-001.",
+  "evidence_refs": [
+    "github-actions:39098853837",
+    "tests/test_a2_persistence_contract.py",
+    "schemas/tests/test_trusted_memory_tms002.py"
+  ],
+  "control_status": "CONTROLLED",
+  "regression_test": "test_tms2_bitemporal_projection_links_only_real_trusted_memory_predecessors"
+}

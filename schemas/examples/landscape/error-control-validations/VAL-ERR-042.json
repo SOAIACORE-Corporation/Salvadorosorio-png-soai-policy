@@ -1,0 +1,19 @@
+{
+  "validation_id": "VAL-ERR-042",
+  "error_id": "ERR-20261024-042",
+  "status": "CONTROLLED",
+  "observed_at": "2026-10-24",
+  "evidence_refs": [
+    "github-actions:40083096273",
+    "github-actions:40083096281",
+    "commit:5d413f80847329c36a7cba50670bcf8e144a1208",
+    "SCN-041"
+  ],
+  "human_required": false,
+  "regression_tests": [
+    "schemas/tests/test_mocatriz_execution.py::test_three_failed_routes_can_drive_evidence_based_strategy_mutation_without_drift",
+    "schemas/tests/test_mocatriz_execution.py::test_revisit_without_new_evidence_is_drift",
+    "schemas/tests/test_mocatriz_execution.py::test_strategy_change_that_departs_objective_is_drift"
+  ],
+  "rationale": "Landscape #240 derived three evidence-driven strategy mutations without drift and rejected unsupported revisit/objective departure; A2 #112, Terraform #184, Alpha #47 and Worker #138 also succeeded."
+}

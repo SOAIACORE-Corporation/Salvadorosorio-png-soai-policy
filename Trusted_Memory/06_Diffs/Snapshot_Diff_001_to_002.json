@@ -1,0 +1,33 @@
+{
+  "diff_version": "1.0",
+  "previous_snapshot_id": "TMS-SOAIACORE-MOCATRIZ-20260926-001",
+  "current_snapshot_id": "TMS-SOAIACORE-MOCATRIZ-20260928-002",
+  "previous_hash": "EEDFA3D7AE3AB292BAD75F87067ECB63AA63FCB374096BBE04958A4998DD1C4A",
+  "current_hash": "9EE9E2018FDCB2CCCFD1228083673B0D71CE5DD740F85EF4FFDF33522B5D8490",
+  "changed_fields": [
+    "snapshot_id",
+    "snapshot_version",
+    "version_no",
+    "created_at",
+    "valid_from",
+    "previous_snapshot_id",
+    "objective",
+    "checkpoint",
+    "error_matrix",
+    "metrics",
+    "rules",
+    "authoritative_sources",
+    "evidence_inventory_ref",
+    "decisions",
+    "pending_and_exceptions",
+    "resume_point",
+    "metadata"
+  ],
+  "key_changes": [
+    "ERR-028 incorporated as CONTROLLED",
+    "error matrix advanced 27/25/2 → 28/26/2",
+    "first append-only temporal lineage demonstrated",
+    "next unresolved gate narrowed to PostgreSQL write/read-back and independent fault-domain replication"
+  ],
+  "interpretation": "TMS-002 is a new immutable temporal version; TMS-001 remains unchanged."
+}
